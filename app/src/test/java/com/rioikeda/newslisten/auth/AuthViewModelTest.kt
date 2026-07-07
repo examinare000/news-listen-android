@@ -330,4 +330,31 @@ class AuthViewModelTest {
 
         assertFalse(authenticatedCalled)
     }
+
+    // --- applyProfileUpdate（フェーズ11 P11 T2: 表示名更新のAuthState反映） ---
+
+    @Test
+    fun applyProfileUpdateはAuthenticated状態でauthStateのuserを更新する() = runTest {
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onMe = { user }, onFetchPreferences = { preferences }),
+            sessionStore = InMemorySessionStore(initialToken = "token-abc"),
+        )
+        viewModel.refreshAuth()
+        val updatedUser = user.copy(displayName = "新しい表示名")
+
+        viewModel.applyProfileUpdate(updatedUser)
+
+        assertEquals(AuthState.Authenticated(updatedUser), viewModel.authState.value)
+    }
+
+    @Test
+    fun applyProfileUpdateは非Authenticatedならno_opになる() = runTest {
+        val viewModel = newViewModel(sessionStore = InMemorySessionStore(initialToken = null))
+        viewModel.refreshAuth()
+        val updatedUser = user.copy(displayName = "新しい表示名")
+
+        viewModel.applyProfileUpdate(updatedUser)
+
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+    }
 }

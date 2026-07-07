@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.google.firebase.messaging.FirebaseMessaging
 import com.rioikeda.newslisten.BuildConfig
+import com.rioikeda.newslisten.account.AccountViewModel
 import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedViewModel
@@ -316,4 +317,29 @@ class AppContainer(context: Context) {
     }
 
     fun getSettingsViewModel(): SettingsViewModel = _settingsViewModel
+
+    /**
+     * AccountViewModel（設定タブ「アカウント」セクション: 表示名更新・パスワード変更）を
+     * 生成して返す（フェーズ11 P11 T3）。
+     *
+     * Dispatcher: 他の ViewModel と同じ理由で Dispatchers.Default.limitedParallelism(1) を使う。
+     * 表示名・パスワード入力欄の読み取り→書き込みが複数スレッドで競合すると入力の取りこぼしが
+     * 起こり得るため、単一スレッドで直列化する。
+     *
+     * authViewModel: 表示名更新成功時に AuthState.Authenticated.user を書き換えるため、
+     * SettingsViewModel の isAdminProvider（関数注入）とは異なり AuthViewModel を直接注入する
+     * （詳細は [AccountViewModel] のクラスコメント参照）。
+     *
+     * by lazy でシングルトンキャッシュ化：画面回転時に AccountViewModel インスタンスが
+     * 同じままであることを保証し、入力中の表示名・パスワードやメッセージ表示が保持される。
+     */
+    private val _accountViewModel: AccountViewModel by lazy {
+        AccountViewModel(
+            apiClient = apiClient,
+            authViewModel = _authViewModel,
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+        )
+    }
+
+    fun getAccountViewModel(): AccountViewModel = _accountViewModel
 }
