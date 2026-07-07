@@ -1,11 +1,15 @@
 package com.rioikeda.newslisten.feed
 
 import com.rioikeda.newslisten.model.ActionResponse
+import com.rioikeda.newslisten.model.FeaturedSitesResponse
 import com.rioikeda.newslisten.model.FeedResponse
+import com.rioikeda.newslisten.model.GenerationQuotaResponse
+import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
+import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
@@ -77,4 +81,28 @@ class FakeFeedApiClient(
 
     override suspend fun unregisterDeviceToken(token: String, platform: String) =
         error("unregisterDeviceToken is out of scope for feed tests")
+
+    override suspend fun fetchSources(): RssSourcesResponse =
+        error("fetchSources is out of scope for feed tests")
+
+    override suspend fun createSource(name: String, url: String): RssSourcesResponse =
+        error("createSource is out of scope for feed tests")
+
+    override suspend fun updateSource(oldUrl: String, name: String, url: String): RssSourcesResponse =
+        error("updateSource is out of scope for feed tests")
+
+    override suspend fun deleteSource(url: String): RssSourcesResponse =
+        error("deleteSource is out of scope for feed tests")
+
+    override suspend fun fetchFeaturedSites(): FeaturedSitesResponse =
+        error("fetchFeaturedSites is out of scope for feed tests")
+
+    override suspend fun updatePreferences(defaultDifficulty: String?, defaultPlaybackSpeed: Double?): PreferencesResponse =
+        error("updatePreferences is out of scope for feed tests")
+
+    override suspend fun fetchGenerationQuota(): GenerationQuotaResponse =
+        error("fetchGenerationQuota is out of scope for feed tests")
+
+    override suspend fun fetchListeningStreak(): ListeningStreakResponse =
+        error("fetchListeningStreak is out of scope for feed tests")
 }

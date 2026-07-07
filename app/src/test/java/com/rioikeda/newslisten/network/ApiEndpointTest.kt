@@ -86,4 +86,54 @@ class ApiEndpointTest {
         assertEquals("/notifications/device-tokens", ApiEndpoint.UnregisterDeviceToken.path)
         assertEquals("DELETE", ApiEndpoint.UnregisterDeviceToken.method)
     }
+
+    // --- フェーズ10 P10 Task1: 設定機能 ---
+
+    @Test
+    fun fetchSourcesはGET_settingsSources() {
+        assertEquals("/settings/sources", ApiEndpoint.FetchSources.path)
+        assertEquals("GET", ApiEndpoint.FetchSources.method)
+    }
+
+    @Test
+    fun createSourceはPOST_settingsSources() {
+        assertEquals("/settings/sources", ApiEndpoint.CreateSource.path)
+        assertEquals("POST", ApiEndpoint.CreateSource.method)
+    }
+
+    @Test
+    fun updateSourceはPUT_settingsSources() {
+        assertEquals("/settings/sources", ApiEndpoint.UpdateSource.path)
+        assertEquals("PUT", ApiEndpoint.UpdateSource.method)
+    }
+
+    @Test
+    fun deleteSourceはDELETE_settingsSources() {
+        assertEquals("/settings/sources", ApiEndpoint.DeleteSource.path)
+        assertEquals("DELETE", ApiEndpoint.DeleteSource.method)
+    }
+
+    @Test
+    fun featuredSourcesはGET_settingsFeaturedSources() {
+        assertEquals("/settings/featured-sources", ApiEndpoint.FeaturedSources.path)
+        assertEquals("GET", ApiEndpoint.FeaturedSources.method)
+    }
+
+    @Test
+    fun updatePreferencesはPUT_settingsPreferences() {
+        assertEquals("/settings/preferences", ApiEndpoint.UpdatePreferences.path)
+        assertEquals("PUT", ApiEndpoint.UpdatePreferences.method)
+    }
+
+    @Test
+    fun generationQuotaはGET_usersMeGenerationQuota() {
+        assertEquals("/users/me/generation-quota", ApiEndpoint.GenerationQuota.path)
+        assertEquals("GET", ApiEndpoint.GenerationQuota.method)
+    }
+
+    @Test
+    fun listeningStreakはGET_usersMeListeningStreak() {
+        assertEquals("/users/me/listening-streak", ApiEndpoint.ListeningStreak.path)
+        assertEquals("GET", ApiEndpoint.ListeningStreak.method)
+    }
 }

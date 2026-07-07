@@ -255,4 +255,144 @@ class OkHttpApiClientTest {
         assertEquals("DELETE", recorded.method)
         assertEquals("/notifications/device-tokens?token=fcm-token-abc&platform=android", recorded.path)
     }
+
+    // --- フェーズ10 P10 Task1: 設定機能（RSS ソース / おすすめサイト / プリファレンス / クォータ / ストリーク） ---
+
+    @Test
+    fun fetchSourcesはGETでRssSourcesResponseを返す() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody("""{"sources":[{"name":"NHK","url":"https://example.com/nhk.xml"}]}""")
+        )
+
+        val response = client.fetchSources()
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        assertEquals("/settings/sources", recorded.path)
+        assertEquals("NHK", response.sources[0].name)
+    }
+
+    @Test
+    fun createSourceはPOSTでnameとurlボディを送る() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody("""{"sources":[{"name":"NHK","url":"https://example.com/nhk.xml"}]}""")
+        )
+
+        client.createSource("NHK", "https://example.com/nhk.xml")
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/settings/sources", recorded.path)
+        assertEquals(
+            """{"name":"NHK","url":"https://example.com/nhk.xml"}""",
+            recorded.body.readUtf8(),
+        )
+    }
+
+    @Test
+    fun updateSourceはPUTでold_urlを含むボディを送る() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"sources":[]}"""))
+
+        client.updateSource(
+            oldUrl = "https://example.com/old.xml",
+            name = "NHK",
+            url = "https://example.com/nhk.xml",
+        )
+
+        val recorded = server.takeRequest()
+        assertEquals("PUT", recorded.method)
+        assertEquals("/settings/sources", recorded.path)
+        assertEquals(
+            """{"name":"NHK","url":"https://example.com/nhk.xml","old_url":"https://example.com/old.xml"}""",
+            recorded.body.readUtf8(),
+        )
+    }
+
+    @Test
+    fun deleteSourceはDELETEでurlをクエリに付与する() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"sources":[]}"""))
+
+        client.deleteSource("https://example.com/nhk.xml")
+
+        val recorded = server.takeRequest()
+        assertEquals("DELETE", recorded.method)
+        assertEquals("/settings/sources?url=https%3A%2F%2Fexample.com%2Fnhk.xml", recorded.path)
+    }
+
+    @Test
+    fun fetchFeaturedSitesはGETでFeaturedSitesResponseを返す() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody("""{"sites":[{"id":"s1","name":"NHK","url":"https://example.com/nhk.xml"}]}""")
+        )
+
+        val response = client.fetchFeaturedSites()
+
+        assertEquals("/settings/featured-sources", server.takeRequest().path)
+        assertEquals("s1", response.sites[0].id)
+    }
+
+    @Test
+    fun updatePreferencesはPUTでdifficultyとspeedのみをsnake_caseで送る() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """{"default_difficulty":"toeic_600","default_playback_speed":1.25,"digest_enabled":false,"digest_article_count":3}"""
+            )
+        )
+
+        val response = client.updatePreferences(
+            defaultDifficulty = "toeic_600",
+            defaultPlaybackSpeed = 1.25,
+        )
+
+        val recorded = server.takeRequest()
+        assertEquals("PUT", recorded.method)
+        assertEquals("/settings/preferences", recorded.path)
+        assertEquals(
+            """{"default_difficulty":"toeic_600","default_playback_speed":1.25}""",
+            recorded.body.readUtf8(),
+        )
+        assertEquals("toeic_600", response.defaultDifficulty)
+    }
+
+    @Test
+    fun fetchGenerationQuotaはGETでGenerationQuotaResponseを返す() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody("""{"limit":20,"used":3,"remaining":17,"reset_at":"2026-07-09T00:00:00+00:00"}""")
+        )
+
+        val response = client.fetchGenerationQuota()
+
+        assertEquals("/users/me/generation-quota", server.takeRequest().path)
+        assertEquals(17, response.remaining)
+    }
+
+    @Test
+    fun fetchGenerationQuotaは無制限時にremainingがnull() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody("""{"limit":0,"used":5,"remaining":null,"reset_at":"2026-07-09T00:00:00+00:00"}""")
+        )
+
+        val response = client.fetchGenerationQuota()
+
+        assertNull(response.remaining)
+    }
+
+    @Test
+    fun fetchListeningStreakはGETでListeningStreakResponseを返す() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody("""{"current_streak_days":3,"today_listened":true,"last_listened_day":"2026-07-08"}""")
+        )
+
+        val response = client.fetchListeningStreak()
+
+        assertEquals("/users/me/listening-streak", server.takeRequest().path)
+        assertEquals(3, response.currentStreakDays)
+        assertTrue(response.todayListened)
+    }
 }
