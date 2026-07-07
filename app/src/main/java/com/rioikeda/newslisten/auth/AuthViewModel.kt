@@ -47,6 +47,16 @@ class AuthViewModel(
      * 別途 docs 側の follow-up として扱う。
      */
     private val onLogoutCleanup: suspend () -> Unit = {},
+    /**
+     * 認証確立時（refreshAuth の me 成功・login 成功）に追加で行うフック（フェーズ9・FCM トークン登録）。
+     *
+     * onLogoutCleanup と同じ設計判断: FCM トークン登録の実体（FcmTokenRegistrar）は notification 層に
+     * 属し、auth 層から直接依存させると層の依存方向が崩れるため、呼び出し元（AppContainer）が
+     * `{ fcmTokenRegistrar.onAuthenticated() }` を注入する形にした。ログイン成功直後・アプリ起動時の
+     * 再認証成功時のどちらでも FCM トークンを登録できるよう、Authenticated 遷移の両経路（refreshAuth
+     * 内の me 成功パスと login 成功パス）で呼び出す。
+     */
+    private val onAuthenticated: suspend () -> Unit = {},
 ) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unknown)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -81,6 +91,7 @@ class AuthViewModel(
             _authState.value = AuthState.Authenticated(user)
             // 認証確立後、サーバーの preferences を同期する（失敗時は既存のローカル値を保持）。
             syncPreferences()
+            onAuthenticated()
         } catch (e: ApiException) {
             sessionStore.clear()
             _authState.value = AuthState.Unauthenticated
@@ -119,6 +130,7 @@ class AuthViewModel(
             sessionStore.save(response.token)
             _loginErrorMessage.value = null
             _authState.value = AuthState.Authenticated(response.user)
+            onAuthenticated()
         } catch (e: ApiException.HttpError) {
             _loginErrorMessage.value = if (e.code == 401) {
                 "ユーザーIDまたはパスワードが正しくありません"

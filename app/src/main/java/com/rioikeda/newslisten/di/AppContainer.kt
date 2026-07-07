@@ -1,6 +1,11 @@
 package com.rioikeda.newslisten.di
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
+import com.google.firebase.messaging.FirebaseMessaging
 import com.rioikeda.newslisten.BuildConfig
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedViewModel
@@ -12,12 +17,16 @@ import com.rioikeda.newslisten.network.JavaFileSystem
 import com.rioikeda.newslisten.network.KeystoreSessionStore
 import com.rioikeda.newslisten.network.OkHttpApiClient
 import com.rioikeda.newslisten.network.SessionStore
+import com.rioikeda.newslisten.notification.FcmTokenRegistrar
 import com.rioikeda.newslisten.podcast.ExoPlayerController
 import com.rioikeda.newslisten.podcast.PodcastViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
 
 /**
  * アプリケーション スコープ依存グラフの管理。
@@ -85,6 +94,50 @@ class AppContainer(context: Context) {
     private val networkMonitor: ConnectivityNetworkMonitor = ConnectivityNetworkMonitor(appContext).apply { start() }
 
     /**
+     * FCM トークン取得の suspend ラッパ（フェーズ9・プッシュ通知）。
+     *
+     * WHY suspendCancellableCoroutine: kotlinx-coroutines-play-services への追加依存
+     * (Task.await()) を避け、OkHttpApiClient.executeCall と同型のパターンで既存の
+     * Task API(addOnCompleteListener) をラップする。取得失敗時は例外を投げず null を返し、
+     * 「トークン取得できない」として FcmTokenRegistrar 側に判断を委ねる。
+     *
+     * WHY @Suppress("DEPRECATION"): firebase-bom 34.15.0 (firebase-messaging 25.1.0) では
+     * `FirebaseMessaging.getToken()` が非推奨化されている（コンパイル時に確認済み。register() は
+     * Task<Void> しか返さずトークン文字列を取得できないため代替にならない）。ログイン時に
+     * その場でトークンを pull 取得する用途では、現時点で Google 公式ドキュメントもこの API を
+     * 案内しており、機能上は問題ない。SDK の将来のメジャー更新で本当に削除される場合は
+     * FcmTokenRegistrar のインターフェース（tokenProvider: suspend () -> String?）は変えずに
+     * ここだけ差し替えればよい設計にしてある。
+     */
+    @Suppress("DEPRECATION")
+    private val fcmTokenProvider: suspend () -> String? = {
+        suspendCancellableCoroutine { continuation ->
+            FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                continuation.resume(if (task.isSuccessful) task.result else null)
+            }
+        }
+    }
+
+    /**
+     * FCM デバイストークンの登録・解除ロジック（フェーズ9）。
+     *
+     * permissionChecker: API 33 未満は POST_NOTIFICATIONS 権限自体が存在しないため常に許可扱い
+     * （MainActivity のランタイム要求ガードと同じ判定基準）。
+     */
+    private val fcmTokenRegistrar: FcmTokenRegistrar = FcmTokenRegistrar(
+        apiClient = apiClient,
+        tokenProvider = fcmTokenProvider,
+        permissionChecker = {
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+        },
+        dispatcher = Dispatchers.Default,
+    )
+
+    fun getFcmTokenRegistrar(): FcmTokenRegistrar = fcmTokenRegistrar
+
+    /**
      * AuthViewModel（認証状態ゲーティング + ログイン）を生成して返す。
      *
      * Dispatcher: Dispatchers.Default は CPU バウンドタスク向き。IO タスクには Dispatchers.IO を
@@ -112,7 +165,26 @@ class AppContainer(context: Context) {
             apiClient = apiClient,
             sessionStore = sessionStore,
             dispatcher = Dispatchers.Default,
-            onLogoutCleanup = { _podcastViewModel.cancelDownloadsAndClearCache() }
+            // フェーズ9: cancelDownloadsAndClearCache（既存・フェーズ8-D）と FCM トークン解除を
+            // 両方行う合成ラムダ。onLogoutCleanup は単一のフック点のため、複数の後始末はここで束ねる。
+            // 各操作を独立した try/catch で保護し、前段の失敗が後段をスキップさせないようにする。
+            onLogoutCleanup = {
+                try {
+                    _podcastViewModel.cancelDownloadsAndClearCache()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // キャッシュクリア失敗はログアウト継続
+                }
+                try {
+                    fcmTokenRegistrar.onLogout()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // FCM トークン解除失敗はログアウト継続
+                }
+            },
+            onAuthenticated = { fcmTokenRegistrar.onAuthenticated() },
         )
     }
 

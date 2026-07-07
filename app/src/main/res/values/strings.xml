@@ -68,4 +68,7 @@
     <string name="queue_remove_description">削除</string>
     <string name="podcast_play_next">次に再生</string>
     <string name="podcast_add_to_queue">キューに追加</string>
+
+    <!-- プッシュ通知（フェーズ9・FCM） -->
+    <string name="notification_channel_podcast_updates">Podcast 更新通知</string>
 </resources>
