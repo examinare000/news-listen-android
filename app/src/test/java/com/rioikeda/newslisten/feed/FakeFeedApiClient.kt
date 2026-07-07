@@ -9,7 +9,9 @@ import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
+import com.rioikeda.newslisten.model.RevokeSessionsResponse
 import com.rioikeda.newslisten.model.RssSourcesResponse
+import com.rioikeda.newslisten.model.SessionsListResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
@@ -105,4 +107,19 @@ class FakeFeedApiClient(
 
     override suspend fun fetchListeningStreak(): ListeningStreakResponse =
         error("fetchListeningStreak is out of scope for feed tests")
+
+    override suspend fun updateProfile(displayName: String): UserResponse =
+        error("updateProfile is out of scope for feed tests")
+
+    override suspend fun changePassword(currentPassword: String, newPassword: String) =
+        error("changePassword is out of scope for feed tests")
+
+    override suspend fun listSessions(): SessionsListResponse =
+        error("listSessions is out of scope for feed tests")
+
+    override suspend fun revokeSession(id: String) =
+        error("revokeSession is out of scope for feed tests")
+
+    override suspend fun revokeOtherSessions(): RevokeSessionsResponse =
+        error("revokeOtherSessions is out of scope for feed tests")
 }

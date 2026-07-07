@@ -80,4 +80,21 @@ sealed class ApiEndpoint(val path: String, val method: String) {
 
     /** 聴取ストリーク（連続聴取日数）を取得する（フェーズ10 P10、issue #165）。 */
     data object ListeningStreak : ApiEndpoint("/users/me/listening-streak", "GET")
+
+    // --- フェーズ11 P11 Task1: アカウント管理 ---
+
+    /** プロフィール（表示名）を更新する。 */
+    data object UpdateProfile : ApiEndpoint("/auth/me", "PATCH")
+
+    /** パスワードを変更する。現パスワード誤りは 400、新パスワード強度不足は 422。 */
+    data object ChangePassword : ApiEndpoint("/auth/password", "POST")
+
+    /** ログイン中セッション一覧を取得する。 */
+    data object ListSessions : ApiEndpoint("/auth/sessions", "GET")
+
+    /** 指定 ID のセッションを失効させる（404 は冪等成功扱い。iOS SessionsViewModel:57 準拠）。 */
+    data class RevokeSession(val id: String) : ApiEndpoint("/auth/sessions/$id", "DELETE")
+
+    /** 自セッション以外の全セッションを失効させる。 */
+    data object RevokeOtherSessions : ApiEndpoint("/auth/sessions/revoke-others", "POST")
 }

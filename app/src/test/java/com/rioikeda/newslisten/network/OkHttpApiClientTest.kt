@@ -395,4 +395,129 @@ class OkHttpApiClientTest {
         assertEquals(3, response.currentStreakDays)
         assertTrue(response.todayListened)
     }
+
+    // --- フェーズ11 P11 Task1: アカウント管理 ---
+
+    @Test
+    fun updateProfileはPATCHでdisplay_nameボディを送りUserResponseを受ける() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody("""{"username":"u","role":"member","display_name":"Alice"}""")
+        )
+
+        val response = client.updateProfile("Alice")
+
+        val recorded = server.takeRequest()
+        assertEquals("PATCH", recorded.method)
+        assertEquals("/auth/me", recorded.path)
+        assertEquals("""{"display_name":"Alice"}""", recorded.body.readUtf8())
+        assertEquals("Alice", response.displayName)
+    }
+
+    @Test
+    fun changePasswordはPOSTでcurrent_passwordとnew_passwordボディを送る() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"status":"ok"}"""))
+
+        client.changePassword("old-pass", "new-pass")
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/auth/password", recorded.path)
+        assertEquals(
+            """{"current_password":"old-pass","new_password":"new-pass"}""",
+            recorded.body.readUtf8(),
+        )
+    }
+
+    @Test
+    fun changePasswordは現パスワード誤りで400のHttpErrorを投げる() = runTest {
+        server.enqueue(MockResponse().setResponseCode(400))
+
+        try {
+            client.changePassword("wrong-pass", "new-pass")
+            fail("ApiException.HttpError が投げられるべき")
+        } catch (e: ApiException.HttpError) {
+            assertEquals(400, e.code)
+        }
+    }
+
+    @Test
+    fun changePasswordは新パスワード強度不足で422のHttpErrorを投げる() = runTest {
+        server.enqueue(MockResponse().setResponseCode(422))
+
+        try {
+            client.changePassword("old-pass", "weak")
+            fail("ApiException.HttpError が投げられるべき")
+        } catch (e: ApiException.HttpError) {
+            assertEquals(422, e.code)
+        }
+    }
+
+    @Test
+    fun listSessionsはGETでSessionsListResponseをデコードする() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """
+                {
+                  "sessions": [
+                    {"id":"s1","device_label":null,"created_at":"2026-07-01T09:00:00+00:00","last_used_at":null,"current":true}
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val response = client.listSessions()
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        assertEquals("/auth/sessions", recorded.path)
+        assertEquals(1, response.sessions.size)
+        assertEquals("s1", response.sessions[0].id)
+        assertNull(response.sessions[0].deviceLabel)
+        assertTrue(response.sessions[0].current)
+    }
+
+    @Test
+    fun revokeSessionはDELETEで指定IDへ送る() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200))
+
+        client.revokeSession("s1")
+
+        val recorded = server.takeRequest()
+        assertEquals("DELETE", recorded.method)
+        assertEquals("/auth/sessions/s1", recorded.path)
+    }
+
+    @Test
+    fun revokeSessionは404でも例外を投げず冪等成功扱いにする() = runTest {
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        // 例外が投げられなければ成功（iOS SessionsViewModel:57 と同じ「既に失効済みは成功扱い」方針）。
+        client.revokeSession("already-revoked")
+    }
+
+    @Test
+    fun revokeSessionは404以外のエラーはHttpErrorを投げる() = runTest {
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        try {
+            client.revokeSession("s1")
+            fail("ApiException.HttpError が投げられるべき")
+        } catch (e: ApiException.HttpError) {
+            assertEquals(500, e.code)
+        }
+    }
+
+    @Test
+    fun revokeOtherSessionsはPOSTでRevokeSessionsResponseをデコードする() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"revoked_count":2}"""))
+
+        val response = client.revokeOtherSessions()
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/auth/sessions/revoke-others", recorded.path)
+        assertEquals(2, response.revokedCount)
+    }
 }

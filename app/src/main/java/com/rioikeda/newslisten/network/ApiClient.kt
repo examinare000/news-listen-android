@@ -9,7 +9,9 @@ import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
+import com.rioikeda.newslisten.model.RevokeSessionsResponse
 import com.rioikeda.newslisten.model.RssSourcesResponse
+import com.rioikeda.newslisten.model.SessionsListResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.model.UserResponse
 
@@ -99,4 +101,29 @@ interface ApiClient {
 
     /** 聴取ストリーク（連続聴取日数）を取得する（フェーズ10 P10、issue #165）。 */
     suspend fun fetchListeningStreak(): ListeningStreakResponse
+
+    /** プロフィール（表示名）を更新し、更新後のユーザー情報を返す（フェーズ11 P11）。 */
+    suspend fun updateProfile(displayName: String): UserResponse
+
+    /**
+     * パスワードを変更する（フェーズ11 P11）。
+     *
+     * 現パスワード誤りは 400、新パスワード強度不足は 422 で backend が区別する
+     * （[ApiException.HttpError.code] をそのまま伝播するため、呼び出し側は catch した
+     * 例外の code で判別する）。
+     */
+    suspend fun changePassword(currentPassword: String, newPassword: String)
+
+    /** ログイン中セッション一覧を取得する（フェーズ11 P11）。 */
+    suspend fun listSessions(): SessionsListResponse
+
+    /**
+     * 指定 ID のセッションを失効させる（フェーズ11 P11）。
+     *
+     * 404（既に失効済み）は冪等成功として扱い例外を投げない（iOS SessionsViewModel:57 準拠）。
+     */
+    suspend fun revokeSession(id: String)
+
+    /** 自セッション以外の全セッションを失効させる（フェーズ11 P11）。 */
+    suspend fun revokeOtherSessions(): RevokeSessionsResponse
 }

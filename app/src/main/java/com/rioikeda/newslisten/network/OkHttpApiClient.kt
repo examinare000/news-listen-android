@@ -9,13 +9,17 @@ import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.LoginRequest
 import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.NewsListenJson
+import com.rioikeda.newslisten.model.PasswordChangeRequest
 import com.rioikeda.newslisten.model.PlaybackPositionRequest
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
+import com.rioikeda.newslisten.model.ProfileUpdateRequest
+import com.rioikeda.newslisten.model.RevokeSessionsResponse
 import com.rioikeda.newslisten.model.RssSourceCreateRequest
 import com.rioikeda.newslisten.model.RssSourceUpdateRequest
 import com.rioikeda.newslisten.model.RssSourcesResponse
+import com.rioikeda.newslisten.model.SessionsListResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.model.UpdatePreferencesRequest
 import com.rioikeda.newslisten.model.UserResponse
@@ -182,6 +186,44 @@ class OkHttpApiClient(
 
     override suspend fun fetchListeningStreak(): ListeningStreakResponse =
         execute(buildRequest(ApiEndpoint.ListeningStreak), ListeningStreakResponse.serializer())
+
+    override suspend fun updateProfile(displayName: String): UserResponse =
+        execute(
+            buildRequest(
+                ApiEndpoint.UpdateProfile,
+                body = ProfileUpdateRequest(displayName = displayName),
+                bodySerializer = ProfileUpdateRequest.serializer(),
+            ),
+            UserResponse.serializer(),
+        )
+
+    override suspend fun changePassword(currentPassword: String, newPassword: String) {
+        executeVoid(
+            buildRequest(
+                ApiEndpoint.ChangePassword,
+                body = PasswordChangeRequest(currentPassword = currentPassword, newPassword = newPassword),
+                bodySerializer = PasswordChangeRequest.serializer(),
+            )
+        )
+    }
+
+    override suspend fun listSessions(): SessionsListResponse =
+        execute(buildRequest(ApiEndpoint.ListSessions), SessionsListResponse.serializer())
+
+    /**
+     * 404（既に失効済み）を冪等成功として扱う。iOS SessionsViewModel:57 と同じ方針で、
+     * ユーザーが同一セッションを複数タブ等から連打しても UI 上はエラーにしない。
+     */
+    override suspend fun revokeSession(id: String) {
+        try {
+            executeVoid(buildRequest(ApiEndpoint.RevokeSession(id)))
+        } catch (e: ApiException.HttpError) {
+            if (e.code != 404) throw e
+        }
+    }
+
+    override suspend fun revokeOtherSessions(): RevokeSessionsResponse =
+        execute(buildRequest(ApiEndpoint.RevokeOtherSessions), RevokeSessionsResponse.serializer())
 
     // region private helpers
 
