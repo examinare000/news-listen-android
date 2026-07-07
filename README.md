@@ -28,6 +28,16 @@ news-listen の Android ネイティブクライアント。Kotlin + Jetpack Com
 ./gradlew assembleDebug
 ```
 
+### Firebase セットアップ
+
+初回ビルド前に、Firebase 設定ファイルを配置してください：
+
+```bash
+cp app/google-services.json.example app/google-services.json
+```
+
+本番環境では、Firebase コンソールから取得した実際の `google-services.json` を `app/` ディレクトリに配置してください。
+
 ## プロジェクト構成
 
 ```

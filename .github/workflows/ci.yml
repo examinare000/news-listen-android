@@ -26,6 +26,11 @@ jobs:
           java-version: 17
           cache: gradle
 
+      - name: Prepare Firebase config (dummy, CI ビルド用)
+        # 実ファイルは .gitignore 済みのため、ダミー値の example から配置してビルドを green にする。
+        # 実配信には Firebase コンソールで取得した実ファイルへの差し替えが別途必要。
+        run: cp app/google-services.json.example app/google-services.json
+
       - name: Build and test
         run: ./gradlew build --stacktrace
 
