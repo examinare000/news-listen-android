@@ -35,9 +35,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // 依存グラフから AuthViewModel を取得
+        // 依存グラフから ViewModel を取得
         val appContainer = NewsListenApplication.getAppContainer()
         val authViewModel = appContainer.getAuthViewModel()
+        val feedViewModel = appContainer.getFeedViewModel()
 
         setContent {
             NewsListenTheme {
@@ -81,7 +82,7 @@ class MainActivity : ComponentActivity() {
 
                     is AuthState.Authenticated -> {
                         // メインアプリ（3 タブスカフォルド）
-                        AppScaffold()
+                        AppScaffold(feedViewModel)
                     }
                 }
             }
