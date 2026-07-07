@@ -5,6 +5,7 @@ import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.FakeFileSystem
+import com.rioikeda.newslisten.network.StubNetworkMonitor
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -54,8 +55,9 @@ class PodcastViewModelTest {
         apiClient: FakePodcastApiClient,
         playerController: FakePlayerController,
         cacheManager: AudioCacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
+        networkMonitor: StubNetworkMonitor = StubNetworkMonitor(initialIsOnline = true),
     ): PodcastViewModel =
-        PodcastViewModel(apiClient, playerController, cacheManager, StandardTestDispatcher(testScheduler))
+        PodcastViewModel(apiClient, playerController, cacheManager, networkMonitor, StandardTestDispatcher(testScheduler))
 
     // --- fetchPodcasts ---
 
@@ -159,6 +161,94 @@ class PodcastViewModelTest {
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertEquals("生成に失敗しました", viewModel.errorMessage.value)
+    }
+
+    // --- オフライン再生（フェーズ8-C: resolvePlaybackSource 統合。正本: shared-playback-spec.md §6.1） ---
+
+    @Test
+    fun キャッシュ済みかつオフラインならfetchPodcastを呼ばずキャッシュURIでprepareして再生する() = runTest {
+        val p1 = podcast(id = "p1")
+        // fetchPodcast/fetchPodcasts は未スタブのままにし、呼ばれたら即座にテスト失敗させる
+        // （CACHED 経路は fetch 系に一切触れない独立経路であることの検証）。
+        // updatePlaybackPosition は stopPlayback() の最終同期で呼ばれるためスタブしておく。
+        val apiClient = FakePodcastApiClient(onUpdatePlaybackPosition = { _, _ -> p1 })
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        cacheManager.cache("p1", byteArrayOf(1, 2, 3))
+        val networkMonitor = StubNetworkMonitor(initialIsOnline = false)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, cacheManager, networkMonitor)
+
+        viewModel.play(p1)
+
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertEquals(listOf("file:///cache/audio/p1.mp3"), player.prepareCalls)
+        assertEquals(listOf(p1.toPlaybackMetadata()), player.metadataCalls)
+        assertEquals(1, player.playCallCount)
+        assertEquals(p1, viewModel.currentPodcast.value)
+        assertNull(viewModel.errorMessage.value)
+
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun キャッシュ済みならオンラインでもfetchPodcastを呼ばずキャッシュを優先する() = runTest {
+        // spec §6.1: キャッシュ有は署名 URL 失効と無関係に常に最優先（オンライン時も再取得しない）。
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(onUpdatePlaybackPosition = { _, _ -> p1 })
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        cacheManager.cache("p1", byteArrayOf(1))
+        val networkMonitor = StubNetworkMonitor(initialIsOnline = true)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, cacheManager, networkMonitor)
+
+        viewModel.play(p1)
+
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertEquals(listOf("file:///cache/audio/p1.mp3"), player.prepareCalls)
+        assertEquals(p1, viewModel.currentPodcast.value)
+
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun 未キャッシュかつオフラインなら再生できずエラーメッセージを設定する() = runTest {
+        val apiClient = FakePodcastApiClient()
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val networkMonitor = StubNetworkMonitor(initialIsOnline = false)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, cacheManager, networkMonitor)
+
+        viewModel.play(podcast(id = "p1"))
+
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertTrue(player.prepareCalls.isEmpty())
+        assertEquals(0, player.playCallCount)
+        assertEquals("オフラインのため再生できません", viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun キャッシュ済み再生中はオフラインでもNetworkErrorを握って位置同期を継続する() = runTest {
+        // spec §6.2: オフライン中の位置同期は行われない設計だが、実装は「送信して失敗を握る」
+        // 既存方針（iOS syncPlaybackPositionIfNeeded 忠実写像）を維持する。ここでは
+        // ApiException.NetworkError を投げても viewModel がクラッシュ・エラー表示せず
+        // 継続することを保証する。
+        val p1 = podcast(id = "p1")
+        val exception = ApiException.NetworkError(RuntimeException("offline"))
+        val apiClient = FakePodcastApiClient(onUpdatePlaybackPosition = { _, _ -> throw exception })
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        cacheManager.cache("p1", byteArrayOf(1))
+        val networkMonitor = StubNetworkMonitor(initialIsOnline = false)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, cacheManager, networkMonitor)
+
+        viewModel.play(p1)
+        player.setPosition(12.5)
+        advanceTimeBy(15_000)
+        runCurrent()
+
+        assertNull(viewModel.errorMessage.value)
+
+        viewModel.stopPlayback()
     }
 
     // --- 位置同期（15秒毎。ストリーク起点。iOS PodcastViewModel.swift:580-603 忠実写像） ---

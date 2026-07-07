@@ -7,6 +7,7 @@ import com.rioikeda.newslisten.feed.FeedViewModel
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.AuthInterceptor
+import com.rioikeda.newslisten.network.ConnectivityNetworkMonitor
 import com.rioikeda.newslisten.network.JavaFileSystem
 import com.rioikeda.newslisten.network.KeystoreSessionStore
 import com.rioikeda.newslisten.network.OkHttpApiClient
@@ -76,6 +77,12 @@ class AppContainer(context: Context) {
         fileSystem = JavaFileSystem(),
         baseDir = appContext.cacheDir.absolutePath
     )
+
+    /**
+     * ネットワーク接続状態の監視（フェーズ8-C・shared-playback-spec.md §6.1）。
+     * PodcastViewModel.play() の resolvePlaybackSource 判定に isOnline を供給する。
+     */
+    private val networkMonitor: ConnectivityNetworkMonitor = ConnectivityNetworkMonitor(appContext).apply { start() }
 
     /**
      * AuthViewModel（認証状態ゲーティング + ログイン）を生成して返す。
@@ -151,6 +158,7 @@ class AppContainer(context: Context) {
             apiClient = apiClient,
             playerController = _playerController,
             cacheManager = audioCacheManager,
+            networkMonitor = networkMonitor,
             dispatcher = Dispatchers.Default.limitedParallelism(1)
         )
     }

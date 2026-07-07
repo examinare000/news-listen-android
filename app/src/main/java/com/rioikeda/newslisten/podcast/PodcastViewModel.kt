@@ -1,11 +1,14 @@
 package com.rioikeda.newslisten.podcast
 
 import com.rioikeda.newslisten.core.PlaybackQueue
+import com.rioikeda.newslisten.core.PlaybackSource
+import com.rioikeda.newslisten.core.resolvePlaybackSource
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.AudioCacheException
 import com.rioikeda.newslisten.network.AudioCacheManager
+import com.rioikeda.newslisten.network.NetworkMonitoring
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -35,6 +38,7 @@ class PodcastViewModel(
     private val apiClient: ApiClient,
     private val playerController: PlayerController,
     private val cacheManager: AudioCacheManager,
+    private val networkMonitor: NetworkMonitoring,
     private val dispatcher: CoroutineDispatcher,
 ) {
     // 位置同期タイマー（15秒毎）を動かすための内部スコープ。play()/suspend 関数の呼び出しを跨いで
@@ -191,12 +195,17 @@ class PodcastViewModel(
      *
      * 1. まず再生可否をゲートする（processing/failed/partial_failed は再生不可）。
      *    iOS は暗黙的に再生失敗するだけだが、Android は明示的にガードし [errorMessage] へ理由を出す改善。
-     * 2. 再生直前に [ApiClient.fetchPodcast] で署名付き audio_url を再取得する。
-     *    正本: docs/design/shared-playback-spec.md §6.1-2 / web useStartPodcast / ADR-009。
-     *    iOS（PodcastViewModel.swift:207-268）は一覧取得時点の URL に依存するが、
-     *    署名 URL は時間経過で失効しうるため、Android は再生直前の再取得を意図的な改善として行う。
+     * 2. [resolvePlaybackSource] で再生元を決定する（正本: docs/design/shared-playback-spec.md §6.1
+     *    / core.PlaybackSourceResolver）。
+     *    - CACHED: ローカルキャッシュを最優先（署名 URL 失効・オフラインと無関係に常に成立）。
+     *      [ApiClient.fetchPodcast] を経由しない独立経路のため、オフラインでも再生できる。
+     *    - NETWORK: [ApiClient.fetchPodcast] で署名付き audio_url を再取得してから再生する。
+     *      正本: spec §6.1-2 / web useStartPodcast / ADR-009。iOS（PodcastViewModel.swift:207-268）は
+     *      一覧取得時点の URL に依存するが、署名 URL は時間経過で失効しうるため、
+     *      Android は再生直前の再取得を意図的な改善として行う（この差異は spec 側が正）。
+     *    - UNAVAILABLE: 未キャッシュ + オフラインは再生不可。[errorMessage] へ理由を出す。
      *
-     * @param podcast 再生対象（一覧の要素。gate 判定はこの引数の status で行う）。
+     * @param podcast 再生対象（一覧の要素。gate 判定・CACHED 経路のメタデータ生成はこの引数から行う）。
      */
     suspend fun play(podcast: PodcastResponse): Unit = withContext(dispatcher) {
         // 二重呼び出し（連打・エピソード切替の取り違え）で古い同期タイマーが即座に見えなくなる
@@ -219,18 +228,44 @@ class PodcastViewModel(
             // （iOS play() 冒頭で無条件に stopPlayback() を呼ぶのと同じ設計）。
             stopInternal()
 
-            try {
-                val fresh = apiClient.fetchPodcast(podcast.id)
-                _currentPodcast.value = fresh
-                _errorMessage.value = null
-                playerController.onPlaybackCompleted = { scope.launch { handlePlaybackEnded() } }
-                playerController.prepare(fresh.audioUrl, fresh.toPlaybackMetadata())
-                playerController.play()
-                startPositionSync(fresh.id)
-            } catch (e: ApiException) {
-                _errorMessage.value = e.message
+            when (resolvePlaybackSource(hasCached = cacheManager.isCached(podcast.id), isOnline = networkMonitor.isOnline.value)) {
+                PlaybackSource.CACHED -> {
+                    // fetchPodcast を経由しないため、引数の podcast をそのまま採用する
+                    // （一覧レスポンスは segments を含む表示用情報を既に持つため再取得不要）。
+                    // requireNotNull: resolvePlaybackSource が CACHED を返した直後なので
+                    // isCached(id) は true のはずであり、cachedFileUri は必ず非 null。
+                    val cachedUri = requireNotNull(cacheManager.cachedFileUri(podcast.id)) {
+                        "CACHED と判定されたのに cachedFileUri が null: id=${podcast.id}"
+                    }
+                    beginPlayback(podcast, cachedUri)
+                }
+                PlaybackSource.NETWORK -> {
+                    try {
+                        val fresh = apiClient.fetchPodcast(podcast.id)
+                        beginPlayback(fresh, fresh.audioUrl)
+                    } catch (e: ApiException) {
+                        _errorMessage.value = e.message
+                    }
+                }
+                PlaybackSource.UNAVAILABLE -> {
+                    _errorMessage.value = "オフラインのため再生できません"
+                }
             }
         }
+    }
+
+    /**
+     * 再生元（キャッシュ/ネットワーク）決定後の共通開始処理。
+     * WHY 抽出: CACHED/NETWORK 分岐は「どの URL とメタデータ元 Podcast を使うか」だけが異なり、
+     * 状態更新・PlayerController 起動・同期タイマー開始の手順は完全に同一のため重複を避ける。
+     */
+    private fun beginPlayback(podcast: PodcastResponse, url: String) {
+        _currentPodcast.value = podcast
+        _errorMessage.value = null
+        playerController.onPlaybackCompleted = { scope.launch { handlePlaybackEnded() } }
+        playerController.prepare(url, podcast.toPlaybackMetadata())
+        playerController.play()
+        startPositionSync(podcast.id)
     }
 
     // --- 再生キュー（issue #81 相当。フェーズ6 T1） ---
