@@ -71,4 +71,10 @@ class FakeFeedApiClient(
 
     override suspend fun downloadAudio(url: String): ByteArray =
         error("downloadAudio is out of scope for feed tests")
+
+    override suspend fun registerDeviceToken(token: String, platform: String) =
+        error("registerDeviceToken is out of scope for feed tests")
+
+    override suspend fun unregisterDeviceToken(token: String, platform: String) =
+        error("unregisterDeviceToken is out of scope for feed tests")
 }

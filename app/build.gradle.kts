@@ -5,6 +5,8 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    // FCM (プッシュ通知・フェーズ9): app/google-services.json を読み込む
+    alias(libs.plugins.google.services)
 }
 
 /**
@@ -103,6 +105,17 @@ dependencies {
 
     // Media3 Session: MediaSessionService + MediaStyle 通知（フェーズ7）
     implementation(libs.androidx.media3.session)
+
+    // Firebase Cloud Messaging: プッシュ通知（FCM トークン登録・Podcast 生成完了通知。フェーズ9）
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
+
+    // WHY: firebase-messaging が com.google.android.gms:play-services-base 経由で
+    // androidx.fragment:1.1.0 を transitively 引き込み、MainActivity の
+    // registerForActivityResult（フェーズ4・POST_NOTIFICATIONS 要求）に対して Android Lint の
+    // InvalidFragmentVersionForActivityResult が発火する（ActivityResult API は fragment >= 1.3.0
+    // を要求）。直接依存として新しい安定版を宣言し、解決バージョンを引き上げて回避する。
+    implementation(libs.androidx.fragment)
 
     // Testing
     testImplementation(libs.junit)

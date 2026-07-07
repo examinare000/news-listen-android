@@ -18,10 +18,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.auth.LoginScreen
@@ -52,7 +54,13 @@ class MainActivity : ComponentActivity() {
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
-        // 承認/拒否いずれの場合も処理なし（通知非表示時の フォールバック）
+        if (isGranted) {
+            // 権限が許可されたため、ログイン済みの場合は FCM トークンを登録する
+            // 未ログイン時は FcmTokenRegistrar の内部ガードによりスキップされる
+            lifecycleScope.launch {
+                NewsListenApplication.getAppContainer().getFcmTokenRegistrar().onAuthenticated()
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

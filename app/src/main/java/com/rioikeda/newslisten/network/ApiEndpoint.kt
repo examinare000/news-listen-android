@@ -36,4 +36,15 @@ sealed class ApiEndpoint(val path: String, val method: String) {
 
     /** ユーザー設定選択（難易度・再生速度）を取得。 */
     data object Preferences : ApiEndpoint("/settings/preferences", "GET")
+
+    /** デバイストークン（FCM）を登録する（フェーズ9）。 */
+    data object RegisterDeviceToken : ApiEndpoint("/notifications/device-tokens", "POST")
+
+    /**
+     * デバイストークン（FCM）を解除する（フェーズ9）。
+     *
+     * token はクエリパラメータで渡す（backend/api/routers/notifications.py の
+     * unregister_device_token と同じ規約。DismissArticle 等とは異なりパス埋め込みではない）。
+     */
+    data object UnregisterDeviceToken : ApiEndpoint("/notifications/device-tokens", "DELETE")
 }

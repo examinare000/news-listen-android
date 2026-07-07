@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.network
 
 import com.rioikeda.newslisten.model.ActionResponse
+import com.rioikeda.newslisten.model.DeviceTokenRequest
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.LoginRequest
 import com.rioikeda.newslisten.model.LoginResponse
@@ -103,6 +104,22 @@ class OkHttpApiClient(
             validateResponse(response)
             response.body?.bytes() ?: ByteArray(0)
         }
+    }
+
+    override suspend fun registerDeviceToken(token: String, platform: String) {
+        executeVoid(
+            buildRequest(
+                ApiEndpoint.RegisterDeviceToken,
+                body = DeviceTokenRequest(deviceToken = token, platform = platform),
+                bodySerializer = DeviceTokenRequest.serializer(),
+            )
+        )
+    }
+
+    override suspend fun unregisterDeviceToken(token: String, platform: String) {
+        executeVoid(
+            buildRequest(ApiEndpoint.UnregisterDeviceToken, queryParams = mapOf("token" to token, "platform" to platform))
+        )
     }
 
     // region private helpers

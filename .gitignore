@@ -11,6 +11,10 @@ build/
 # Local configuration
 local.properties
 
+# Firebase (FCM): 実ファイルは各開発者/CIがローカルに配置する。実値は決してコミットしない
+# (app/google-services.json.example を参照してコピーする)。
+app/google-services.json
+
 # macOS
 .DS_Store
 

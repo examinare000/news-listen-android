@@ -51,4 +51,15 @@ interface ApiClient {
      * 実ファイル保存への接続はフェーズ8 で行うため、フェーズ2 はバイト列取得までの実装。
      */
     suspend fun downloadAudio(url: String): ByteArray
+
+    /**
+     * デバイストークン（FCM）を登録する（冪等: 同一 token は upsert。フェーズ9）。
+     *
+     * @param platform backend は platform 別にトークン形式を検証し保存先を分岐する
+     * （android は FCM 形式・fcmDeviceTokens コレクション。正本: backend api/routers/notifications.py）。
+     */
+    suspend fun registerDeviceToken(token: String, platform: String = "android")
+
+    /** デバイストークン（FCM）を解除する（冪等: 不在でも成功扱い。フェーズ9）。 */
+    suspend fun unregisterDeviceToken(token: String, platform: String = "android")
 }

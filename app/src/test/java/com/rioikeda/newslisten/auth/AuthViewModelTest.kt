@@ -37,8 +37,9 @@ class AuthViewModelTest {
         apiClient: ApiClient = FakeApiClient(),
         sessionStore: SessionStore = InMemorySessionStore(),
         onLogoutCleanup: () -> Unit = {},
+        onAuthenticated: () -> Unit = {},
     ): AuthViewModel =
-        AuthViewModel(apiClient, sessionStore, StandardTestDispatcher(testScheduler), onLogoutCleanup)
+        AuthViewModel(apiClient, sessionStore, StandardTestDispatcher(testScheduler), onLogoutCleanup, onAuthenticated)
 
     // --- refreshAuth ---
 
@@ -232,5 +233,71 @@ class AuthViewModelTest {
         viewModel.login("u", "p")
 
         assertFalse(cleanupCalled)
+    }
+
+    // --- onAuthenticated（フェーズ9・FCM トークン登録フック） ---
+
+    @Test
+    fun refreshAuthでAuthenticatedになるとonAuthenticatedが呼ばれる() = runTest {
+        var authenticatedCalled = false
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onMe = { user }, onFetchPreferences = { preferences }),
+            sessionStore = InMemorySessionStore(initialToken = "token-abc"),
+            onAuthenticated = { authenticatedCalled = true },
+        )
+
+        viewModel.refreshAuth()
+
+        assertTrue(authenticatedCalled)
+    }
+
+    @Test
+    fun refreshAuthでUnauthenticatedのままならonAuthenticatedは呼ばれない() = runTest {
+        var authenticatedCalled = false
+        val viewModel = newViewModel(
+            sessionStore = InMemorySessionStore(initialToken = null),
+            onAuthenticated = { authenticatedCalled = true },
+        )
+
+        viewModel.refreshAuth()
+
+        assertFalse(authenticatedCalled)
+    }
+
+    @Test
+    fun login成功でonAuthenticatedが呼ばれる() = runTest {
+        var authenticatedCalled = false
+        val loginResponse = LoginResponse(token = "new-token", user = user)
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onLogin = { _, _ -> loginResponse }),
+            onAuthenticated = { authenticatedCalled = true },
+        )
+
+        viewModel.login("u", "p")
+
+        assertTrue(authenticatedCalled)
+    }
+
+    @Test
+    fun login失敗ならonAuthenticatedは呼ばれない() = runTest {
+        var authenticatedCalled = false
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onLogin = { _, _ -> throw ApiException.HttpError(401) }),
+            onAuthenticated = { authenticatedCalled = true },
+        )
+
+        viewModel.login("u", "wrong-password")
+
+        assertFalse(authenticatedCalled)
+    }
+
+    @Test
+    fun logoutではonAuthenticatedは呼ばれない() = runTest {
+        var authenticatedCalled = false
+        val viewModel = newViewModel(onAuthenticated = { authenticatedCalled = true })
+
+        viewModel.logout()
+
+        assertFalse(authenticatedCalled)
     }
 }
