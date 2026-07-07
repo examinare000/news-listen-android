@@ -135,7 +135,7 @@ class PodcastViewModel(
                 _currentPodcast.value = fresh
                 _errorMessage.value = null
                 playerController.onPlaybackCompleted = { scope.launch { handlePlaybackEnded() } }
-                playerController.prepare(fresh.audioUrl)
+                playerController.prepare(fresh.audioUrl, fresh.toPlaybackMetadata())
                 playerController.play()
                 startPositionSync(fresh.id)
             } catch (e: ApiException) {

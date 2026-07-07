@@ -73,6 +73,7 @@ android {
         compose = true
         buildConfig = true
     }
+
 }
 
 dependencies {
@@ -99,6 +100,9 @@ dependencies {
 
     // Media3 ExoPlayer: 音声再生制御（フェーズ5）
     implementation(libs.androidx.media3.exoplayer)
+
+    // Media3 Session: MediaSessionService + MediaStyle 通知（フェーズ7）
+    implementation(libs.androidx.media3.session)
 
     // Testing
     testImplementation(libs.junit)

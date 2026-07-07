@@ -41,8 +41,14 @@ interface PlayerController {
      */
     var onPlaybackCompleted: (() -> Unit)?
 
-    /** 指定 URL の音声を再生準備する。 */
-    fun prepare(url: String)
+    /**
+     * 指定 URL の音声を再生準備する。
+     *
+     * [metadata] は MediaItem の MediaMetadata に載せ、MediaStyle 通知（ロック画面含む）の
+     * タイトル/アーティストとして表示される（正本: NowPlayingInfo.swift:36-37 の
+     * `MPMediaItemPropertyTitle`/`MPMediaItemPropertyArtist` 相当）。
+     */
+    fun prepare(url: String, metadata: PlaybackMetadata)
 
     /** 再生を開始（または再開）する。 */
     fun play()

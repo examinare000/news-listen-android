@@ -4,6 +4,13 @@
     <!-- インターネットアクセス: バックエンド API 通信用 -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- フォアグラウンドサービス: MediaSessionService の再生通知表示用（API 31+） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <!-- 通知ポスト: MediaStyle 通知表示用（API 33+） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".NewsListenApplication"
         android:allowBackup="true"
@@ -22,6 +29,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- MediaSessionService: 共有 ExoPlayer の MediaSession 提供（フェーズ7） -->
+        <service
+            android:name=".playbackservice.PlaybackService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
 
     </application>
 
