@@ -38,6 +38,11 @@
     <string name="podcast_empty">Podcast がありません</string>
     <string name="error_dialog_title">エラー</string>
 
+    <!-- ダウンロード -->
+    <string name="podcast_download_label">ダウンロード</string>
+    <string name="podcast_downloading">ダウンロード中</string>
+    <string name="podcast_downloaded">ダウンロード済み</string>
+
     <!-- プレイヤー -->
     <string name="player_now_playing">再生中</string>
     <string name="player_transcript">トランスクリプト</string>

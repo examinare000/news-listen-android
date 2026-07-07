@@ -4,6 +4,8 @@ import com.rioikeda.newslisten.core.PlaybackQueue
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
+import com.rioikeda.newslisten.network.AudioCacheException
+import com.rioikeda.newslisten.network.AudioCacheManager
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -32,6 +34,7 @@ import kotlinx.coroutines.withContext
 class PodcastViewModel(
     private val apiClient: ApiClient,
     private val playerController: PlayerController,
+    private val cacheManager: AudioCacheManager,
     private val dispatcher: CoroutineDispatcher,
 ) {
     // 位置同期タイマー（15秒毎）を動かすための内部スコープ。play()/suspend 関数の呼び出しを跨いで
@@ -73,6 +76,27 @@ class PodcastViewModel(
     /** 現在再生対象の Podcast（未再生なら null）。署名付き URL 再取得後の最新値。 */
     val currentPodcast: StateFlow<PodcastResponse?> = _currentPodcast.asStateFlow()
 
+    private val _downloadingIds = MutableStateFlow<Set<String>>(emptySet())
+
+    /** ダウンロード中 Podcast ID の集合（進捗率は持たない。フェーズ8-B・ADR-027）。 */
+    val downloadingIds: StateFlow<Set<String>> = _downloadingIds.asStateFlow()
+
+    private val _downloadedIds = MutableStateFlow<Set<String>>(emptySet())
+
+    /** ダウンロード済み（キャッシュ済み）Podcast ID の集合。 */
+    val downloadedIds: StateFlow<Set<String>> = _downloadedIds.asStateFlow()
+
+    /**
+     * 進行中ダウンロードの Job 追跡（[cancelDownloadsAndClearCache] からの明示的キャンセル用）。
+     *
+     * WHY: [download] は fetchPodcast という suspend 境界を挟むため、logout 時の
+     * cancelDownloadsAndClearCache（別コルーチンから呼ばれる）と無同期だと、
+     * 削除後にファイル書き込みが発生し downloadedIds が残留し得る（spec §6.3 違反）。
+     * 読み書きは常に [dispatcher]（limitedParallelism(1)）上でのみ行われるため、
+     * 追加の同期プリミティブなしで安全に共有できる（[_downloadingIds] 等の StateFlow と同じ規律）。
+     */
+    private val downloadJobs: MutableMap<String, Job> = mutableMapOf()
+
     private val _queue = MutableStateFlow(PlaybackQueue<PodcastResponse>())
 
     /**
@@ -91,10 +115,75 @@ class PodcastViewModel(
         try {
             val response = apiClient.fetchPodcasts()
             _podcasts.value = response.podcasts
+            syncDownloadedState()
         } catch (e: ApiException) {
             _errorMessage.value = e.message
         }
         _isLoading.value = false
+    }
+
+    /**
+     * ローカルキャッシュから、ダウンロード済み ID を同期する。
+     * 正本: PodcastViewModel.swift:112-115（syncDownloadedState）。
+     */
+    private fun syncDownloadedState() {
+        _downloadedIds.value = _podcasts.value.filter { cacheManager.isCached(it.id) }.map { it.id }.toSet()
+    }
+
+    /**
+     * 指定 Podcast の音声をダウンロード・キャッシュし、[downloadedIds] に追加する。
+     * ダウンロード中の重複を防ぐため、既に downloading/downloaded 中なら何もしない
+     * （正本: PodcastViewModel.swift:141-163 の二重起動防止と同じガード）。
+     *
+     * 実処理は [scope]（[dispatcher] 上）で起動した Job として [downloadJobs] に登録し、
+     * 呼び出し元には従来どおり完了まで suspend する契約を維持するため join する。
+     * こうして [cancelDownloadsAndClearCache] が外部（logout 経路）から個々のダウンロードを
+     * 明示的にキャンセルできるようにする（Job 参照を保持しない限りキャンセル不能なため）。
+     *
+     * @param podcast ダウンロード対象の Podcast。
+     */
+    suspend fun download(podcast: PodcastResponse) {
+        val job = withContext(dispatcher) {
+            if (_downloadingIds.value.contains(podcast.id) || _downloadedIds.value.contains(podcast.id)) {
+                return@withContext null
+            }
+            _downloadingIds.value = _downloadingIds.value + podcast.id
+            scope.launch { performDownload(podcast) }.also { downloadJobs[podcast.id] = it }
+        }
+        job?.join()
+    }
+
+    /** [download] の実処理本体。[scope] 上の Job として起動され、[dispatcher] に確定して実行される。 */
+    private suspend fun performDownload(podcast: PodcastResponse) {
+        try {
+            // 署名付き URL を新たに取得（ダウンロード時点での最新 URL を確保）。
+            val fresh = apiClient.fetchPodcast(podcast.id)
+            val audioData = apiClient.downloadAudio(fresh.audioUrl)
+            cacheManager.cache(podcast.id, audioData)
+            _downloadedIds.value = _downloadedIds.value + podcast.id
+        } catch (e: ApiException) {
+            _errorMessage.value = e.message
+        } catch (e: AudioCacheException) {
+            _errorMessage.value = e.message
+        } finally {
+            _downloadingIds.value = _downloadingIds.value - podcast.id
+            downloadJobs.remove(podcast.id)
+        }
+    }
+
+    /**
+     * キャッシュからダウンロード済み Podcast を削除する。
+     * 正本: PodcastViewModel.swift:165-174（removeDownload）。
+     *
+     * @param id 削除対象の Podcast ID。
+     */
+    suspend fun removeDownload(id: String): Unit = withContext(dispatcher) {
+        try {
+            cacheManager.remove(id)
+            _downloadedIds.value = _downloadedIds.value - id
+        } catch (e: AudioCacheException) {
+            _errorMessage.value = e.message
+        }
     }
 
     /**

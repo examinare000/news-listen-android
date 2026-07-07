@@ -5,7 +5,9 @@ import com.rioikeda.newslisten.BuildConfig
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedViewModel
 import com.rioikeda.newslisten.network.ApiClient
+import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.AuthInterceptor
+import com.rioikeda.newslisten.network.JavaFileSystem
 import com.rioikeda.newslisten.network.KeystoreSessionStore
 import com.rioikeda.newslisten.network.OkHttpApiClient
 import com.rioikeda.newslisten.network.SessionStore
@@ -59,6 +61,20 @@ class AppContainer(context: Context) {
     private val apiClient: ApiClient = OkHttpApiClient(
         baseUrl = baseUrl.toHttpUrl(),
         okHttpClient = okHttpClient
+    )
+
+    /**
+     * 音声キャッシュマネージャ（フェーズ8-B・ADR-027）。
+     *
+     * 正本: ios/NewsListenApp/NewsListenApp/Networking/AudioCacheManager.swift（iOS は
+     * PodcastViewModel.swift:87 のデフォルト引数で `FileManager.default` の `Caches/` を暗黙に使う）。
+     * Android は Hilt 不採用方針（ADR-066）に合わせ、AppContainer で明示的に組み立てて注入する。
+     * `Context.cacheDir` はアプリのアンインストール/OS のストレージ逼迫時に自動削除され得る領域で、
+     * オフライン再生用の一時キャッシュとして妥当（iOS の `Caches/` ディレクトリと同じ位置付け）。
+     */
+    private val audioCacheManager: AudioCacheManager = AudioCacheManager(
+        fileSystem = JavaFileSystem(),
+        baseDir = appContext.cacheDir.absolutePath
     )
 
     /**
@@ -134,6 +150,7 @@ class AppContainer(context: Context) {
         PodcastViewModel(
             apiClient = apiClient,
             playerController = _playerController,
+            cacheManager = audioCacheManager,
             dispatcher = Dispatchers.Default.limitedParallelism(1)
         )
     }
