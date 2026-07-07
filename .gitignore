@@ -1,0 +1,28 @@
+# Android Gradle
+.gradle/
+build/
+
+# Android Studio
+.idea/
+*.iml
+.externalNativeBuild
+.cxx/
+
+# Local configuration
+local.properties
+
+# macOS
+.DS_Store
+
+# Captures
+captures/
+
+# Keystore files
+*.keystore
+*.jks
+
+# Test results
+test-results/
+
+# Lint results
+lint-results/
