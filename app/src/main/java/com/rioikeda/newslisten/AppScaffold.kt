@@ -25,10 +25,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rioikeda.newslisten.auth.AuthState
+import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedScreen
 import com.rioikeda.newslisten.feed.FeedViewModel
 import com.rioikeda.newslisten.podcast.PodcastScreen
 import com.rioikeda.newslisten.podcast.PodcastViewModel
+import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.settings.SettingsScreen
+import com.rioikeda.newslisten.settings.SettingsViewModel
 
 /**
  * メインのアプリケーション スカフォルド。3 タブ（フィード / Podcast / 設定）を Material3 NavigationBar で提供する。
@@ -38,10 +44,23 @@ import com.rioikeda.newslisten.podcast.PodcastViewModel
  *
  * @param feedViewModel フィード タブの ViewModel（AppContainer.getFeedViewModel() から供給）。
  * @param podcastViewModel Podcast タブの ViewModel（AppContainer.getPodcastViewModel() から供給）。
+ * @param settingsViewModel 設定 タブの ViewModel（AppContainer.getSettingsViewModel() から供給）。
+ * @param preferencesStore ユーザー設定値の永続化層（AppContainer.getPreferencesStore() から供給）。
+ * @param authViewModel 認証状態 ViewModel（SettingsScreen の admin ゲート判定用）。
  */
 @Composable
-fun AppScaffold(feedViewModel: FeedViewModel, podcastViewModel: PodcastViewModel) {
+fun AppScaffold(
+    feedViewModel: FeedViewModel,
+    podcastViewModel: PodcastViewModel,
+    settingsViewModel: SettingsViewModel,
+    preferencesStore: PreferencesStore,
+    authViewModel: AuthViewModel,
+) {
     var selectedTab by remember { mutableStateOf(0) }
+
+    // Get admin status from authViewModel
+    val authState by authViewModel.authState.collectAsStateWithLifecycle()
+    val isAdmin = (authState as? AuthState.Authenticated)?.user?.role == "admin"
 
     val tabs = listOf(
         TabItem(
@@ -57,7 +76,7 @@ fun AppScaffold(feedViewModel: FeedViewModel, podcastViewModel: PodcastViewModel
         TabItem(
             label = stringResource(R.string.tab_settings),
             icon = Icons.Filled.Settings,
-            screen = { SettingsTabPlaceholder() }
+            screen = { SettingsScreen(settingsViewModel, preferencesStore, authViewModel, isAdmin) }
         )
     )
 
@@ -124,20 +143,3 @@ private fun PodcastTabPlaceholder() {
     }
 }
 
-/** 設定 タブ プレースホルダ。 */
-@Composable
-private fun SettingsTabPlaceholder() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = stringResource(R.string.placeholder_settings),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-    }
-}

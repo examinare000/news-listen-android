@@ -71,4 +71,73 @@
 
     <!-- プッシュ通知（フェーズ9・FCM） -->
     <string name="notification_channel_podcast_updates">Podcast 更新通知</string>
+
+    <!-- 設定画面（フェーズ10 P10 Task5） -->
+    <string name="settings_screen_title">設定</string>
+
+    <!-- フィードセクション -->
+    <string name="settings_section_feed">フィード</string>
+    <string name="settings_article_open_mode_label">記事の開き方</string>
+    <string name="settings_article_open_mode_in_app">アプリ内で開く</string>
+    <string name="settings_article_open_mode_external">外部ブラウザで開く</string>
+    <string name="settings_time_format_label">記事の日付表記</string>
+    <string name="settings_time_format_absolute">絶対表記 (YYYY-MM-DD)</string>
+    <string name="settings_time_format_relative">相対表記 (N分前)</string>
+    <string name="settings_preferences_sync_failed">設定の同期に失敗しました。ローカルの値を表示しています。</string>
+    <string name="settings_retry_button">再試行</string>
+
+    <!-- RSS ソースセクション -->
+    <string name="settings_section_rss_sources">購読中のRSSソース</string>
+    <string name="settings_rss_sources_count">購読中のRSSソース (%d)</string>
+    <string name="settings_rss_sources_empty">購読中のRSSソースはありません</string>
+    <string name="settings_rss_sources_add_button">ソースを追加</string>
+    <string name="settings_rss_sources_edit_hint">タップすると名称と URL を編集できます</string>
+    <string name="settings_rss_sources_add_dialog_title">RSS ソースを追加</string>
+    <string name="settings_rss_sources_add_dialog_name_label">名前 (例: TechCrunch)</string>
+    <string name="settings_rss_sources_add_dialog_url_label">RSS URL</string>
+    <string name="settings_rss_sources_add_dialog_confirm">追加</string>
+    <string name="settings_rss_sources_add_dialog_cancel">キャンセル</string>
+    <string name="settings_rss_sources_edit_dialog_title">RSS ソースを編集</string>
+    <string name="settings_rss_sources_edit_dialog_confirm">変更を保存</string>
+
+    <!-- おすすめサイトセクション -->
+    <string name="settings_section_featured_sites">おすすめサイト</string>
+    <string name="settings_featured_sites_failed">おすすめサイトの取得に失敗しました</string>
+    <string name="settings_featured_sites_subscribe_button">購読</string>
+
+    <!-- Podcast 生成セクション -->
+    <string name="settings_section_generation_quota">Podcast 生成</string>
+    <string name="settings_generation_quota_unlimited">本日の生成回数: 無制限</string>
+    <string name="settings_generation_quota_limited">本日の残り生成回数: %d / %d</string>
+    <string name="settings_generation_quota_failed">生成残回数の取得に失敗しました</string>
+
+    <!-- 聴取ストリークセクション -->
+    <string name="settings_section_listening_streak">聴取ストリーク</string>
+    <string name="settings_listening_streak_days">%d日連続</string>
+    <string name="settings_listening_streak_today_listened">本日聴取済み</string>
+    <string name="settings_listening_streak_last_day">最終聴取日: %s</string>
+    <string name="settings_listening_streak_no_history">まだ聴取記録がありません</string>
+    <string name="settings_listening_streak_failed">聴取ストリークの取得に失敗しました</string>
+
+    <!-- 難易度セクション -->
+    <string name="settings_section_difficulty">デフォルト難易度</string>
+    <string name="settings_difficulty_label">難易度</string>
+    <string name="settings_difficulty_toeic_600">TOEIC 600以下</string>
+    <string name="settings_difficulty_toeic_900">TOEIC 730〜900</string>
+    <string name="settings_difficulty_ielts_55">IELTS 5.5〜6.5</string>
+    <string name="settings_difficulty_ielts_7">IELTS 7.0以上</string>
+    <string name="settings_difficulty_eiken_2">英検2級</string>
+    <string name="settings_difficulty_eiken_p1">英検準1級以上</string>
+
+    <!-- 再生速度セクション -->
+    <string name="settings_section_playback_speed">再生速度</string>
+    <string name="settings_playback_speed_label">デフォルト再生速度</string>
+    <string name="settings_playback_speed_format">%1$.2f×</string>
+
+    <!-- アカウントセクション -->
+    <string name="settings_section_account">アカウント</string>
+    <string name="settings_logout_button">ログアウト</string>
+
+    <!-- エラーメッセージ -->
+    <string name="settings_error_dialog_title">エラー</string>
 </resources>

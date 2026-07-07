@@ -4,6 +4,9 @@ import com.rioikeda.newslisten.model.ArticleResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
+import com.rioikeda.newslisten.preferences.ArticleOpenMode
+import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.preferences.TimeFormat
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -24,9 +27,22 @@ import kotlinx.coroutines.withContext
 class FeedViewModel(
     private val apiClient: ApiClient,
     private val dispatcher: CoroutineDispatcher,
+    /**
+     * 記事の開き方・日付表記設定の値の正本（フェーズ10 P10 Task4）。FeedViewModel は独自コピーを
+     * 持たず、このストアの StateFlow（[articleOpenMode]・[timeFormat]）をそのまま公開する
+     * （「どちらが最新か」の二重管理を避ける設計。[com.rioikeda.newslisten.auth.AuthViewModel] と
+     * 同じ方針。詳細は [PreferencesStore] のコメント参照）。
+     */
+    private val preferencesStore: PreferencesStore,
 ) {
     private val _articles = MutableStateFlow<List<ArticleResponse>>(emptyList())
     val articles: StateFlow<List<ArticleResponse>> = _articles.asStateFlow()
+
+    /** 記事タップ時の遷移先設定（[ArticleOpener] へそのまま渡す）。 */
+    val articleOpenMode: StateFlow<ArticleOpenMode> = preferencesStore.articleOpenMode
+
+    /** 記事の日付表記設定（FeedScreen の日付表示切り替えに使う）。 */
+    val timeFormat: StateFlow<TimeFormat> = preferencesStore.timeFormat
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()

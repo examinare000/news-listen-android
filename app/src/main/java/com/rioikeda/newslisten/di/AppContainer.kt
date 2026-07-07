@@ -5,8 +5,10 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.google.firebase.messaging.FirebaseMessaging
 import com.rioikeda.newslisten.BuildConfig
+import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedViewModel
 import com.rioikeda.newslisten.network.ApiClient
@@ -20,11 +22,17 @@ import com.rioikeda.newslisten.network.SessionStore
 import com.rioikeda.newslisten.notification.FcmTokenRegistrar
 import com.rioikeda.newslisten.podcast.ExoPlayerController
 import com.rioikeda.newslisten.podcast.PodcastViewModel
+import com.rioikeda.newslisten.preferences.DataStorePreferencesStore
+import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.settings.SettingsViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
+import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
@@ -138,6 +146,33 @@ class AppContainer(context: Context) {
     fun getFcmTokenRegistrar(): FcmTokenRegistrar = fcmTokenRegistrar
 
     /**
+     * PreferencesStore（フェーズ10 P10 Task3）用の長寿命 CoroutineScope。
+     *
+     * WHY SupervisorJob + Dispatchers.Default: AudioCacheManager 等と異なり、値の読み取り
+     * （StateFlow）がアプリ全体の寿命にわたって必要なため、特定の ViewModel のスコープではなく
+     * AppContainer（Application スコープ）に紐づく専用スコープを持つ。SupervisorJob により
+     * 個々の書き込み失敗が他の購読を巻き込んで停止させない。
+     */
+    private val preferencesScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * ユーザー設定選択（難易度・再生速度・記事の開き方・日付表記）の値所有層（フェーズ10 P10 Task3）。
+     *
+     * 正本: ios/NewsListenApp/NewsListenApp/AppState.swift（UserDefaults 永続化）のミラー。
+     * ファイルは `filesDir` 配下に置く（`cacheDir` はストレージ逼迫時に OS が削除し得るため、
+     * 恒久的なユーザー設定の保存先として不適切）。
+     */
+    private val preferencesStore: PreferencesStore = DataStorePreferencesStore(
+        dataStore = PreferenceDataStoreFactory.create(
+            scope = preferencesScope,
+            produceFile = { File(appContext.filesDir, "user_preferences.preferences_pb") },
+        ),
+        scope = preferencesScope,
+    )
+
+    fun getPreferencesStore(): PreferencesStore = preferencesStore
+
+    /**
      * AuthViewModel（認証状態ゲーティング + ログイン）を生成して返す。
      *
      * Dispatcher: Dispatchers.Default は CPU バウンドタスク向き。IO タスクには Dispatchers.IO を
@@ -165,6 +200,7 @@ class AppContainer(context: Context) {
             apiClient = apiClient,
             sessionStore = sessionStore,
             dispatcher = Dispatchers.Default,
+            preferencesStore = preferencesStore,
             // フェーズ9: cancelDownloadsAndClearCache（既存・フェーズ8-D）と FCM トークン解除を
             // 両方行う合成ラムダ。onLogoutCleanup は単一のフック点のため、複数の後始末はここで束ねる。
             // 各操作を独立した try/catch で保護し、前段の失敗が後段をスキップさせないようにする。
@@ -205,7 +241,8 @@ class AppContainer(context: Context) {
     private val _feedViewModel: FeedViewModel by lazy {
         FeedViewModel(
             apiClient = apiClient,
-            dispatcher = Dispatchers.Default.limitedParallelism(1)
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+            preferencesStore = preferencesStore,
         )
     }
 
@@ -249,4 +286,34 @@ class AppContainer(context: Context) {
     }
 
     fun getPodcastViewModel(): PodcastViewModel = _podcastViewModel
+
+    /**
+     * SettingsViewModel（設定タブ: RSS ソース管理・おすすめサイト・生成クォータ・聴取ストリーク・
+     * 難易度/再生速度のサーバー同期）を生成して返す（フェーズ10 P10 Task2）。
+     *
+     * Dispatcher: FeedViewModel/PodcastViewModel と同じ理由で
+     * Dispatchers.Default.limitedParallelism(1) を使う。sources リストの読み取り→書き込みが
+     * 複数スレッドで競合すると更新の取りこぼしが起こり得るため、単一スレッドで直列化する。
+     *
+     * isAdminProvider: RSS ソース編集（updateSource）は admin 限定（issue #66・ADR-047）。
+     * settings 層が auth 層の型（AuthState）に直接依存しないよう、AuthViewModel の
+     * onLogoutCleanup/onAuthenticated と同じ「呼び出し元が判定関数を注入する」パターンを踏襲する。
+     * role は認証確立後に非同期で確定するため、コンストラクタ時点の固定値ではなく
+     * 呼び出し時点で都度 _authViewModel.authState.value を評価する。
+     *
+     * by lazy でシングルトンキャッシュ化：画面回転時に SettingsViewModel インスタンスが
+     * 同じままであることを保証し、sources/generationQuota 等の読み込み済み状態を保持する。
+     */
+    private val _settingsViewModel: SettingsViewModel by lazy {
+        SettingsViewModel(
+            apiClient = apiClient,
+            preferencesStore = preferencesStore,
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+            isAdminProvider = {
+                (_authViewModel.authState.value as? AuthState.Authenticated)?.user?.role == "admin"
+            },
+        )
+    }
+
+    fun getSettingsViewModel(): SettingsViewModel = _settingsViewModel
 }

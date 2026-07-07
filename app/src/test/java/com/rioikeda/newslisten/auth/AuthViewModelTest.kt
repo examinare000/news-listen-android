@@ -7,6 +7,8 @@ import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.InMemorySessionStore
 import com.rioikeda.newslisten.network.SessionStore
+import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
+import com.rioikeda.newslisten.preferences.PreferencesStore
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -21,6 +23,9 @@ import org.junit.Test
  *
  * 正本: ios/NewsListenApp/NewsListenApp/AppState.swift:130-178（refreshAuth/refreshPreferences/logout）、
  * ios/NewsListenApp/NewsListenApp/Auth/LoginViewModel.swift（ログインのエラー文言）のミラー。
+ *
+ * フェーズ10 P10 Task3: defaultDifficulty/defaultPlaybackSpeed の値の正本は [PreferencesStore] に
+ * 一本化した（AuthViewModel は StateFlow を委譲するのみで独自コピーを持たない）。
  */
 class AuthViewModelTest {
 
@@ -36,10 +41,18 @@ class AuthViewModelTest {
     private fun TestScope.newViewModel(
         apiClient: ApiClient = FakeApiClient(),
         sessionStore: SessionStore = InMemorySessionStore(),
+        preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
         onLogoutCleanup: () -> Unit = {},
         onAuthenticated: () -> Unit = {},
     ): AuthViewModel =
-        AuthViewModel(apiClient, sessionStore, StandardTestDispatcher(testScheduler), onLogoutCleanup, onAuthenticated)
+        AuthViewModel(
+            apiClient = apiClient,
+            sessionStore = sessionStore,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            preferencesStore = preferencesStore,
+            onLogoutCleanup = onLogoutCleanup,
+            onAuthenticated = onAuthenticated,
+        )
 
     // --- refreshAuth ---
 
@@ -106,6 +119,23 @@ class AuthViewModelTest {
         assertEquals("toeic_800", viewModel.defaultDifficulty.value)
         assertEquals(1.5, viewModel.defaultPlaybackSpeed.value, 0.0)
         assertFalse(viewModel.preferencesSyncFailed.value)
+    }
+
+    @Test
+    fun 認証成功後preferences取得成功で注入したPreferencesStore自体が更新される() = runTest {
+        // 二重管理でないことの検証: AuthViewModel が内部に独自コピーを持たず、注入した
+        // PreferencesStore インスタンスそのものへ書き戻していることを確認する。
+        val preferencesStore = InMemoryPreferencesStore()
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onMe = { user }, onFetchPreferences = { preferences }),
+            sessionStore = InMemorySessionStore(initialToken = "token-abc"),
+            preferencesStore = preferencesStore,
+        )
+
+        viewModel.refreshAuth()
+
+        assertEquals("toeic_800", preferencesStore.defaultDifficulty.value)
+        assertEquals(1.5, preferencesStore.defaultPlaybackSpeed.value, 0.0)
     }
 
     @Test

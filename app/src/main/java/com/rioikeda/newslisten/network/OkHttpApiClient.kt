@@ -2,7 +2,10 @@ package com.rioikeda.newslisten.network
 
 import com.rioikeda.newslisten.model.ActionResponse
 import com.rioikeda.newslisten.model.DeviceTokenRequest
+import com.rioikeda.newslisten.model.FeaturedSitesResponse
 import com.rioikeda.newslisten.model.FeedResponse
+import com.rioikeda.newslisten.model.GenerationQuotaResponse
+import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.LoginRequest
 import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.NewsListenJson
@@ -10,7 +13,11 @@ import com.rioikeda.newslisten.model.PlaybackPositionRequest
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
+import com.rioikeda.newslisten.model.RssSourceCreateRequest
+import com.rioikeda.newslisten.model.RssSourceUpdateRequest
+import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.model.StarRequest
+import com.rioikeda.newslisten.model.UpdatePreferencesRequest
 import com.rioikeda.newslisten.model.UserResponse
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.KSerializer
@@ -121,6 +128,60 @@ class OkHttpApiClient(
             buildRequest(ApiEndpoint.UnregisterDeviceToken, queryParams = mapOf("token" to token, "platform" to platform))
         )
     }
+
+    override suspend fun fetchSources(): RssSourcesResponse =
+        execute(buildRequest(ApiEndpoint.FetchSources), RssSourcesResponse.serializer())
+
+    override suspend fun createSource(name: String, url: String): RssSourcesResponse =
+        execute(
+            buildRequest(
+                ApiEndpoint.CreateSource,
+                body = RssSourceCreateRequest(name = name, url = url),
+                bodySerializer = RssSourceCreateRequest.serializer(),
+            ),
+            RssSourcesResponse.serializer(),
+        )
+
+    override suspend fun updateSource(oldUrl: String, name: String, url: String): RssSourcesResponse =
+        execute(
+            buildRequest(
+                ApiEndpoint.UpdateSource,
+                body = RssSourceUpdateRequest(name = name, url = url, oldUrl = oldUrl),
+                bodySerializer = RssSourceUpdateRequest.serializer(),
+            ),
+            RssSourcesResponse.serializer(),
+        )
+
+    override suspend fun deleteSource(url: String): RssSourcesResponse =
+        execute(
+            buildRequest(ApiEndpoint.DeleteSource, queryParams = mapOf("url" to url)),
+            RssSourcesResponse.serializer(),
+        )
+
+    override suspend fun fetchFeaturedSites(): FeaturedSitesResponse =
+        execute(buildRequest(ApiEndpoint.FeaturedSources), FeaturedSitesResponse.serializer())
+
+    override suspend fun updatePreferences(
+        defaultDifficulty: String?,
+        defaultPlaybackSpeed: Double?,
+    ): PreferencesResponse =
+        execute(
+            buildRequest(
+                ApiEndpoint.UpdatePreferences,
+                body = UpdatePreferencesRequest(
+                    defaultDifficulty = defaultDifficulty,
+                    defaultPlaybackSpeed = defaultPlaybackSpeed,
+                ),
+                bodySerializer = UpdatePreferencesRequest.serializer(),
+            ),
+            PreferencesResponse.serializer(),
+        )
+
+    override suspend fun fetchGenerationQuota(): GenerationQuotaResponse =
+        execute(buildRequest(ApiEndpoint.GenerationQuota), GenerationQuotaResponse.serializer())
+
+    override suspend fun fetchListeningStreak(): ListeningStreakResponse =
+        execute(buildRequest(ApiEndpoint.ListeningStreak), ListeningStreakResponse.serializer())
 
     // region private helpers
 
