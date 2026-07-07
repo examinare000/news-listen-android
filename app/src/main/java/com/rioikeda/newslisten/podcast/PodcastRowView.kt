@@ -8,17 +8,25 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.model.PodcastResponse
 
@@ -31,6 +39,9 @@ import com.rioikeda.newslisten.model.PodcastResponse
 fun PodcastRowView(
     podcast: PodcastResponse,
     isPlaying: Boolean,
+    downloadingIds: Set<String> = emptySet(),
+    downloadedIds: Set<String> = emptySet(),
+    onDownloadTap: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
@@ -120,6 +131,16 @@ fun PodcastRowView(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    // ダウンロードボタン（processing/failed の場合は表示しない）
+                    if (PodcastStatusBadge.from(podcast) is PodcastStatusBadge.None) {
+                        DownloadButton(
+                            isDownloading = podcast.id in downloadingIds,
+                            isDownloaded = podcast.id in downloadedIds,
+                            onDownloadTap = onDownloadTap,
+                            modifier = Modifier.padding(start = DSSpacing.s)
+                        )
+                    }
                 }
             }
         }
@@ -130,6 +151,69 @@ fun PodcastRowView(
             thickness = 1.dp,
             modifier = Modifier.padding(horizontal = DSSpacing.l)
         )
+    }
+}
+
+/**
+ * ダウンロード状態に応じたボタンを返す。
+ *
+ * 正本: ios/NewsListenApp/NewsListenApp/Podcast/PodcastRowView.swift:80-102
+ * - 未キャッシュ + completed: ダウンロードボタン（iOS: arrow.down.circle。Android は
+ *   Icons.Filled.Download が material-icons-core に非搭載のため "↓" テキストグリフで代替し、
+ *   a11y は contentDescription（podcast_download_label）を semantics で補う）
+ * - ダウンロード中（downloadingIds に含まれる）: 不定 CircularProgressIndicator（進捗率なし。
+ *   a11y は contentDescription（podcast_downloading）を semantics で補う）
+ * - キャッシュ済み（downloadedIds に含まれる）: 静的チェックアイコン（非インタラクティブ）
+ */
+@Composable
+private fun DownloadButton(
+    isDownloading: Boolean,
+    isDownloaded: Boolean,
+    onDownloadTap: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    when {
+        isDownloading -> {
+            // ダウンロード中: 不定 ProgressIndicator。既定の semantics（進捗ロール）だけでは
+            // 読み上げ内容が不明瞭なため、AudioPlayerSection の一時停止アイコンと同じ前例に倣い
+            // clearAndSetSemantics で contentDescription に置き換える。
+            val downloadingLabel = stringResource(R.string.podcast_downloading)
+            CircularProgressIndicator(
+                modifier = modifier
+                    .width(24.dp)
+                    .padding(2.dp)
+                    .clearAndSetSemantics { contentDescription = downloadingLabel },
+                strokeWidth = 2.dp
+            )
+        }
+        isDownloaded -> {
+            // キャッシュ済み: 静的チェックアイコン（非インタラクティブ）
+            Icon(
+                imageVector = Icons.Filled.CheckCircle,
+                contentDescription = stringResource(R.string.podcast_downloaded),
+                tint = MaterialTheme.colorScheme.secondary,
+                modifier = modifier.width(24.dp)
+            )
+        }
+        else -> {
+            // 未キャッシュ: ダウンロードボタン。装飾テキスト "↓" 自体の既定 semantics（生の文字を
+            // 読み上げる）は clearAndSetSemantics で打ち消し、ボタン側の contentDescription のみ
+            // 読み上げさせる（AudioPlayerSection の skip ボタン群と同じ前例）。
+            val downloadLabel = stringResource(R.string.podcast_download_label)
+            IconButton(
+                onClick = { onDownloadTap?.invoke() },
+                modifier = modifier
+                    .width(32.dp)
+                    .semantics { contentDescription = downloadLabel }
+            ) {
+                Text(
+                    text = "↓",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clearAndSetSemantics {}
+                )
+            }
+        }
     }
 }
 

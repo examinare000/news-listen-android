@@ -36,7 +36,9 @@ class AuthViewModelTest {
     private fun TestScope.newViewModel(
         apiClient: ApiClient = FakeApiClient(),
         sessionStore: SessionStore = InMemorySessionStore(),
-    ): AuthViewModel = AuthViewModel(apiClient, sessionStore, StandardTestDispatcher(testScheduler))
+        onLogoutCleanup: () -> Unit = {},
+    ): AuthViewModel =
+        AuthViewModel(apiClient, sessionStore, StandardTestDispatcher(testScheduler), onLogoutCleanup)
 
     // --- refreshAuth ---
 
@@ -190,5 +192,45 @@ class AuthViewModelTest {
 
         assertNull(sessionStore.load())
         assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+    }
+
+    // --- logout: キャッシュクリーンアップ（spec §6.3 共有端末対応、フェーズ8-D） ---
+
+    @Test
+    fun logoutでonLogoutCleanupが呼ばれる() = runTest {
+        var cleanupCalled = false
+        val viewModel = newViewModel(onLogoutCleanup = { cleanupCalled = true })
+
+        viewModel.logout()
+
+        assertTrue(cleanupCalled)
+    }
+
+    @Test
+    fun logoutはonLogoutCleanupが例外を投げてもトークンを破棄しUnauthenticatedになる() = runTest {
+        val sessionStore = InMemorySessionStore(initialToken = "token-abc")
+        val viewModel = newViewModel(
+            sessionStore = sessionStore,
+            onLogoutCleanup = { throw RuntimeException("cache cleanup failed") },
+        )
+
+        viewModel.logout()
+
+        assertNull(sessionStore.load())
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+    }
+
+    @Test
+    fun loginではonLogoutCleanupは呼ばれない() = runTest {
+        var cleanupCalled = false
+        val loginResponse = LoginResponse(token = "new-token", user = user)
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onLogin = { _, _ -> loginResponse }),
+            onLogoutCleanup = { cleanupCalled = true },
+        )
+
+        viewModel.login("u", "p")
+
+        assertFalse(cleanupCalled)
     }
 }

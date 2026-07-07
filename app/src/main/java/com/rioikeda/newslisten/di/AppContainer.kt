@@ -5,7 +5,10 @@ import com.rioikeda.newslisten.BuildConfig
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedViewModel
 import com.rioikeda.newslisten.network.ApiClient
+import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.AuthInterceptor
+import com.rioikeda.newslisten.network.ConnectivityNetworkMonitor
+import com.rioikeda.newslisten.network.JavaFileSystem
 import com.rioikeda.newslisten.network.KeystoreSessionStore
 import com.rioikeda.newslisten.network.OkHttpApiClient
 import com.rioikeda.newslisten.network.SessionStore
@@ -62,6 +65,26 @@ class AppContainer(context: Context) {
     )
 
     /**
+     * 音声キャッシュマネージャ（フェーズ8-B・ADR-027）。
+     *
+     * 正本: ios/NewsListenApp/NewsListenApp/Networking/AudioCacheManager.swift（iOS は
+     * PodcastViewModel.swift:87 のデフォルト引数で `FileManager.default` の `Caches/` を暗黙に使う）。
+     * Android は Hilt 不採用方針（ADR-066）に合わせ、AppContainer で明示的に組み立てて注入する。
+     * `Context.cacheDir` はアプリのアンインストール/OS のストレージ逼迫時に自動削除され得る領域で、
+     * オフライン再生用の一時キャッシュとして妥当（iOS の `Caches/` ディレクトリと同じ位置付け）。
+     */
+    private val audioCacheManager: AudioCacheManager = AudioCacheManager(
+        fileSystem = JavaFileSystem(),
+        baseDir = appContext.cacheDir.absolutePath
+    )
+
+    /**
+     * ネットワーク接続状態の監視（フェーズ8-C・shared-playback-spec.md §6.1）。
+     * PodcastViewModel.play() の resolvePlaybackSource 判定に isOnline を供給する。
+     */
+    private val networkMonitor: ConnectivityNetworkMonitor = ConnectivityNetworkMonitor(appContext).apply { start() }
+
+    /**
      * AuthViewModel（認証状態ゲーティング + ログイン）を生成して返す。
      *
      * Dispatcher: Dispatchers.Default は CPU バウンドタスク向き。IO タスクには Dispatchers.IO を
@@ -71,12 +94,25 @@ class AppContainer(context: Context) {
      *
      * by lazy でシングルトンキャッシュ化：画面回転時に AuthViewModel インスタンスが同じ
      * ままであることを保証し、authState が Unknown にリセットされるのを防ぐ。
+     *
+     * onLogoutCleanup: フェーズ8-D・shared-playback-spec.md §6.3（共有端末対応）。logout 時に
+     * 音声キャッシュを全削除し、共有端末に他人の音声データが残らないようにする。auth 層に
+     * AudioCacheManager を直接依存させないため、削除処理だけを関数として注入する
+     * （詳細は AuthViewModel の onLogoutCleanup コメント参照）。
+     *
+     * 2レビュー統合指摘（logout×ダウンロード競合）の修正: 直接 `audioCacheManager.removeAll()` を
+     * 呼ぶのではなく `_podcastViewModel.cancelDownloadsAndClearCache()` を呼ぶ。PodcastViewModel の
+     * download() は AudioCacheManager と同じ limitedParallelism(1) dispatcher 上で進行中 Job を
+     * 追跡しており、cancelDownloadsAndClearCache() がそれを cancelAndJoin してから removeAll() する
+     * ことで、fetchPodcast の suspend 境界中の download と logout のキャッシュ削除が競合し
+     * ファイルが残留する事態を防ぐ。
      */
     private val _authViewModel: AuthViewModel by lazy {
         AuthViewModel(
             apiClient = apiClient,
             sessionStore = sessionStore,
-            dispatcher = Dispatchers.Default
+            dispatcher = Dispatchers.Default,
+            onLogoutCleanup = { _podcastViewModel.cancelDownloadsAndClearCache() }
         )
     }
 
@@ -134,6 +170,8 @@ class AppContainer(context: Context) {
         PodcastViewModel(
             apiClient = apiClient,
             playerController = _playerController,
+            cacheManager = audioCacheManager,
+            networkMonitor = networkMonitor,
             dispatcher = Dispatchers.Default.limitedParallelism(1)
         )
     }

@@ -3,6 +3,10 @@ package com.rioikeda.newslisten.podcast
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.network.ApiException
+import com.rioikeda.newslisten.network.AudioCacheManager
+import com.rioikeda.newslisten.network.FakeFileSystem
+import com.rioikeda.newslisten.network.StubNetworkMonitor
+import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -13,6 +17,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -49,7 +54,10 @@ class PodcastViewModelTest {
     private fun TestScope.newViewModel(
         apiClient: FakePodcastApiClient,
         playerController: FakePlayerController,
-    ): PodcastViewModel = PodcastViewModel(apiClient, playerController, StandardTestDispatcher(testScheduler))
+        cacheManager: AudioCacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
+        networkMonitor: StubNetworkMonitor = StubNetworkMonitor(initialIsOnline = true),
+    ): PodcastViewModel =
+        PodcastViewModel(apiClient, playerController, cacheManager, networkMonitor, StandardTestDispatcher(testScheduler))
 
     // --- fetchPodcasts ---
 
@@ -153,6 +161,94 @@ class PodcastViewModelTest {
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertEquals("生成に失敗しました", viewModel.errorMessage.value)
+    }
+
+    // --- オフライン再生（フェーズ8-C: resolvePlaybackSource 統合。正本: shared-playback-spec.md §6.1） ---
+
+    @Test
+    fun キャッシュ済みかつオフラインならfetchPodcastを呼ばずキャッシュURIでprepareして再生する() = runTest {
+        val p1 = podcast(id = "p1")
+        // fetchPodcast/fetchPodcasts は未スタブのままにし、呼ばれたら即座にテスト失敗させる
+        // （CACHED 経路は fetch 系に一切触れない独立経路であることの検証）。
+        // updatePlaybackPosition は stopPlayback() の最終同期で呼ばれるためスタブしておく。
+        val apiClient = FakePodcastApiClient(onUpdatePlaybackPosition = { _, _ -> p1 })
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        cacheManager.cache("p1", byteArrayOf(1, 2, 3))
+        val networkMonitor = StubNetworkMonitor(initialIsOnline = false)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, cacheManager, networkMonitor)
+
+        viewModel.play(p1)
+
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertEquals(listOf("file:///cache/audio/p1.mp3"), player.prepareCalls)
+        assertEquals(listOf(p1.toPlaybackMetadata()), player.metadataCalls)
+        assertEquals(1, player.playCallCount)
+        assertEquals(p1, viewModel.currentPodcast.value)
+        assertNull(viewModel.errorMessage.value)
+
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun キャッシュ済みならオンラインでもfetchPodcastを呼ばずキャッシュを優先する() = runTest {
+        // spec §6.1: キャッシュ有は署名 URL 失効と無関係に常に最優先（オンライン時も再取得しない）。
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(onUpdatePlaybackPosition = { _, _ -> p1 })
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        cacheManager.cache("p1", byteArrayOf(1))
+        val networkMonitor = StubNetworkMonitor(initialIsOnline = true)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, cacheManager, networkMonitor)
+
+        viewModel.play(p1)
+
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertEquals(listOf("file:///cache/audio/p1.mp3"), player.prepareCalls)
+        assertEquals(p1, viewModel.currentPodcast.value)
+
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun 未キャッシュかつオフラインなら再生できずエラーメッセージを設定する() = runTest {
+        val apiClient = FakePodcastApiClient()
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val networkMonitor = StubNetworkMonitor(initialIsOnline = false)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, cacheManager, networkMonitor)
+
+        viewModel.play(podcast(id = "p1"))
+
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertTrue(player.prepareCalls.isEmpty())
+        assertEquals(0, player.playCallCount)
+        assertEquals("オフラインのため再生できません", viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun キャッシュ済み再生中はオフラインでもNetworkErrorを握って位置同期を継続する() = runTest {
+        // spec §6.2: オフライン中の位置同期は行われない設計だが、実装は「送信して失敗を握る」
+        // 既存方針（iOS syncPlaybackPositionIfNeeded 忠実写像）を維持する。ここでは
+        // ApiException.NetworkError を投げても viewModel がクラッシュ・エラー表示せず
+        // 継続することを保証する。
+        val p1 = podcast(id = "p1")
+        val exception = ApiException.NetworkError(RuntimeException("offline"))
+        val apiClient = FakePodcastApiClient(onUpdatePlaybackPosition = { _, _ -> throw exception })
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        cacheManager.cache("p1", byteArrayOf(1))
+        val networkMonitor = StubNetworkMonitor(initialIsOnline = false)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, cacheManager, networkMonitor)
+
+        viewModel.play(p1)
+        player.setPosition(12.5)
+        advanceTimeBy(15_000)
+        runCurrent()
+
+        assertNull(viewModel.errorMessage.value)
+
+        viewModel.stopPlayback()
     }
 
     // --- 位置同期（15秒毎。ストリーク起点。iOS PodcastViewModel.swift:580-603 忠実写像） ---
@@ -706,5 +802,204 @@ class PodcastViewModelTest {
         assertEquals(listOf(p2, p3), viewModel.queue.value.upNext)
 
         viewModel.stopPlayback()
+    }
+
+    // --- ダウンロード・音声キャッシュ（フェーズ8-B。正本: ADR-027 / iOS PodcastViewModel.swift:141-174） ---
+
+    @Test
+    fun downloadは開始時にdownloadingIdsへ追加し完了後に除去する() = runTest {
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { delay(1_000); p1 },
+            onDownloadAudio = { byteArrayOf(1, 2, 3) },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+
+        launch { viewModel.download(p1) }
+        runCurrent()
+        assertEquals(setOf("p1"), viewModel.downloadingIds.value)
+
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        assertEquals(emptySet<String>(), viewModel.downloadingIds.value)
+    }
+
+    @Test
+    fun download成功でキャッシュに保存されdownloadedIdsに追加される() = runTest {
+        val p1 = podcast(id = "p1", audioUrl = "https://example.com/p1-stale.mp3")
+        val fresh = podcast(id = "p1", audioUrl = "https://example.com/p1-fresh.mp3")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { fresh },
+            onDownloadAudio = { byteArrayOf(9, 9) },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+
+        viewModel.download(p1)
+
+        assertEquals(listOf("p1"), apiClient.fetchPodcastCalls)
+        assertEquals(listOf("https://example.com/p1-fresh.mp3"), apiClient.downloadAudioCalls)
+        assertTrue(cacheManager.isCached("p1"))
+        assertEquals(setOf("p1"), viewModel.downloadedIds.value)
+        assertEquals(emptySet<String>(), viewModel.downloadingIds.value)
+        assertNull(viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun download失敗でerrorMessageに反映されキャッシュされずdownloadingIdsから除去される() = runTest {
+        val exception = ApiException.NetworkError(RuntimeException("offline"))
+        val apiClient = FakePodcastApiClient(onFetchPodcast = { throw exception })
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+
+        viewModel.download(podcast(id = "p1"))
+
+        assertEquals(exception.message, viewModel.errorMessage.value)
+        assertFalse(cacheManager.isCached("p1"))
+        assertEquals(emptySet<String>(), viewModel.downloadingIds.value)
+        assertEquals(emptySet<String>(), viewModel.downloadedIds.value)
+    }
+
+    @Test
+    fun downloadは既にdownloadingまたはdownloaded中なら何もしない() = runTest {
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { p1 },
+            onDownloadAudio = { byteArrayOf(1) },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+
+        viewModel.download(p1)
+        assertEquals(1, apiClient.fetchPodcastCalls.size)
+
+        // 既に downloadedIds に含まれるため、再度呼んでも fetchPodcast は増えない
+        // （iOS PodcastViewModel.swift:142 の二重起動防止と同じガード）。
+        viewModel.download(p1)
+
+        assertEquals(1, apiClient.fetchPodcastCalls.size)
+    }
+
+    @Test
+    fun removeDownloadはキャッシュを削除しdownloadedIdsから除去する() = runTest {
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { p1 },
+            onDownloadAudio = { byteArrayOf(1) },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+        viewModel.download(p1)
+
+        viewModel.removeDownload("p1")
+
+        assertFalse(cacheManager.isCached("p1"))
+        assertEquals(emptySet<String>(), viewModel.downloadedIds.value)
+    }
+
+    @Test
+    fun removeDownloadは不正なidの場合errorMessageに反映する() = runTest {
+        val apiClient = FakePodcastApiClient()
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+
+        viewModel.removeDownload("../evil")
+
+        assertNotNull(viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun downloadはキャッシュ書き込みのIOExceptionでもクラッシュせずdownloadingIdsから除去される() = runTest {
+        // WARNING指摘: AudioCacheManager.cache() が投げるIOExceptionをラップせず素通しにすると
+        // downloadingIds は finally で除去されるものの、例外がコルーチンを未捕捉のまま抜けクラッシュしうる。
+        // AudioCacheException.WriteFailed へラップし既存の catch (e: AudioCacheException) で
+        // 捕捉されることを確認する。
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { p1 },
+            onDownloadAudio = { byteArrayOf(1) },
+        )
+        val fileSystem = FakeFileSystem().apply { writeException = IOException("disk full") }
+        val cacheManager = AudioCacheManager(fileSystem, baseDir = "/cache")
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+
+        viewModel.download(p1)
+
+        assertFalse(cacheManager.isCached("p1"))
+        assertEquals(emptySet<String>(), viewModel.downloadingIds.value)
+        assertEquals(emptySet<String>(), viewModel.downloadedIds.value)
+        assertNotNull(viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun fetchPodcasts後にキャッシュ済みidがdownloadedIdsへ同期される() = runTest {
+        val p1 = podcast(id = "p1")
+        val p2 = podcast(id = "p2")
+        val fileSystem = FakeFileSystem()
+        val cacheManager = AudioCacheManager(fileSystem, baseDir = "/cache")
+        cacheManager.cache("p1", byteArrayOf(1)) // 事前に p1 だけキャッシュ済みの状態を再現する
+        val apiClient = FakePodcastApiClient(onFetchPodcasts = { PodcastListResponse(listOf(p1, p2)) })
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+
+        viewModel.fetchPodcasts()
+
+        assertEquals(setOf("p1"), viewModel.downloadedIds.value)
+    }
+
+    // --- cancelDownloadsAndClearCache（logout×ダウンロード競合。共有端末対応 spec §6.3） ---
+    //
+    // WHY このテストが必要か: AuthViewModel.onLogoutCleanup（Dispatchers.Default 上で動く）と
+    // PodcastViewModel.download()（limitedParallelism(1)）は、download() が fetchPodcast という
+    // suspend 境界を挟むために無同期になり得る。download が suspend 中に logout のキャッシュ全削除が
+    // 素通りしてしまうと、削除後に download が再開してファイルを書き込み、downloadedIds にも
+    // 残留してしまう（共有端末に前ユーザーの音声データが残る＝ spec §6.3 の存在理由に反する）。
+
+    @Test
+    fun cancelDownloadsAndClearCacheはfetchPodcast中の進行中downloadを中断しキャッシュ書き込みを残さない() = runTest {
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { delay(1_000); p1 },
+            onDownloadAudio = { byteArrayOf(1, 2, 3) },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+
+        launch { viewModel.download(p1) }
+        runCurrent()
+        assertEquals(setOf("p1"), viewModel.downloadingIds.value)
+
+        // logout 相当の割り込み。download が fetchPodcast の delay(1_000) で中断している最中に呼ぶ。
+        viewModel.cancelDownloadsAndClearCache()
+
+        assertFalse(cacheManager.isCached("p1"))
+        assertEquals(emptySet<String>(), viewModel.downloadedIds.value)
+        assertEquals(emptySet<String>(), viewModel.downloadingIds.value)
+
+        // 中断された download の続き（fetchPodcast 完了後の cache() 呼び出し）が
+        // 遅れて実行されてファイルが復活することがないか、時間を進めて再確認する。
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertFalse(cacheManager.isCached("p1"))
+        assertEquals(emptySet<String>(), viewModel.downloadedIds.value)
+    }
+
+    @Test
+    fun cancelDownloadsAndClearCacheは完了済みのダウンロードキャッシュも削除しdownloadedIdsを空にする() = runTest {
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { p1 },
+            onDownloadAudio = { byteArrayOf(1) },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+        viewModel.download(p1)
+        assertTrue(cacheManager.isCached("p1"))
+
+        viewModel.cancelDownloadsAndClearCache()
+
+        assertFalse(cacheManager.isCached("p1"))
+        assertEquals(emptySet<String>(), viewModel.downloadedIds.value)
     }
 }

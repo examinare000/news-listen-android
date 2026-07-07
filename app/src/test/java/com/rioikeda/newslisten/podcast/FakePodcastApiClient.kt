@@ -24,6 +24,8 @@ class FakePodcastApiClient(
         { error("fetchPodcast is not stubbed") },
     private val onUpdatePlaybackPosition: suspend (id: String, positionSeconds: Double) -> PodcastResponse =
         { id, _ -> error("updatePlaybackPosition is not stubbed for id=$id") },
+    private val onDownloadAudio: suspend (url: String) -> ByteArray =
+        { error("downloadAudio is not stubbed") },
 ) : ApiClient {
     /** fetchPodcasts が呼ばれた回数。 */
     var fetchPodcastsCallCount = 0
@@ -34,6 +36,9 @@ class FakePodcastApiClient(
 
     /** updatePlaybackPosition に渡された (id, positionSeconds) の呼び出し履歴。 */
     val updatePlaybackPositionCalls: MutableList<Pair<String, Double>> = mutableListOf()
+
+    /** downloadAudio に渡された url の呼び出し履歴。 */
+    val downloadAudioCalls: MutableList<String> = mutableListOf()
 
     override suspend fun fetchPodcasts(): PodcastListResponse {
         fetchPodcastsCallCount++
@@ -69,6 +74,8 @@ class FakePodcastApiClient(
     override suspend fun fetchPreferences(): PreferencesResponse =
         error("fetchPreferences is out of scope for podcast tests")
 
-    override suspend fun downloadAudio(url: String): ByteArray =
-        error("downloadAudio is out of scope for podcast tests")
+    override suspend fun downloadAudio(url: String): ByteArray {
+        downloadAudioCalls.add(url)
+        return onDownloadAudio(url)
+    }
 }

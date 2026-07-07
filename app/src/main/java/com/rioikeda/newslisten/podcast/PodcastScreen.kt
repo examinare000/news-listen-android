@@ -59,6 +59,8 @@ fun PodcastScreen(viewModel: PodcastViewModel) {
     val errorMessage by viewModel.errorMessage.collectAsState()
     val currentPodcast by viewModel.currentPodcast.collectAsState()
     val queue by viewModel.queue.collectAsState()
+    val downloadingIds by viewModel.downloadingIds.collectAsState()
+    val downloadedIds by viewModel.downloadedIds.collectAsState()
     val scope = rememberCoroutineScope()
 
     var showQueue by remember { mutableStateOf(false) }
@@ -154,7 +156,14 @@ fun PodcastScreen(viewModel: PodcastViewModel) {
                             ) {
                                 PodcastRowView(
                                     podcast = podcast,
-                                    isPlaying = currentPodcast?.id == podcast.id
+                                    isPlaying = currentPodcast?.id == podcast.id,
+                                    downloadingIds = downloadingIds,
+                                    downloadedIds = downloadedIds,
+                                    onDownloadTap = {
+                                        scope.launch {
+                                            viewModel.download(podcast)
+                                        }
+                                    }
                                 )
 
                                 // 長押しメニュー：次に再生 / キューに追加
