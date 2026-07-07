@@ -20,7 +20,6 @@ private val DSOnAccentLight = Color(0xFFFBF9F4)
 private val DSAccentSoftLight = DSAccentLight.copy(alpha = 0.10f)
 private val DSDangerLight = Color(0xFFC0392B)
 private val DSStarLight = Color(0xFFC8902E) // 金
-private val DSSuccessLight = Color(0xFF4F7A3A) // 森緑
 
 // ダークモード
 private val DSPaperDark = Color(0xFF14130F)
@@ -35,7 +34,6 @@ private val DSOnAccentDark = Color(0xFF14130F)
 private val DSAccentSoftDark = DSAccentDark.copy(alpha = 0.16f)
 private val DSDangerDark = Color(0xFFE57373)
 private val DSStarDark = Color(0xFFE0B65C) // 金
-private val DSSuccessDark = Color(0xFF8BB87A) // 森緑
 
 // Material3 ColorScheme の構築（android-design.md §5.2 の写像に従う）
 
@@ -86,6 +84,3 @@ internal val DarkColorScheme = darkColorScheme(
     onSecondaryContainer = DSInkSecondaryDark,
 )
 
-// 拡張色：success（森緑、ColorScheme 外）
-val DSSuccessLight_Extended = DSSuccessLight
-val DSSuccessDark_Extended = DSSuccessDark

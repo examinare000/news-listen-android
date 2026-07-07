@@ -9,6 +9,8 @@ import com.rioikeda.newslisten.network.AuthInterceptor
 import com.rioikeda.newslisten.network.KeystoreSessionStore
 import com.rioikeda.newslisten.network.OkHttpApiClient
 import com.rioikeda.newslisten.network.SessionStore
+import com.rioikeda.newslisten.podcast.ExoPlayerController
+import com.rioikeda.newslisten.podcast.PodcastViewModel
 import kotlinx.coroutines.Dispatchers
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -25,6 +27,7 @@ import java.util.concurrent.TimeUnit
  * 正当化されない。手書きコンストラクタ注入で十分。
  */
 class AppContainer(context: Context) {
+    private val appContext: Context = context.applicationContext
     private val baseUrl: String = BuildConfig.API_BASE_URL
     private val apiKey: String = BuildConfig.API_KEY
 
@@ -99,4 +102,41 @@ class AppContainer(context: Context) {
     }
 
     fun getFeedViewModel(): FeedViewModel = _feedViewModel
+
+    /**
+     * ExoPlayerController（Media3 ExoPlayer 実装）を生成して返す。
+     *
+     * by lazy でシングルトンキャッシュ化：画面回転時に ExoPlayerController インスタンスが
+     * 同じままであることを保証し、再生状態の中断を防ぐ。
+     *
+     * WHY: ExoPlayer インスタンスは内部で native リソース（デコーダ等）を持つため、
+     * 不必要な再生成を避ける。Context は Application スコープを使用してメモリリーク回避。
+     */
+    private val _playerController: ExoPlayerController by lazy {
+        ExoPlayerController(appContext)
+    }
+
+    fun getPlayerController(): ExoPlayerController = _playerController
+
+    /**
+     * PodcastViewModel（Podcast タブの状態とロジック）を生成して返す。
+     *
+     * Dispatcher: Dispatchers.Default.limitedParallelism(1) を使用し、状態変更を直列化する。
+     * WHY: PodcastViewModel の fetchPodcasts() や play() などの操作が複数スレッドで
+     * 競合すると、currentPodcast の読み取り→書き込み、PlayerController の状態の
+     * 同期ずれが生じ得る。iOS の @MainActor による直列実行を Kotlin で再現する。
+     *
+     * by lazy でシングルトンキャッシュ化：画面回転時に PodcastViewModel インスタンスが
+     * 同じままであることを保証し、fetchPodcasts() の loadingState や currentPodcast が
+     * リセットされるのを防ぐ。
+     */
+    private val _podcastViewModel: PodcastViewModel by lazy {
+        PodcastViewModel(
+            apiClient = apiClient,
+            playerController = _playerController,
+            dispatcher = Dispatchers.Default.limitedParallelism(1)
+        )
+    }
+
+    fun getPodcastViewModel(): PodcastViewModel = _podcastViewModel
 }

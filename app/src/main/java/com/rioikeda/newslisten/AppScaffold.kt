@@ -27,15 +27,20 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import com.rioikeda.newslisten.feed.FeedScreen
 import com.rioikeda.newslisten.feed.FeedViewModel
+import com.rioikeda.newslisten.podcast.PodcastScreen
+import com.rioikeda.newslisten.podcast.PodcastViewModel
 
 /**
  * メインのアプリケーション スカフォルド。3 タブ（フィード / Podcast / 設定）を Material3 NavigationBar で提供する。
  *
  * 正本: ios/NewsListenApp/NewsListenApp/NewsListenAppApp.swift:73-108（ContentView）のミラー。
  * iOS の TabView と同型の Material3 BottomNavigationBar 実装。各タブはプレースホルダ（フェーズ4以降で実装）。
+ *
+ * @param feedViewModel フィード タブの ViewModel（AppContainer.getFeedViewModel() から供給）。
+ * @param podcastViewModel Podcast タブの ViewModel（AppContainer.getPodcastViewModel() から供給）。
  */
 @Composable
-fun AppScaffold(feedViewModel: FeedViewModel) {
+fun AppScaffold(feedViewModel: FeedViewModel, podcastViewModel: PodcastViewModel) {
     var selectedTab by remember { mutableStateOf(0) }
 
     val tabs = listOf(
@@ -47,7 +52,7 @@ fun AppScaffold(feedViewModel: FeedViewModel) {
         TabItem(
             label = stringResource(R.string.tab_podcast),
             icon = Icons.Filled.Favorite,
-            screen = { PodcastTabPlaceholder() }
+            screen = { PodcastScreen(podcastViewModel) }
         ),
         TabItem(
             label = stringResource(R.string.tab_settings),

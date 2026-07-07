@@ -13,3 +13,6 @@ object DSSpacing {
     val xl = 24.dp  // 特大
     val xxl = 32.dp // 超特大
 }
+
+// 角丸トークンは Theme.kt の DSShapes（Material3 Shapes.small/medium）に一元化した
+// （android-design.md §5.5。旧 DSRadius は未使用の重複トークンだったため削除）。
