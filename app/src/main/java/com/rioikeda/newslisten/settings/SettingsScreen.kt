@@ -41,6 +41,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rioikeda.newslisten.R
+import com.rioikeda.newslisten.account.AccountViewModel
+import com.rioikeda.newslisten.account.SessionsViewModel
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.designsystem.DSSpacing
@@ -50,19 +52,25 @@ import com.rioikeda.newslisten.preferences.TimeFormat
 import kotlinx.coroutines.launch
 
 /**
- * 設定タブのルート画面。iOS SettingsView.swift のミラー（フェーズ10 P10 Task5）。
+ * 設定タブのルート画面。iOS SettingsView.swift のミラー（フェーズ10 P10 Task5 & フェーズ11 P11 T3/T4）。
  *
  * RSS ソース管理・おすすめサイト・生成クォータ・聴取ストリーク・難易度/再生速度・
- * 記事の開き方・日付表記を扱う。
+ * 記事の開き方・日付表記・アカウント（表示名/パスワード）・ログイン中デバイス管理を扱う。
  *
  * @param viewModel SettingsViewModel（RSS ソース・おすすめサイト・クォータ・ストリーク管理）
  * @param preferencesStore PreferencesStore（難易度・再生速度・記事開き方・日付表記）
+ * @param authViewModel AuthViewModel（アカウント操作時の認証状態反映）
+ * @param accountViewModel AccountViewModel（表示名/パスワード変更）
+ * @param sessionsViewModel SessionsViewModel（デバイス一覧・失効管理）
+ * @param isAdmin admin ロール判定フラグ（RSS ソース編集権限）
  */
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
     preferencesStore: PreferencesStore,
     authViewModel: AuthViewModel,
+    accountViewModel: AccountViewModel,
+    sessionsViewModel: SessionsViewModel,
     isAdmin: Boolean = false,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -74,10 +82,19 @@ fun SettingsScreen(
             viewModel.loadFeaturedSites()
             viewModel.loadGenerationQuota()
             viewModel.loadListeningStreak()
+            sessionsViewModel.loadSessions()
         }
     }
 
-    // ViewModel state
+    // 認証済み状態で表示名をプリフィル（iOS AccountSettingsView.swift:81 相当の onAppear パターン）。
+    val authState by authViewModel.authState.collectAsStateWithLifecycle()
+    LaunchedEffect(authState) {
+        if (authState is com.rioikeda.newslisten.auth.AuthState.Authenticated) {
+            accountViewModel.prefillDisplayName()
+        }
+    }
+
+    // SettingsViewModel state
     val sources by viewModel.sources.collectAsStateWithLifecycle()
     val featuredSites by viewModel.featuredSites.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
@@ -97,7 +114,24 @@ fun SettingsScreen(
     val articleOpenMode by preferencesStore.articleOpenMode.collectAsStateWithLifecycle()
     val timeFormat by preferencesStore.timeFormat.collectAsStateWithLifecycle()
 
-    // Local UI state
+    // AccountViewModel state
+    val displayName by accountViewModel.displayName.collectAsStateWithLifecycle()
+    val currentPassword by accountViewModel.currentPassword.collectAsStateWithLifecycle()
+    val newPassword by accountViewModel.newPassword.collectAsStateWithLifecycle()
+    val accountIsLoading by accountViewModel.isLoading.collectAsStateWithLifecycle()
+    val profileMessage by accountViewModel.profileMessage.collectAsStateWithLifecycle()
+    val profileMessageIsError by accountViewModel.profileMessageIsError.collectAsStateWithLifecycle()
+    val passwordMessage by accountViewModel.passwordMessage.collectAsStateWithLifecycle()
+    val passwordMessageIsError by accountViewModel.passwordMessageIsError.collectAsStateWithLifecycle()
+
+    // SessionsViewModel state
+    val sessions by sessionsViewModel.sessions.collectAsStateWithLifecycle()
+    val sessionsIsLoading by sessionsViewModel.isLoading.collectAsStateWithLifecycle()
+    val sessionsErrorMessage by sessionsViewModel.errorMessage.collectAsStateWithLifecycle()
+    val hasOtherSessions by sessionsViewModel.hasOtherSessions.collectAsStateWithLifecycle()
+    val revokedOthersCount by sessionsViewModel.revokedOthersCount.collectAsStateWithLifecycle()
+
+    // Local UI state for dialogs and forms
     var showAddSourceDialog by remember { mutableStateOf(false) }
     var newSourceName by remember { mutableStateOf("") }
     var newSourceUrl by remember { mutableStateOf("") }
@@ -109,6 +143,7 @@ fun SettingsScreen(
     var selectedSpeedIndex by remember { mutableIntStateOf(-1) }
     var selectedArticleOpenModeIndex by remember { mutableIntStateOf(-1) }
     var selectedTimeFormatIndex by remember { mutableIntStateOf(-1) }
+    var showRevokeOthersConfirmDialog by remember { mutableStateOf(false) }
 
     // Initialize selected indices
     LaunchedEffect(defaultDifficulty, defaultPlaybackSpeed, articleOpenMode, timeFormat) {
@@ -526,11 +561,179 @@ fun SettingsScreen(
             )
         }
 
-        // Account セクション (placeholder)
+        // Account セクション（表示名・パスワード変更）
         item {
             SettingsSectionHeader(stringResource(R.string.settings_section_account))
+            AccountNameSection(
+                displayName = displayName,
+                isLoading = accountIsLoading,
+                message = profileMessage,
+                messageIsError = profileMessageIsError,
+                onDisplayNameChange = { accountViewModel.onDisplayNameChange(it) },
+                onSaveProfile = {
+                    coroutineScope.launch {
+                        accountViewModel.saveProfile()
+                    }
+                }
+            )
+            PasswordChangeSection(
+                currentPassword = currentPassword,
+                newPassword = newPassword,
+                isLoading = accountIsLoading,
+                message = passwordMessage,
+                messageIsError = passwordMessageIsError,
+                onCurrentPasswordChange = { accountViewModel.onCurrentPasswordChange(it) },
+                onNewPasswordChange = { accountViewModel.onNewPasswordChange(it) },
+                onChangePassword = {
+                    coroutineScope.launch {
+                        accountViewModel.changePassword()
+                    }
+                }
+            )
+        }
+
+        // Sessions（デバイス管理）セクション
+        item {
+            SettingsSectionHeader(stringResource(R.string.settings_section_sessions))
             Button(
-                onClick = { /* TODO: Implement logout */ },
+                onClick = { showRevokeOthersConfirmDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = hasOtherSessions
+            ) {
+                Text(stringResource(R.string.settings_sessions_revoke_others_button))
+            }
+        }
+
+        // Sessions一覧
+        if (sessions.isEmpty()) {
+            if (sessionsIsLoading) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(40.dp))
+                    }
+                }
+            } else {
+                item {
+                    Text(
+                        text = stringResource(R.string.settings_sessions_empty),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
+            items(sessions) { session ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = DSSpacing.s),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(DSSpacing.xs),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = session.deviceLabel ?: stringResource(R.string.settings_sessions_unknown_device),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            if (session.current) {
+                                Text(
+                                    text = stringResource(R.string.settings_sessions_current_device),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Text(
+                            text = formatSessionDateLine(
+                                createdAt = session.createdAt,
+                                lastUsedAt = session.lastUsedAt,
+                                createdAtLabel = stringResource(R.string.settings_sessions_created_at_label),
+                                lastUsedAtLabel = stringResource(R.string.settings_sessions_last_used_at_label),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (!session.current) {
+                        OutlinedButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    sessionsViewModel.revokeSession(session.id)
+                                }
+                            },
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.settings_sessions_revoke_button_description),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sessions エラー＆フィードバック
+        if (sessionsErrorMessage != null) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(DSSpacing.m)
+                        .background(
+                            MaterialTheme.colorScheme.errorContainer,
+                            shape = MaterialTheme.shapes.small
+                        )
+                        .padding(DSSpacing.m),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = sessionsErrorMessage ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    TextButton(onClick = {
+                        coroutineScope.launch {
+                            sessionsViewModel.loadSessions()
+                        }
+                    }) {
+                        Text(stringResource(R.string.settings_retry_button))
+                    }
+                }
+            }
+        }
+
+        if (revokedOthersCount != null) {
+            item {
+                Text(
+                    text = stringResource(
+                        R.string.settings_sessions_revoked_others_count,
+                        revokedOthersCount ?: 0
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Logout セクション
+        item {
+            Button(
+                onClick = {
+                    coroutineScope.launch {
+                        authViewModel.logout()
+                    }
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(stringResource(R.string.settings_logout_button))
@@ -641,6 +844,33 @@ fun SettingsScreen(
             }
         )
     }
+
+    // Revoke other sessions confirmation dialog
+    if (showRevokeOthersConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showRevokeOthersConfirmDialog = false },
+            title = { Text(stringResource(R.string.settings_sessions_confirm_revoke_others_title)) },
+            text = { Text(stringResource(R.string.settings_sessions_confirm_revoke_others_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            sessionsViewModel.revokeOtherSessions()
+                            showRevokeOthersConfirmDialog = false
+                        }
+                    },
+                    enabled = !sessionsIsLoading
+                ) {
+                    Text(stringResource(R.string.settings_sessions_confirm_revoke_others_logout))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRevokeOthersConfirmDialog = false }) {
+                    Text(stringResource(R.string.settings_sessions_confirm_revoke_others_cancel))
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -732,6 +962,119 @@ private fun SettingsPlaybackSpeedDropdown(
         selectedIndex = selectedIndex,
         onSelectionChange = onSelectionChange
     )
+}
+
+/**
+ * 表示名更新セクション（AccountSettingsView.swift:54-59 のミラー）。
+ */
+@Composable
+private fun AccountNameSection(
+    displayName: String,
+    isLoading: Boolean,
+    message: String?,
+    messageIsError: Boolean,
+    onDisplayNameChange: (String) -> Unit,
+    onSaveProfile: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(DSSpacing.s)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(DSSpacing.s),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextField(
+                value = displayName,
+                onValueChange = onDisplayNameChange,
+                label = { Text(stringResource(R.string.settings_account_display_name_label)) },
+                modifier = Modifier.weight(1f),
+                enabled = !isLoading
+            )
+            Button(
+                onClick = onSaveProfile,
+                enabled = !isLoading && displayName.isNotEmpty()
+            ) {
+                Text(stringResource(R.string.settings_account_save_profile_button))
+            }
+        }
+        if (message != null) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (messageIsError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * パスワード変更セクション（AccountSettingsView.swift:61-68 のミラー）。
+ * パスワード要件の案内文（12文字以上・3文字種以上）も含む。
+ */
+@Composable
+private fun PasswordChangeSection(
+    currentPassword: String,
+    newPassword: String,
+    isLoading: Boolean,
+    message: String?,
+    messageIsError: Boolean,
+    onCurrentPasswordChange: (String) -> Unit,
+    onNewPasswordChange: (String) -> Unit,
+    onChangePassword: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(DSSpacing.s)) {
+        TextField(
+            value = currentPassword,
+            onValueChange = onCurrentPasswordChange,
+            label = { Text(stringResource(R.string.settings_account_current_password_label)) },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading
+        )
+        TextField(
+            value = newPassword,
+            onValueChange = onNewPasswordChange,
+            label = { Text(stringResource(R.string.settings_account_new_password_label)) },
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading
+        )
+        Text(
+            text = stringResource(R.string.settings_account_password_requirement),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Button(
+            onClick = onChangePassword,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading && currentPassword.isNotEmpty() && newPassword.isNotEmpty()
+        ) {
+            Text(stringResource(R.string.settings_account_change_password_button))
+        }
+        if (message != null) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (messageIsError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * セッション行の日付表記（ログイン日 + 最終利用日があれば併記・iOS :294-301 相当）。
+ * ラベルは Composable 側から stringResource 経由で渡す（i18n 対応）。
+ */
+private fun formatSessionDateLine(
+    createdAt: String,
+    lastUsedAt: String?,
+    createdAtLabel: String,
+    lastUsedAtLabel: String,
+): String {
+    var line = "$createdAtLabel${createdAt.take(10)}"
+    if (lastUsedAt != null) {
+        line += "　$lastUsedAtLabel${lastUsedAt.take(10)}"
+    }
+    return line
 }
 
 // Settings screen specific playback speeds (5-step: iOS SettingsView.swift:44)

@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rioikeda.newslisten.account.AccountViewModel
+import com.rioikeda.newslisten.account.SessionsViewModel
 import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedScreen
@@ -47,6 +49,8 @@ import com.rioikeda.newslisten.settings.SettingsViewModel
  * @param settingsViewModel 設定 タブの ViewModel（AppContainer.getSettingsViewModel() から供給）。
  * @param preferencesStore ユーザー設定値の永続化層（AppContainer.getPreferencesStore() から供給）。
  * @param authViewModel 認証状態 ViewModel（SettingsScreen の admin ゲート判定用）。
+ * @param accountViewModel アカウント管理 ViewModel（AppContainer.getAccountViewModel() から供給・フェーズ11 P11 T3）。
+ * @param sessionsViewModel デバイス管理 ViewModel（AppContainer.getSessionsViewModel() から供給・フェーズ11 P11 T4）。
  */
 @Composable
 fun AppScaffold(
@@ -55,6 +59,8 @@ fun AppScaffold(
     settingsViewModel: SettingsViewModel,
     preferencesStore: PreferencesStore,
     authViewModel: AuthViewModel,
+    accountViewModel: AccountViewModel,
+    sessionsViewModel: SessionsViewModel,
 ) {
     var selectedTab by remember { mutableStateOf(0) }
 
@@ -76,7 +82,16 @@ fun AppScaffold(
         TabItem(
             label = stringResource(R.string.tab_settings),
             icon = Icons.Filled.Settings,
-            screen = { SettingsScreen(settingsViewModel, preferencesStore, authViewModel, isAdmin) }
+            screen = {
+                SettingsScreen(
+                    settingsViewModel,
+                    preferencesStore,
+                    authViewModel,
+                    accountViewModel,
+                    sessionsViewModel,
+                    isAdmin
+                )
+            }
         )
     )
 

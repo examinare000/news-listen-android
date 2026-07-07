@@ -80,6 +80,8 @@ class MainActivity : ComponentActivity() {
         val podcastViewModel = appContainer.getPodcastViewModel()
         val settingsViewModel = appContainer.getSettingsViewModel()
         val preferencesStore = appContainer.getPreferencesStore()
+        val accountViewModel = appContainer.getAccountViewModel()
+        val sessionsViewModel = appContainer.getSessionsViewModel()
 
         setContent {
             NewsListenTheme {
@@ -123,7 +125,15 @@ class MainActivity : ComponentActivity() {
 
                     is AuthState.Authenticated -> {
                         // メインアプリ（3 タブスカフォルド）
-                        AppScaffold(feedViewModel, podcastViewModel, settingsViewModel, preferencesStore, authViewModel)
+                        AppScaffold(
+                            feedViewModel,
+                            podcastViewModel,
+                            settingsViewModel,
+                            preferencesStore,
+                            authViewModel,
+                            accountViewModel,
+                            sessionsViewModel
+                        )
                     }
                 }
             }

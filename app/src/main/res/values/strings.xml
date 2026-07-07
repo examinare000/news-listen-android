@@ -134,8 +134,30 @@
     <string name="settings_playback_speed_label">デフォルト再生速度</string>
     <string name="settings_playback_speed_format">%1$.2f×</string>
 
-    <!-- アカウントセクション -->
+    <!-- アカウントセクション（フェーズ11 P11 T3/T4） -->
     <string name="settings_section_account">アカウント</string>
+    <string name="settings_account_display_name_label">表示名</string>
+    <string name="settings_account_save_profile_button">更新</string>
+    <string name="settings_account_current_password_label">現在のパスワード</string>
+    <string name="settings_account_new_password_label">新しいパスワード</string>
+    <string name="settings_account_password_requirement">パスワードは12文字以上で、英大文字・英小文字・数字・記号のうち3種類以上を組み合わせてください</string>
+    <string name="settings_account_change_password_button">パスワードを変更</string>
+
+    <!-- ログイン中のデバイスセクション（issue #84） -->
+    <string name="settings_section_sessions">ログイン中のデバイス</string>
+    <string name="settings_sessions_revoke_others_button">他のデバイスからログアウト</string>
+    <string name="settings_sessions_current_device">現在のデバイス</string>
+    <string name="settings_sessions_unknown_device">不明なデバイス</string>
+    <string name="settings_sessions_empty">ログイン中のデバイスはありません</string>
+    <string name="settings_sessions_created_at_label">ログイン: </string>
+    <string name="settings_sessions_last_used_at_label">最終利用: </string>
+    <string name="settings_sessions_revoke_button_description">デバイスをログアウト</string>
+    <string name="settings_sessions_revoked_others_count">他の %d台 のデバイスからログアウトしました</string>
+    <string name="settings_sessions_confirm_revoke_others_title">他のデバイスからログアウトしますか？</string>
+    <string name="settings_sessions_confirm_revoke_others_message">現在のデバイス以外のすべてのセッションが失効します。</string>
+    <string name="settings_sessions_confirm_revoke_others_logout">ログアウト</string>
+    <string name="settings_sessions_confirm_revoke_others_cancel">キャンセル</string>
+
     <string name="settings_logout_button">ログアウト</string>
 
     <!-- エラーメッセージ -->
