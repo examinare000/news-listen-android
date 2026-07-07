@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.podcast
 
+import com.rioikeda.newslisten.core.PlaybackQueue
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
@@ -72,6 +73,14 @@ class PodcastViewModel(
     /** 現在再生対象の Podcast（未再生なら null）。署名付き URL 再取得後の最新値。 */
     val currentPodcast: StateFlow<PodcastResponse?> = _currentPodcast.asStateFlow()
 
+    private val _queue = MutableStateFlow(PlaybackQueue<PodcastResponse>())
+
+    /**
+     * 再生キュー（連続再生・プレイリスト / issue #81 相当）。UI は current/upNext を購読する。
+     * 正本: ios/NewsListenApp/NewsListenApp/Podcast/PodcastViewModel.swift:270-320。
+     */
+    val queue: StateFlow<PlaybackQueue<PodcastResponse>> = _queue.asStateFlow()
+
     /**
      * Podcast 一覧を取得して [podcasts] を更新する。失敗時は [errorMessage] に反映する。
      * 正本: PodcastViewModel.swift:99-110（loadPodcasts）。
@@ -125,7 +134,7 @@ class PodcastViewModel(
                 val fresh = apiClient.fetchPodcast(podcast.id)
                 _currentPodcast.value = fresh
                 _errorMessage.value = null
-                playerController.onPlaybackCompleted = { scope.launch { stopInternal() } }
+                playerController.onPlaybackCompleted = { scope.launch { handlePlaybackEnded() } }
                 playerController.prepare(fresh.audioUrl)
                 playerController.play()
                 startPositionSync(fresh.id)
@@ -133,6 +142,96 @@ class PodcastViewModel(
                 _errorMessage.value = e.message
             }
         }
+    }
+
+    // --- 再生キュー（issue #81 相当。フェーズ6 T1） ---
+
+    /**
+     * 再生終了時の自動次再生。キューに次があれば [play] で再生し、無ければ停止する。
+     * 正本: PodcastViewModel.swift:272-281（handlePlaybackEnded）。
+     * [play] の fetch/gate/Mutex/同期タイマー規律をすべて経由させるため、ここでは
+     * `prepare`/`play` を直接呼ばず既存の [play] に委譲する。
+     *
+     * WHY 遷移前にゲート判定する: [play] 自身もゲート判定するが、ゲートされた場合は
+     * Mutex に入る前に早期 return するため stopInternal() が呼ばれない。advance() で
+     * queue.current は既に次へ進んでいるのに、[play] に委譲するだけだと currentPodcast は
+     * 終了した旧エピソードのまま残り、queue と currentPodcast が不整合になる
+     * （review指摘）。ここで先にゲート判定し、弾かれる場合は明示的に errorMessage を設定して
+     * stopInternal() を呼び、状態を整合させる。
+     */
+    private suspend fun handlePlaybackEnded() {
+        val (advanced, next) = _queue.value.advance()
+        _queue.value = advanced
+        val gateError = next?.let { playabilityError(it) }
+        if (next != null && gateError == null) {
+            play(next)
+        } else {
+            if (gateError != null) _errorMessage.value = gateError
+            stopInternal()
+        }
+    }
+
+    /**
+     * このエピソードを今すぐ再生する（一覧タップの導線）。
+     * キュー内に既にあればそこへジャンプ、無ければ現在の次に挿入してそこへジャンプしてから再生する。
+     *
+     * WHY(#81 review 転記): start/setQueue で丸ごと置換すると利用者が組んだ待機列が消えるため、
+     * 挿入方式（[PlaybackQueue.playNext] + [PlaybackQueue.jump]）でキューを保持する。
+     * 正本: PodcastViewModel.swift:283-292（playNow）。
+     */
+    suspend fun playNow(podcast: PodcastResponse): Unit = withContext(dispatcher) {
+        val (jumped, found) = _queue.value.jump(podcast.id)
+        _queue.value = if (found) jumped else _queue.value.playNext(podcast).jump(podcast.id).first
+        play(podcast)
+    }
+
+    /**
+     * 現在の次に割り込む（「次に再生」）。何も再生していなければ即再生する。
+     * 正本: PodcastViewModel.swift:303-310（playNext）。
+     */
+    suspend fun playNext(podcast: PodcastResponse): Unit = withContext(dispatcher) {
+        val nothingPlaying = _currentPodcast.value == null
+        _queue.value = _queue.value.playNext(podcast)
+        if (nothingPlaying) playNow(podcast)
+    }
+
+    /**
+     * キュー末尾に追加する（「キューに追加」）。何も再生していなければ即再生する。
+     * 正本: PodcastViewModel.swift:294-301（addToQueue）。
+     */
+    suspend fun addToQueue(podcast: PodcastResponse): Unit = withContext(dispatcher) {
+        val nothingPlaying = _currentPodcast.value == null
+        _queue.value = _queue.value.add(podcast)
+        if (nothingPlaying) playNow(podcast)
+    }
+
+    /**
+     * キューから取り除く。純粋なキューモデル操作であり、実際の再生（[playerController]）には
+     * 一切触れない。正本: PodcastViewModel.swift:313-315（removeFromQueue）。
+     *
+     * WHY 再生に影響させない: iOS の [QueueSheet] は待機列（upNext）のみ削除対象にでき、
+     * 現在再生中の項目を削除する導線は存在しない。仮に現在再生中の id を渡しても、
+     * キューモデル上は次の要素が currentIndex に昇格するだけで、[currentPodcast]/実再生は
+     * 不変（iOS 忠実写像）。
+     *
+     * WHY suspend + withContext(dispatcher): [moveUpNext] と同じくロストアップデート防止のため
+     * 他のキュー変更操作と同じ直列化規律に揃える。
+     */
+    suspend fun removeFromQueue(id: String): Unit = withContext(dispatcher) {
+        _queue.value = _queue.value.remove(id)
+    }
+
+    /**
+     * 待機列（upNext）を並べ替える。`toOffset` は削除前オフセット方式（SwiftUI `onMove` 規約）。
+     * 正本: PodcastViewModel.swift:317-320（moveUpNext）。
+     *
+     * WHY suspend + withContext(dispatcher): [play] 系と同じく _queue への書き込みを
+     * dispatcher 上に直列化する。連打（例: 上へ移動を連続タップ）で複数の呼び出しが
+     * 並行に _queue.value を読み書きすると、片方の更新がもう片方に上書きされて消える
+     * （ロストアップデート）ため、他のキュー変更操作と同じ直列化規律に揃える。
+     */
+    suspend fun moveUpNext(from: Int, toOffset: Int): Unit = withContext(dispatcher) {
+        _queue.value = _queue.value.moveUpNext(from, toOffset)
     }
 
     /** 再生中なら一時停止し、停止中なら再生を再開する。 */

@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.model
 
+import com.rioikeda.newslisten.core.QueueItem
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -12,10 +13,13 @@ import kotlinx.serialization.Serializable
  *
  * WHY(ADR-059): segments は既存 Podcast ドキュメントには無いため default=null で後方互換。
  * クライアントは null を「トランスクリプト未提供」として graceful degradation する。
+ *
+ * WHY [QueueItem] 準拠（フェーズ6 T1）: [com.rioikeda.newslisten.core.PlaybackQueue] へ接続するため。
+ * model → core の依存方向であり、core は model を参照しないため健全（逆方向の依存は生まれない）。
  */
 @Serializable
 data class PodcastResponse(
-    val id: String,
+    override val id: String,
     val type: String,
     @SerialName("article_ids") val articleIds: List<String>,
     val difficulty: String,
@@ -28,4 +32,4 @@ data class PodcastResponse(
     val title: String = "",
     val segments: List<TranscriptSegment>? = null,
     @SerialName("created_at") val createdAt: String,
-)
+) : QueueItem
