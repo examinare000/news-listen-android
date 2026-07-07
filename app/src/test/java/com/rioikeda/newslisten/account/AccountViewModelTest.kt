@@ -16,10 +16,10 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * [AccountViewModel] の挙動検証（表示名編集）。
+ * [AccountViewModel] の挙動検証。
  *
- * 正本: ios/NewsListenApp/NewsListenApp/Settings/AccountSettingsView.swift:49-57（表示名編集 UI）、
- * :303-315（saveProfile ロジック）のミラー。
+ * 正本: ios/NewsListenApp/NewsListenApp/Settings/AccountSettingsView.swift:49-82（表示名編集・
+ * パスワード変更 UI）、:303-332（saveProfile/changePassword ロジック）のミラー。
  * フェーズ11 P11 T3。
  */
 class AccountViewModelTest {
@@ -130,11 +130,73 @@ class AccountViewModelTest {
         assertEquals(stateBeforeSave, authViewModel.authState.value)
     }
 
+    // --- パスワード変更 ---
+
+    @Test
+    fun changePassword成功でフィールドがクリアされメッセージが表示される() = runTest {
+        val viewModel = newViewModel(apiClient = FakeApiClient(onChangePassword = { _, _ -> }))
+        viewModel.onCurrentPasswordChange("current-pass")
+        viewModel.onNewPasswordChange("NewPassw0rd!123")
+
+        viewModel.changePassword()
+
+        assertEquals("", viewModel.currentPassword.value)
+        assertEquals("", viewModel.newPassword.value)
+        assertEquals("パスワードを変更しました", viewModel.passwordMessage.value)
+    }
+
+    @Test
+    fun changePasswordは400で現在のパスワードが正しくありませんと表示しフィールドを保持する() = runTest {
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onChangePassword = { _, _ -> throw ApiException.HttpError(400) }),
+        )
+        viewModel.onCurrentPasswordChange("wrong-pass")
+        viewModel.onNewPasswordChange("NewPassw0rd!123")
+
+        viewModel.changePassword()
+
+        assertEquals("現在のパスワードが正しくありません", viewModel.passwordMessage.value)
+        assertEquals("wrong-pass", viewModel.currentPassword.value)
+        assertEquals("NewPassw0rd!123", viewModel.newPassword.value)
+    }
+
+    @Test
+    fun changePasswordは422でパスワード強度不足の文言を表示する() = runTest {
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onChangePassword = { _, _ -> throw ApiException.HttpError(422) }),
+        )
+        viewModel.onCurrentPasswordChange("current-pass")
+        viewModel.onNewPasswordChange("weak")
+
+        viewModel.changePassword()
+
+        assertEquals(
+            "パスワードは12文字以上で、英大文字・英小文字・数字・記号のうち3種類以上を組み合わせてください",
+            viewModel.passwordMessage.value,
+        )
+    }
+
+    @Test
+    fun changePasswordはその他のエラーで汎用文言を表示する() = runTest {
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(
+                onChangePassword = { _, _ -> throw ApiException.NetworkError(RuntimeException("offline")) },
+            ),
+        )
+        viewModel.onCurrentPasswordChange("current-pass")
+        viewModel.onNewPasswordChange("NewPassw0rd!123")
+
+        viewModel.changePassword()
+
+        assertEquals("パスワードの変更に失敗しました", viewModel.passwordMessage.value)
+    }
+
     @Test
     fun 初期状態ではメッセージやローディングは空である() = runTest {
         val viewModel = newViewModel()
 
         assertNull(viewModel.profileMessage.value)
+        assertNull(viewModel.passwordMessage.value)
         assertFalse(viewModel.isLoading.value)
     }
 

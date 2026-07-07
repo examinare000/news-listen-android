@@ -17,15 +17,18 @@ import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
 
 /**
- * account パッケージ（[AccountViewModel]）のテスト専用フェイク（フェーズ11 P11 T3: 表示名更新）。
+ * account パッケージ（[AccountViewModel]）のテスト専用フェイク（フェーズ11 P11 T3: 表示名更新・
+ * パスワード変更）。
  *
- * updateProfile のみ挙動を差し替え可能にする。それ以外はスコープ外のため、誤って呼ばれた場合は
- * 即座に失敗させて検出できるよう例外を投げる（settings/FakeApiClient.kt・auth/FakeApiClient.kt と
- * 同じ設計方針）。
+ * updateProfile/changePassword のみ挙動を差し替え可能にする。それ以外はスコープ外のため、
+ * 誤って呼ばれた場合は即座に失敗させて検出できるよう例外を投げる（settings/FakeApiClient.kt・
+ * auth/FakeApiClient.kt と同じ設計方針）。
  */
 class FakeApiClient(
     private val onUpdateProfile: suspend (displayName: String) -> UserResponse =
         { error("updateProfile is not stubbed") },
+    private val onChangePassword: suspend (currentPassword: String, newPassword: String) -> Unit =
+        { _, _ -> error("changePassword is not stubbed") },
 ) : ApiClient {
 
     override suspend fun login(username: String, password: String): LoginResponse =
@@ -93,7 +96,7 @@ class FakeApiClient(
         onUpdateProfile(displayName)
 
     override suspend fun changePassword(currentPassword: String, newPassword: String) =
-        error("changePassword is out of scope for account tests")
+        onChangePassword(currentPassword, newPassword)
 
     override suspend fun listSessions(): SessionsListResponse =
         error("listSessions is out of scope for account tests")
