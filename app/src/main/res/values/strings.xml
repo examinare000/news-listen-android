@@ -20,4 +20,16 @@
     <string name="placeholder_feed">フィード（フェーズ4で実装）</string>
     <string name="placeholder_podcast">Podcast（フェーズ5で実装）</string>
     <string name="placeholder_settings">設定（フェーズ6で実装）</string>
+
+    <!-- フィード画面 -->
+    <string name="screen_feed_title">フィード</string>
+    <string name="loading_articles">読み込み中...</string>
+    <string name="feed_empty">記事がありません</string>
+    <string name="feed_toggle_selection">選択モード</string>
+    <string name="feed_toggle_selection_on">選択を終了</string>
+    <string name="feed_toggle_selection_off">選択を開始</string>
+    <string name="feed_star">スター</string>
+    <string name="feed_dismiss">削除</string>
+    <string name="feed_undo">取り消す</string>
+    <string name="feed_bulk_star">%d件を一括スター</string>
 </resources>

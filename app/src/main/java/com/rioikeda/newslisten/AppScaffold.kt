@@ -25,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import com.rioikeda.newslisten.feed.FeedScreen
+import com.rioikeda.newslisten.feed.FeedViewModel
 
 /**
  * メインのアプリケーション スカフォルド。3 タブ（フィード / Podcast / 設定）を Material3 NavigationBar で提供する。
@@ -33,14 +35,14 @@ import androidx.compose.ui.res.stringResource
  * iOS の TabView と同型の Material3 BottomNavigationBar 実装。各タブはプレースホルダ（フェーズ4以降で実装）。
  */
 @Composable
-fun AppScaffold() {
+fun AppScaffold(feedViewModel: FeedViewModel) {
     var selectedTab by remember { mutableStateOf(0) }
 
     val tabs = listOf(
         TabItem(
             label = stringResource(R.string.tab_feed),
             icon = Icons.Filled.Home,
-            screen = { FeedTabPlaceholder() }
+            screen = { FeedScreen(feedViewModel) }
         ),
         TabItem(
             label = stringResource(R.string.tab_podcast),

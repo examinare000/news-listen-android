@@ -3,6 +3,7 @@ package com.rioikeda.newslisten.di
 import android.content.Context
 import com.rioikeda.newslisten.BuildConfig
 import com.rioikeda.newslisten.auth.AuthViewModel
+import com.rioikeda.newslisten.feed.FeedViewModel
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.AuthInterceptor
 import com.rioikeda.newslisten.network.KeystoreSessionStore
@@ -77,4 +78,25 @@ class AppContainer(context: Context) {
     }
 
     fun getAuthViewModel(): AuthViewModel = _authViewModel
+
+    /**
+     * FeedViewModel（フィード一覧・Star/Dismiss・Undo）を生成して返す。
+     *
+     * Dispatcher: Dispatchers.Default.limitedParallelism(1) を使用し、状態変更を直列化する。
+     * WHY: FeedViewModel の読み取り→書き込み（_pendingAction.value の読み取り、null 代入、commit 送信）と
+     * stage の読み取り→変更→書き込み（_articles の読み取り、removeAt、_pendingAction 代入）が別スレッドで
+     * 競合すると、二重送信や記事消失が起こり得る。iOS の @MainActor による直列実行を Kotlin で再現するため、
+     * limitedParallelism(1) で全操作を単一スレッドで順序付ける。testDispatcher で差し替え可能。
+     *
+     * by lazy でシングルトンキャッシュ化：画面回転時に FeedViewModel インスタンスが同じ
+     * ままであることを保証し、フィード一覧の状態が保持される。
+     */
+    private val _feedViewModel: FeedViewModel by lazy {
+        FeedViewModel(
+            apiClient = apiClient,
+            dispatcher = Dispatchers.Default.limitedParallelism(1)
+        )
+    }
+
+    fun getFeedViewModel(): FeedViewModel = _feedViewModel
 }
