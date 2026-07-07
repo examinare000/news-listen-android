@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.google.firebase.messaging.FirebaseMessaging
 import com.rioikeda.newslisten.BuildConfig
+import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedViewModel
 import com.rioikeda.newslisten.network.ApiClient
@@ -23,6 +24,7 @@ import com.rioikeda.newslisten.podcast.ExoPlayerController
 import com.rioikeda.newslisten.podcast.PodcastViewModel
 import com.rioikeda.newslisten.preferences.DataStorePreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.settings.SettingsViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -284,4 +286,34 @@ class AppContainer(context: Context) {
     }
 
     fun getPodcastViewModel(): PodcastViewModel = _podcastViewModel
+
+    /**
+     * SettingsViewModel（設定タブ: RSS ソース管理・おすすめサイト・生成クォータ・聴取ストリーク・
+     * 難易度/再生速度のサーバー同期）を生成して返す（フェーズ10 P10 Task2）。
+     *
+     * Dispatcher: FeedViewModel/PodcastViewModel と同じ理由で
+     * Dispatchers.Default.limitedParallelism(1) を使う。sources リストの読み取り→書き込みが
+     * 複数スレッドで競合すると更新の取りこぼしが起こり得るため、単一スレッドで直列化する。
+     *
+     * isAdminProvider: RSS ソース編集（updateSource）は admin 限定（issue #66・ADR-047）。
+     * settings 層が auth 層の型（AuthState）に直接依存しないよう、AuthViewModel の
+     * onLogoutCleanup/onAuthenticated と同じ「呼び出し元が判定関数を注入する」パターンを踏襲する。
+     * role は認証確立後に非同期で確定するため、コンストラクタ時点の固定値ではなく
+     * 呼び出し時点で都度 _authViewModel.authState.value を評価する。
+     *
+     * by lazy でシングルトンキャッシュ化：画面回転時に SettingsViewModel インスタンスが
+     * 同じままであることを保証し、sources/generationQuota 等の読み込み済み状態を保持する。
+     */
+    private val _settingsViewModel: SettingsViewModel by lazy {
+        SettingsViewModel(
+            apiClient = apiClient,
+            preferencesStore = preferencesStore,
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+            isAdminProvider = {
+                (_authViewModel.authState.value as? AuthState.Authenticated)?.user?.role == "admin"
+            },
+        )
+    }
+
+    fun getSettingsViewModel(): SettingsViewModel = _settingsViewModel
 }
