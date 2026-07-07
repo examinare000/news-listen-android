@@ -1,4 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">NewsListen</string>
+    <string name="app_name">News Listen</string>
+
+    <!-- ログイン画面 -->
+    <string name="login_subtitle">読んで、聴いて、英語を</string>
+    <string name="login_username_label">ユーザーID</string>
+    <string name="login_password_label">パスワード</string>
+    <string name="login_button_label">ログイン</string>
+
+    <!-- ローディング表示 -->
+    <string name="loading_auth">認証を確認中…</string>
+
+    <!-- タブラベル -->
+    <string name="tab_feed">フィード</string>
+    <string name="tab_podcast">Podcast</string>
+    <string name="tab_settings">設定</string>
+
+    <!-- プレースホルダ -->
+    <string name="placeholder_feed">フィード（フェーズ4で実装）</string>
+    <string name="placeholder_podcast">Podcast（フェーズ5で実装）</string>
+    <string name="placeholder_settings">設定（フェーズ6で実装）</string>
 </resources>
