@@ -117,6 +117,9 @@ dependencies {
     // を要求）。直接依存として新しい安定版を宣言し、解決バージョンを引き上げて回避する。
     implementation(libs.androidx.fragment)
 
+    // Preferences DataStore: PreferencesStore の永続化実装（フェーズ10 P10 Task3）
+    implementation(libs.androidx.datastore.preferences)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)

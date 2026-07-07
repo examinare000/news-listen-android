@@ -3,6 +3,7 @@ package com.rioikeda.newslisten.auth
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.SessionStore
+import com.rioikeda.newslisten.preferences.PreferencesStore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +27,12 @@ class AuthViewModel(
     private val apiClient: ApiClient,
     private val sessionStore: SessionStore,
     private val dispatcher: CoroutineDispatcher,
+    /**
+     * 難易度・再生速度の値の正本（フェーズ10 P10 Task3）。AuthViewModel は独自コピーを持たず、
+     * このストアの StateFlow をそのまま公開し、同期成功時にこのストアへ書き戻すのみを行う
+     * （「どちらが最新か」の二重管理を避ける設計。詳細は [PreferencesStore] のコメント参照）。
+     */
+    private val preferencesStore: PreferencesStore,
     /**
      * logout 時に追加で行うクリーンアップ（フェーズ8-D・shared-playback-spec.md §6.3）。
      *
@@ -61,13 +68,20 @@ class AuthViewModel(
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unknown)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
-    private val _defaultDifficulty = MutableStateFlow(DEFAULT_DIFFICULTY)
-    val defaultDifficulty: StateFlow<String> = _defaultDifficulty.asStateFlow()
+    /** 値の正本は [preferencesStore]（フェーズ10 P10 Task3）。ここでは委譲するのみ。 */
+    val defaultDifficulty: StateFlow<String> = preferencesStore.defaultDifficulty
 
-    private val _defaultPlaybackSpeed = MutableStateFlow(DEFAULT_PLAYBACK_SPEED)
-    val defaultPlaybackSpeed: StateFlow<Double> = _defaultPlaybackSpeed.asStateFlow()
+    /** 値の正本は [preferencesStore]（フェーズ10 P10 Task3）。ここでは委譲するのみ。 */
+    val defaultPlaybackSpeed: StateFlow<Double> = preferencesStore.defaultPlaybackSpeed
 
-    /** 直近の preferences 同期が失敗したか（issue #164 同型。既存値は保持したまま可視化のみ行う）。 */
+    /**
+     * 直近の preferences 同期が失敗したか（issue #164 同型。既存値は保持したまま可視化のみ行う）。
+     *
+     * WHY AuthViewModel が保持する（[PreferencesStore] に置かない）: この値は「直近の同期試行の
+     * 結果」という auth/sync フロー固有の一時的な UI シグナルであり、再起動をまたいで
+     * 永続化すべきユーザー設定値ではない（再起動後は refreshAuth() が再評価する）。
+     * PreferencesStore の契約を「値そのもの」に保つため、揮発性フラグはここに留める。
+     */
     private val _preferencesSyncFailed = MutableStateFlow(false)
     val preferencesSyncFailed: StateFlow<Boolean> = _preferencesSyncFailed.asStateFlow()
 
@@ -105,8 +119,8 @@ class AuthViewModel(
     private suspend fun syncPreferences() {
         try {
             val preferences = apiClient.fetchPreferences()
-            _defaultDifficulty.value = preferences.defaultDifficulty
-            _defaultPlaybackSpeed.value = preferences.defaultPlaybackSpeed
+            preferencesStore.setDefaultDifficulty(preferences.defaultDifficulty)
+            preferencesStore.setDefaultPlaybackSpeed(preferences.defaultPlaybackSpeed)
             _preferencesSyncFailed.value = false
         } catch (e: ApiException) {
             _preferencesSyncFailed.value = true
@@ -165,8 +179,6 @@ class AuthViewModel(
     }
 
     private companion object {
-        const val DEFAULT_DIFFICULTY = "toeic_600"
-        const val DEFAULT_PLAYBACK_SPEED = 1.0
         const val GENERIC_LOGIN_ERROR_MESSAGE = "ログインに失敗しました。接続設定を確認してください"
     }
 }
