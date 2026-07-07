@@ -51,4 +51,16 @@
     <string name="player_pause">一時停止</string>
     <string name="player_speed_description">再生速度 %1$s</string>
     <string name="player_speed_selected">選択中</string>
+
+    <!-- 再生キュー（issue #81） -->
+    <string name="queue_button_label">再生待ち</string>
+    <string name="queue_sheet_title">再生キュー</string>
+    <string name="queue_section_now_playing">再生中</string>
+    <string name="queue_section_up_next">再生待ち</string>
+    <string name="queue_empty">キューは空です</string>
+    <string name="queue_move_up_description">上へ移動</string>
+    <string name="queue_move_down_description">下へ移動</string>
+    <string name="queue_remove_description">削除</string>
+    <string name="podcast_play_next">次に再生</string>
+    <string name="podcast_add_to_queue">キューに追加</string>
 </resources>
