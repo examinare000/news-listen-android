@@ -78,4 +78,10 @@ class FakePodcastApiClient(
         downloadAudioCalls.add(url)
         return onDownloadAudio(url)
     }
+
+    override suspend fun registerDeviceToken(token: String, platform: String) =
+        error("registerDeviceToken is out of scope for podcast tests")
+
+    override suspend fun unregisterDeviceToken(token: String, platform: String) =
+        error("unregisterDeviceToken is out of scope for podcast tests")
 }

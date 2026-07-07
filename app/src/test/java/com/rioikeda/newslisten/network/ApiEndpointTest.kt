@@ -74,4 +74,16 @@ class ApiEndpointTest {
         assertEquals("/settings/preferences", ApiEndpoint.Preferences.path)
         assertEquals("GET", ApiEndpoint.Preferences.method)
     }
+
+    @Test
+    fun registerDeviceTokenはPOST_notificationsDeviceTokens() {
+        assertEquals("/notifications/device-tokens", ApiEndpoint.RegisterDeviceToken.path)
+        assertEquals("POST", ApiEndpoint.RegisterDeviceToken.method)
+    }
+
+    @Test
+    fun unregisterDeviceTokenはDELETE_notificationsDeviceTokens() {
+        assertEquals("/notifications/device-tokens", ApiEndpoint.UnregisterDeviceToken.path)
+        assertEquals("DELETE", ApiEndpoint.UnregisterDeviceToken.method)
+    }
 }

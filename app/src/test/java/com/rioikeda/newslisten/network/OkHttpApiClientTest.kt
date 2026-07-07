@@ -218,4 +218,41 @@ class OkHttpApiClientTest {
 
         assertEquals("/feed?filter=unread", server.takeRequest().path)
     }
+
+    // --- registerDeviceToken / unregisterDeviceToken（フェーズ9・FCM） ---
+
+    @Test
+    fun registerDeviceTokenはPOSTでdevice_tokenとplatformボディを送る() = runTest {
+        server.enqueue(MockResponse().setResponseCode(201).setBody("""{"status":"registered"}"""))
+
+        client.registerDeviceToken("fcm-token-abc", "android")
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/notifications/device-tokens", recorded.path)
+        assertEquals(
+            """{"device_token":"fcm-token-abc","platform":"android"}""",
+            recorded.body.readUtf8(),
+        )
+    }
+
+    @Test
+    fun registerDeviceTokenはplatform省略時androidを送る() = runTest {
+        server.enqueue(MockResponse().setResponseCode(201).setBody("""{"status":"registered"}"""))
+
+        client.registerDeviceToken("fcm-token-abc")
+
+        assertTrue(server.takeRequest().body.readUtf8().contains("\"platform\":\"android\""))
+    }
+
+    @Test
+    fun unregisterDeviceTokenはDELETEでtokenとplatformをクエリに付与する() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"status":"unregistered"}"""))
+
+        client.unregisterDeviceToken("fcm-token-abc", "android")
+
+        val recorded = server.takeRequest()
+        assertEquals("DELETE", recorded.method)
+        assertEquals("/notifications/device-tokens?token=fcm-token-abc&platform=android", recorded.path)
+    }
 }
