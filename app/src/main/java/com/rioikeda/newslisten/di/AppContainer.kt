@@ -239,7 +239,8 @@ class AppContainer(context: Context) {
     private val _feedViewModel: FeedViewModel by lazy {
         FeedViewModel(
             apiClient = apiClient,
-            dispatcher = Dispatchers.Default.limitedParallelism(1)
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+            preferencesStore = preferencesStore,
         )
     }
 

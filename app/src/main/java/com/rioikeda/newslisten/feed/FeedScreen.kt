@@ -61,8 +61,10 @@ import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.RelevanceBar
 import com.rioikeda.newslisten.model.ArticleResponse
+import com.rioikeda.newslisten.preferences.TimeFormat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.Instant
 
 /**
  * Feed タブのメイン画面。記事一覧・ダブルタップでの遷移・Star/Dismiss を担う。
@@ -79,6 +81,8 @@ fun FeedScreen(viewModel: FeedViewModel) {
     val errorMessage by viewModel.errorMessage.collectAsState()
     val pendingAction by viewModel.pendingAction.collectAsState()
     val bulkActionResult by viewModel.bulkActionResult.collectAsState()
+    val articleOpenMode by viewModel.articleOpenMode.collectAsState()
+    val timeFormat by viewModel.timeFormat.collectAsState()
 
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -197,6 +201,7 @@ fun FeedScreen(viewModel: FeedViewModel) {
                                     SelectionModeRow(
                                         article = article,
                                         isSelected = article.id in selectedIds,
+                                        timeFormat = timeFormat,
                                         onToggle = {
                                             selectedIds = if (article.id in selectedIds) {
                                                 selectedIds - article.id
@@ -210,11 +215,12 @@ fun FeedScreen(viewModel: FeedViewModel) {
                                     ArticleCardRow(
                                         article = article,
                                         isExpanded = expandedId == article.id,
+                                        timeFormat = timeFormat,
                                         onTap = {
                                             expandedId = if (expandedId == article.id) null else article.id
                                         },
                                         onDoubleTap = {
-                                            ArticleOpener.openArticle(context, article.url, toolbarColor)
+                                            ArticleOpener.openArticle(context, article.url, toolbarColor, articleOpenMode)
                                         },
                                         onStar = {
                                             // 展開状態をリセット（iOS stage 内の expandedId=nil 相当）
@@ -348,6 +354,7 @@ private fun UndoToast(
 private fun SelectionModeRow(
     article: ArticleResponse,
     isSelected: Boolean,
+    timeFormat: TimeFormat,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -372,6 +379,7 @@ private fun SelectionModeRow(
         ArticleCardContent(
             article = article,
             isExpanded = false,
+            timeFormat = timeFormat,
             modifier = Modifier.weight(1f)
         )
     }
@@ -385,6 +393,7 @@ private fun SelectionModeRow(
 private fun ArticleCardRow(
     article: ArticleResponse,
     isExpanded: Boolean,
+    timeFormat: TimeFormat,
     onTap: () -> Unit,
     onDoubleTap: () -> Unit,
     onStar: () -> Unit,
@@ -468,7 +477,8 @@ private fun ArticleCardRow(
                     // アイブロウ・タイトル・RelevanceBar
                     ArticleCardContent(
                         article = article,
-                        isExpanded = isExpanded
+                        isExpanded = isExpanded,
+                        timeFormat = timeFormat
                     )
 
                     // 展開時: Star / Dismiss ボタン
@@ -524,6 +534,7 @@ private fun ArticleCardRow(
 private fun ArticleCardContent(
     article: ArticleResponse,
     isExpanded: Boolean,
+    timeFormat: TimeFormat,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -549,7 +560,7 @@ private fun ArticleCardContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = article.publishedAt.take(10), // YYYY-MM-DD
+                text = ArticleDateFormatter.format(article.publishedAt, timeFormat, Instant.now()),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1

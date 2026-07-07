@@ -5,6 +5,10 @@ import com.rioikeda.newslisten.model.ArticleResponse
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.network.ApiException
+import com.rioikeda.newslisten.preferences.ArticleOpenMode
+import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
+import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.preferences.TimeFormat
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -30,8 +34,11 @@ class FeedViewModelTest {
         publishedAt = "2026-07-01T00:00:00Z",
     )
 
-    private fun TestScope.newViewModel(apiClient: FakeFeedApiClient): FeedViewModel =
-        FeedViewModel(apiClient, StandardTestDispatcher(testScheduler))
+    private fun TestScope.newViewModel(
+        apiClient: FakeFeedApiClient,
+        preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
+    ): FeedViewModel =
+        FeedViewModel(apiClient, StandardTestDispatcher(testScheduler), preferencesStore)
 
     // --- loadFeed（FeedViewModel.swift:45-58） ---
 
@@ -439,5 +446,47 @@ class FeedViewModelTest {
         assertFalse(viewModel.isRefreshing.value)
         assertEquals(articles, viewModel.articles.value)
         assertNull(viewModel.errorMessage.value)
+    }
+
+    // --- articleOpenMode / timeFormat の再公開（フェーズ10 P10 Task4） ---
+
+    @Test
+    fun articleOpenModeは注入したPreferencesStoreの現在値を公開する() = runTest {
+        val preferencesStore = InMemoryPreferencesStore(initialArticleOpenMode = ArticleOpenMode.EXTERNAL)
+        val apiClient = FakeFeedApiClient(onFetchFeed = { FeedResponse(articles = emptyList(), date = "2026-07-01") })
+        val viewModel = newViewModel(apiClient, preferencesStore)
+
+        assertEquals(ArticleOpenMode.EXTERNAL, viewModel.articleOpenMode.value)
+    }
+
+    @Test
+    fun articleOpenModeはPreferencesStoreの更新にも追随する() = runTest {
+        val preferencesStore = InMemoryPreferencesStore()
+        val apiClient = FakeFeedApiClient(onFetchFeed = { FeedResponse(articles = emptyList(), date = "2026-07-01") })
+        val viewModel = newViewModel(apiClient, preferencesStore)
+
+        preferencesStore.setArticleOpenMode(ArticleOpenMode.EXTERNAL)
+
+        assertEquals(ArticleOpenMode.EXTERNAL, viewModel.articleOpenMode.value)
+    }
+
+    @Test
+    fun timeFormatは注入したPreferencesStoreの現在値を公開する() = runTest {
+        val preferencesStore = InMemoryPreferencesStore(initialTimeFormat = TimeFormat.RELATIVE)
+        val apiClient = FakeFeedApiClient(onFetchFeed = { FeedResponse(articles = emptyList(), date = "2026-07-01") })
+        val viewModel = newViewModel(apiClient, preferencesStore)
+
+        assertEquals(TimeFormat.RELATIVE, viewModel.timeFormat.value)
+    }
+
+    @Test
+    fun timeFormatはPreferencesStoreの更新にも追随する() = runTest {
+        val preferencesStore = InMemoryPreferencesStore()
+        val apiClient = FakeFeedApiClient(onFetchFeed = { FeedResponse(articles = emptyList(), date = "2026-07-01") })
+        val viewModel = newViewModel(apiClient, preferencesStore)
+
+        preferencesStore.setTimeFormat(TimeFormat.RELATIVE)
+
+        assertEquals(TimeFormat.RELATIVE, viewModel.timeFormat.value)
     }
 }
