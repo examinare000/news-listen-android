@@ -8,10 +8,8 @@
         android:scaleY="2.61"
         android:translateX="22.68"
         android:translateY="22.68">
-        <circle
-            android:cx="12"
-            android:cy="12"
-            android:r="11"
+        <path
+            android:pathData="M12,1 a11,11 0 1,0 0,22 a11,11 0 1,0 0,-22 Z"
             android:fillColor="#1F6FD6" />
         <path
             android:pathData="M10,8 L10,16 L16,12 Z"
