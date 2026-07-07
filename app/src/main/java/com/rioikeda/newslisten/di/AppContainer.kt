@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.google.firebase.messaging.FirebaseMessaging
 import com.rioikeda.newslisten.BuildConfig
 import com.rioikeda.newslisten.account.AccountViewModel
+import com.rioikeda.newslisten.account.SessionsViewModel
 import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedViewModel
@@ -342,4 +343,24 @@ class AppContainer(context: Context) {
     }
 
     fun getAccountViewModel(): AccountViewModel = _accountViewModel
+
+    /**
+     * SessionsViewModel（ログイン中デバイス一覧・個別/一括失効）を生成して返す
+     * （フェーズ11 P11 T4・issue #84 相当）。
+     *
+     * Dispatcher: FeedViewModel/SettingsViewModel と同じ理由で
+     * Dispatchers.Default.limitedParallelism(1) を使う。sessions リストの読み取り→書き込みが
+     * 複数スレッドで競合すると一覧の取りこぼしが起こり得るため、単一スレッドで直列化する。
+     *
+     * by lazy でシングルトンキャッシュ化：画面回転時に SessionsViewModel インスタンスが
+     * 同じままであることを保証し、sessions/revokedOthersCount 等の読み込み済み状態を保持する。
+     */
+    private val _sessionsViewModel: SessionsViewModel by lazy {
+        SessionsViewModel(
+            apiClient = apiClient,
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+        )
+    }
+
+    fun getSessionsViewModel(): SessionsViewModel = _sessionsViewModel
 }
