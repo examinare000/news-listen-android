@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -173,6 +174,25 @@ class PodcastViewModel(
             _downloadingIds.value = _downloadingIds.value - podcast.id
             downloadJobs.remove(podcast.id)
         }
+    }
+
+    /**
+     * logout 時のクリーンアップ本体（spec §6.3・共有端末対応）。
+     *
+     * 進行中のダウンロードをすべて [Job.cancelAndJoin] で確実に中断・完了待機してから
+     * キャッシュを全削除する。こうすることで、fetchPodcast の suspend 境界中に logout が
+     * 割り込んでも、中断済みの download が後から cache() を呼んでファイルを復活させる
+     * ことがない（[downloadJobs] の doc 参照）。
+     *
+     * ダウンロード中でなく既にキャッシュ済みの分も含め、[downloadedIds]/[downloadingIds] を
+     * 空にする（logout 後に前ユーザーのダウンロード状態が UI に残らないようにする副次的な修正）。
+     */
+    suspend fun cancelDownloadsAndClearCache(): Unit = withContext(dispatcher) {
+        val inFlightJobs = downloadJobs.values.toList()
+        inFlightJobs.forEach { it.cancelAndJoin() }
+        cacheManager.removeAll()
+        _downloadedIds.value = emptySet()
+        _downloadingIds.value = emptySet()
     }
 
     /**

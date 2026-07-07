@@ -947,4 +947,59 @@ class PodcastViewModelTest {
 
         assertEquals(setOf("p1"), viewModel.downloadedIds.value)
     }
+
+    // --- cancelDownloadsAndClearCache（logout×ダウンロード競合。共有端末対応 spec §6.3） ---
+    //
+    // WHY このテストが必要か: AuthViewModel.onLogoutCleanup（Dispatchers.Default 上で動く）と
+    // PodcastViewModel.download()（limitedParallelism(1)）は、download() が fetchPodcast という
+    // suspend 境界を挟むために無同期になり得る。download が suspend 中に logout のキャッシュ全削除が
+    // 素通りしてしまうと、削除後に download が再開してファイルを書き込み、downloadedIds にも
+    // 残留してしまう（共有端末に前ユーザーの音声データが残る＝ spec §6.3 の存在理由に反する）。
+
+    @Test
+    fun cancelDownloadsAndClearCacheはfetchPodcast中の進行中downloadを中断しキャッシュ書き込みを残さない() = runTest {
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { delay(1_000); p1 },
+            onDownloadAudio = { byteArrayOf(1, 2, 3) },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+
+        launch { viewModel.download(p1) }
+        runCurrent()
+        assertEquals(setOf("p1"), viewModel.downloadingIds.value)
+
+        // logout 相当の割り込み。download が fetchPodcast の delay(1_000) で中断している最中に呼ぶ。
+        viewModel.cancelDownloadsAndClearCache()
+
+        assertFalse(cacheManager.isCached("p1"))
+        assertEquals(emptySet<String>(), viewModel.downloadedIds.value)
+        assertEquals(emptySet<String>(), viewModel.downloadingIds.value)
+
+        // 中断された download の続き（fetchPodcast 完了後の cache() 呼び出し）が
+        // 遅れて実行されてファイルが復活することがないか、時間を進めて再確認する。
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertFalse(cacheManager.isCached("p1"))
+        assertEquals(emptySet<String>(), viewModel.downloadedIds.value)
+    }
+
+    @Test
+    fun cancelDownloadsAndClearCacheは完了済みのダウンロードキャッシュも削除しdownloadedIdsを空にする() = runTest {
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { p1 },
+            onDownloadAudio = { byteArrayOf(1) },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+        viewModel.download(p1)
+        assertTrue(cacheManager.isCached("p1"))
+
+        viewModel.cancelDownloadsAndClearCache()
+
+        assertFalse(cacheManager.isCached("p1"))
+        assertEquals(emptySet<String>(), viewModel.downloadedIds.value)
+    }
 }

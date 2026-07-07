@@ -26,6 +26,27 @@ class AuthViewModel(
     private val apiClient: ApiClient,
     private val sessionStore: SessionStore,
     private val dispatcher: CoroutineDispatcher,
+    /**
+     * logout 時に追加で行うクリーンアップ（フェーズ8-D・shared-playback-spec.md §6.3）。
+     *
+     * spec §6.3 は共有端末対応として「logout 時にユーザー固有キャッシュ（音声）を完全削除する」ことを
+     * 全プラットフォーム共通の方針として定めるが、実体（AudioCacheManager）は podcast/network 層に属し、
+     * auth 層から直接依存させると層の依存方向が逆転する（auth → podcast）。そのため呼び出し元
+     * （AppContainer）が `{ podcastViewModel.cancelDownloadsAndClearCache() }` を注入する形にし、
+     * auth 層は「ログアウト時に何かクリーンアップが要る」という事実のみを知る設計にした。
+     *
+     * suspend である理由（2レビュー統合指摘・logout×ダウンロード競合の修正）: PodcastViewModel の
+     * download() は fetchPodcast という suspend 境界を挟むため、単純な `() -> Unit`（同期・fire-and-forget
+     * 相当）では進行中のダウンロードを待たずに戻ってしまい、キャッシュ削除後にダウンロードが完了して
+     * ファイルが復活する競合が起こり得た。cancelDownloadsAndClearCache() が進行中の Job を
+     * cancelAndJoin してからキャッシュを削除するため、ここも suspend にしてその完了を待つ。
+     *
+     * 注記: iOS (AppState.swift:171-178) の logout() は現時点でキャッシュ削除を呼び出しておらず、
+     * spec §6.3 の表が言う「ビルトイン」実装とは実際には未配線（反証済み）。ADR-053 の
+     * 「spec が正本・実装が追随」原則に従い、Android は spec 準拠で先行実装する。iOS 側の追随は
+     * 別途 docs 側の follow-up として扱う。
+     */
+    private val onLogoutCleanup: suspend () -> Unit = {},
 ) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unknown)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -119,6 +140,13 @@ class AuthViewModel(
             apiClient.logout()
         } catch (e: ApiException) {
             // ベストエフォート: サーバ側の失効に失敗してもローカルの認証状態は落とす。
+        }
+        try {
+            onLogoutCleanup()
+        } catch (e: Exception) {
+            // ベストエフォート（spec §6.3）: キャッシュ削除の失敗でログアウト自体を失敗させない。
+            // onLogoutCleanup は呼び出し元が注入する任意の処理のため、ApiException に限定せず
+            // 汎用 Exception で受ける（クライアント側の状態は信頼できない前提）。
         }
         sessionStore.clear()
         _authState.value = AuthState.Unauthenticated

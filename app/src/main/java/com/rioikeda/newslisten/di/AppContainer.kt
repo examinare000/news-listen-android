@@ -94,12 +94,25 @@ class AppContainer(context: Context) {
      *
      * by lazy でシングルトンキャッシュ化：画面回転時に AuthViewModel インスタンスが同じ
      * ままであることを保証し、authState が Unknown にリセットされるのを防ぐ。
+     *
+     * onLogoutCleanup: フェーズ8-D・shared-playback-spec.md §6.3（共有端末対応）。logout 時に
+     * 音声キャッシュを全削除し、共有端末に他人の音声データが残らないようにする。auth 層に
+     * AudioCacheManager を直接依存させないため、削除処理だけを関数として注入する
+     * （詳細は AuthViewModel の onLogoutCleanup コメント参照）。
+     *
+     * 2レビュー統合指摘（logout×ダウンロード競合）の修正: 直接 `audioCacheManager.removeAll()` を
+     * 呼ぶのではなく `_podcastViewModel.cancelDownloadsAndClearCache()` を呼ぶ。PodcastViewModel の
+     * download() は AudioCacheManager と同じ limitedParallelism(1) dispatcher 上で進行中 Job を
+     * 追跡しており、cancelDownloadsAndClearCache() がそれを cancelAndJoin してから removeAll() する
+     * ことで、fetchPodcast の suspend 境界中の download と logout のキャッシュ削除が競合し
+     * ファイルが残留する事態を防ぐ。
      */
     private val _authViewModel: AuthViewModel by lazy {
         AuthViewModel(
             apiClient = apiClient,
             sessionStore = sessionStore,
-            dispatcher = Dispatchers.Default
+            dispatcher = Dispatchers.Default,
+            onLogoutCleanup = { _podcastViewModel.cancelDownloadsAndClearCache() }
         )
     }
 
