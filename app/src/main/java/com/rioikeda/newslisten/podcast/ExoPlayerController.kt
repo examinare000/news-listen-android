@@ -1,14 +1,17 @@
 package com.rioikeda.newslisten.podcast
 
 import android.content.Context
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.rioikeda.newslisten.playbackservice.PlaybackService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,15 +25,16 @@ import kotlinx.coroutines.flow.asStateFlow
  * StateFlow で更新する（iOS の addPeriodicTimeObserver 相当）。
  *
  * オーディオフォーカス取得は handleAudioFocus=true で自動化する（iOS の .playback + .spokenAudio
- * に相当）。マナーモードでも再生が行われ、他のアプリからのオーディオフォーカス割り込みが
- * フェーズ7 以降で実装される予定。
+ * に相当）。マナーモードでも再生が行われ、割り込み（電話等）の一時停止・フォーカス回復時の
+ * 自動再開も Media3 の自動処理に委譲する（iOS InterruptionPolicy 相当。個別実装は持たない）。
  *
  * イヤホン抜去での一時停止は setHandleAudioBecomingNoisy(true) で実装（iOS の
  * handleRouteChange:551-558 相当）。
  */
-class ExoPlayerController(context: Context) : PlayerController {
+class ExoPlayerController(private val context: Context) : PlayerController {
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    @Suppress("UnsafeOptInUsageError")
     private val exoPlayer: ExoPlayer = ExoPlayer.Builder(context)
         .setAudioAttributes(
             AudioAttributes.Builder()
@@ -42,6 +46,10 @@ class ExoPlayerController(context: Context) : PlayerController {
             true  // handleAudioFocus: オーディオフォーカス自動取得
         )
         .setHandleAudioBecomingNoisy(true)  // イヤホン抜去で一時停止
+        .setSeekBackIncrementMs((PlaybackConstants.SKIP_BACKWARD_SECONDS * 1000).toLong())  // 巻き戻し
+        .setSeekForwardIncrementMs((PlaybackConstants.SKIP_FORWARD_SECONDS * 1000).toLong())  // 早送り
+        // WHY: MediaStyle 通知の巻き戻し/早送りボタンが COMMAND_SEEK_BACK/FORWARD 標準コマンド
+        // で自動的に PlaybackConstants の値で動く（カスタムコマンド不要）。
         .build()
 
     private val _isPlaying = MutableStateFlow(false)
@@ -128,6 +136,18 @@ class ExoPlayerController(context: Context) : PlayerController {
 
     override fun play() {
         mainHandler.post {
+            // PlaybackService を起動して MediaSessionService を有効化し、
+            // MediaStyle 通知の表示を準備する。
+            // WHY startForegroundService 必須: API 26+ のバックグラウンド起動制限下で、
+            // フォアグラウンド昇格を予約するために startForegroundService が必須。
+            val intent = Intent(context, PlaybackService::class.java)
+            try {
+                ContextCompat.startForegroundService(context, intent)
+            } catch (e: IllegalStateException) {
+                // 失敗時は機微情報なしのログのみで再生は継続
+                android.util.Log.w("ExoPlayerController", "PlaybackService 起動失敗。通知は表示されない可能性があります。")
+            }
+
             exoPlayer.play()
         }
     }
@@ -170,6 +190,17 @@ class ExoPlayerController(context: Context) : PlayerController {
             exoPlayer.release()
         }
     }
+
+    /**
+     * PlaybackService（MediaSessionService）の MediaSession 構築専用に ExoPlayer インスタンスを公開する。
+     *
+     * WHY 専用手段を設ける: ExoPlayer 本体は AppContainer が所有し、PlayerController 経由の
+     * 再生操作（play/pause/seekTo）で制御される。MediaSession は ExoPlayer と共有するが、
+     * 本メソッドはその構築用に限定し、「外部から ExoPlayer を直接操作しない」というカプセル化を
+     * 保持する。再生操作は PlayerController.play() / pause() 等を呼び出すこと。
+     */
+    val player: Player
+        get() = exoPlayer
 
     /**
      * 0.5 秒毎にポーリング開始（iOS の addPeriodicTimeObserver 相当）。
