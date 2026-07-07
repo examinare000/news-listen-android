@@ -73,11 +73,13 @@ class MainActivity : ComponentActivity() {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        // 依存グラフから ViewModel を取得
+        // 依存グラフから ViewModel と PreferencesStore を取得
         val appContainer = NewsListenApplication.getAppContainer()
         val authViewModel = appContainer.getAuthViewModel()
         val feedViewModel = appContainer.getFeedViewModel()
         val podcastViewModel = appContainer.getPodcastViewModel()
+        val settingsViewModel = appContainer.getSettingsViewModel()
+        val preferencesStore = appContainer.getPreferencesStore()
 
         setContent {
             NewsListenTheme {
@@ -121,7 +123,7 @@ class MainActivity : ComponentActivity() {
 
                     is AuthState.Authenticated -> {
                         // メインアプリ（3 タブスカフォルド）
-                        AppScaffold(feedViewModel, podcastViewModel)
+                        AppScaffold(feedViewModel, podcastViewModel, settingsViewModel, preferencesStore, authViewModel)
                     }
                 }
             }
