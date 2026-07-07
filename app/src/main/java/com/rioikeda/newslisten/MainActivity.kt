@@ -23,6 +23,7 @@ import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.auth.LoginScreen
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.NewsListenTheme
+import com.rioikeda.newslisten.podcast.PodcastViewModel
 
 /**
  * 単一 Activity エントリポイント。認証状態に基づいてコンテンツを切り分ける。
@@ -39,6 +40,7 @@ class MainActivity : ComponentActivity() {
         val appContainer = NewsListenApplication.getAppContainer()
         val authViewModel = appContainer.getAuthViewModel()
         val feedViewModel = appContainer.getFeedViewModel()
+        val podcastViewModel = appContainer.getPodcastViewModel()
 
         setContent {
             NewsListenTheme {
@@ -82,7 +84,7 @@ class MainActivity : ComponentActivity() {
 
                     is AuthState.Authenticated -> {
                         // メインアプリ（3 タブスカフォルド）
-                        AppScaffold(feedViewModel)
+                        AppScaffold(feedViewModel, podcastViewModel)
                     }
                 }
             }
