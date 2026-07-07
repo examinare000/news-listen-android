@@ -97,6 +97,9 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.core)
 
+    // Media3 ExoPlayer: 音声再生制御（フェーズ5）
+    implementation(libs.androidx.media3.exoplayer)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
