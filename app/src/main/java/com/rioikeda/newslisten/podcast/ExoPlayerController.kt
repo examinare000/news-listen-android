@@ -6,6 +6,7 @@ import android.os.Looper
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -105,10 +106,19 @@ class ExoPlayerController(context: Context) : PlayerController {
         )
     }
 
-    override fun prepare(url: String) {
+    override fun prepare(url: String, metadata: PlaybackMetadata) {
         // ExoPlayer API はメインスレッド制約。mainHandler 経由で実行。
         mainHandler.post {
-            val mediaItem = MediaItem.fromUri(url)
+            // MediaMetadata に title/artist を載せることで、MediaStyle 通知（ロック画面含む）の
+            // タイトル/アーティスト表示に反映される（正本: NowPlayingInfo.swift:36-37）。
+            val mediaMetadata = MediaMetadata.Builder()
+                .setTitle(metadata.title)
+                .setArtist(metadata.artist)
+                .build()
+            val mediaItem = MediaItem.Builder()
+                .setUri(url)
+                .setMediaMetadata(mediaMetadata)
+                .build()
             exoPlayer.setMediaItem(mediaItem)
             exoPlayer.prepare()
             // prepare() 直後は durationSeconds は未確定（STATE_READY で確定）

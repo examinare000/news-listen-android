@@ -95,6 +95,7 @@ class PodcastViewModelTest {
 
         assertEquals(listOf("p1"), apiClient.fetchPodcastCalls)
         assertEquals(listOf("https://example.com/p1-fresh.mp3"), player.prepareCalls)
+        assertEquals(listOf(freshPodcast.toPlaybackMetadata()), player.metadataCalls)
         assertEquals(1, player.playCallCount)
         assertEquals(freshPodcast, viewModel.currentPodcast.value)
         assertNull(viewModel.errorMessage.value)

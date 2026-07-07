@@ -33,6 +33,9 @@ class FakePlayerController : PlayerController {
     /** prepare に渡された URL の呼び出し履歴。 */
     val prepareCalls: MutableList<String> = mutableListOf()
 
+    /** prepare に渡された [PlaybackMetadata] の呼び出し履歴（[prepareCalls] と対応するインデックス）。 */
+    val metadataCalls: MutableList<PlaybackMetadata> = mutableListOf()
+
     /** play が呼ばれた回数。 */
     var playCallCount = 0
         private set
@@ -62,9 +65,10 @@ class FakePlayerController : PlayerController {
      */
     private var released = false
 
-    override fun prepare(url: String) {
+    override fun prepare(url: String, metadata: PlaybackMetadata) {
         checkNotReleased()
         prepareCalls.add(url)
+        metadataCalls.add(metadata)
     }
 
     override fun play() {
