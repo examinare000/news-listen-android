@@ -29,6 +29,7 @@ import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.auth.LoginScreen
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.NewsListenTheme
+import com.rioikeda.newslisten.onboarding.OnboardingScreen
 import com.rioikeda.newslisten.podcast.PodcastViewModel
 
 /**
@@ -82,6 +83,7 @@ class MainActivity : ComponentActivity() {
         val preferencesStore = appContainer.getPreferencesStore()
         val accountViewModel = appContainer.getAccountViewModel()
         val sessionsViewModel = appContainer.getSessionsViewModel()
+        val onboardingViewModel = appContainer.getOnboardingViewModel()
 
         setContent {
             NewsListenTheme {
@@ -124,16 +126,31 @@ class MainActivity : ComponentActivity() {
                     }
 
                     is AuthState.Authenticated -> {
-                        // メインアプリ（3 タブスカフォルド）
-                        AppScaffold(
-                            feedViewModel,
-                            podcastViewModel,
-                            settingsViewModel,
-                            preferencesStore,
-                            authViewModel,
-                            accountViewModel,
-                            sessionsViewModel
-                        )
+                        // 認証確立ごとに一度だけ初回オンボーディング状態を取得する
+                        // （iOS ContentView.task { appState.refreshOnboardingStatus() } 相当）。
+                        LaunchedEffect(Unit) {
+                            onboardingViewModel.refreshOnboardingStatus()
+                        }
+                        val onboardingCompleted =
+                            onboardingViewModel.onboardingCompleted.collectAsStateWithLifecycle()
+
+                        // onboarding_completed == false（明示的に未完了）のときだけ追加ステップを
+                        // 差し込む。取得前（null）は判定保留のため通常画面を表示する
+                        // （iOS onboardingBinding: `appState.onboardingCompleted == false` 準拠）。
+                        if (onboardingCompleted.value == false) {
+                            OnboardingScreen(viewModel = onboardingViewModel)
+                        } else {
+                            // メインアプリ（3 タブスカフォルド）
+                            AppScaffold(
+                                feedViewModel,
+                                podcastViewModel,
+                                settingsViewModel,
+                                preferencesStore,
+                                authViewModel,
+                                accountViewModel,
+                                sessionsViewModel
+                            )
+                        }
                     }
                 }
             }

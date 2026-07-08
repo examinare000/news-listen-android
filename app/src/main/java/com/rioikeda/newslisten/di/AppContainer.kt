@@ -24,6 +24,7 @@ import com.rioikeda.newslisten.network.SessionStore
 import com.rioikeda.newslisten.notification.FcmTokenRegistrar
 import com.rioikeda.newslisten.observability.CrashReporter
 import com.rioikeda.newslisten.observability.DeviceInfo
+import com.rioikeda.newslisten.onboarding.OnboardingViewModel
 import com.rioikeda.newslisten.podcast.ExoPlayerController
 import com.rioikeda.newslisten.podcast.PodcastViewModel
 import com.rioikeda.newslisten.preferences.DataStorePreferencesStore
@@ -398,4 +399,24 @@ class AppContainer(context: Context) {
     }
 
     fun getSessionsViewModel(): SessionsViewModel = _sessionsViewModel
+
+    /**
+     * OnboardingViewModel（初回オンボーディング「おすすめサイト追加」ステップ）を生成して返す
+     * （フェーズ13・issue #140 P13）。
+     *
+     * Dispatcher: 他の ViewModel と同じ理由で Dispatchers.Default.limitedParallelism(1) を使う。
+     * featuredSites/addedIds の読み取り→書き込みが複数スレッドで競合すると購読済み判定の
+     * 取りこぼしが起こり得るため、単一スレッドで直列化する。
+     *
+     * by lazy でシングルトンキャッシュ化：画面回転時に OnboardingViewModel インスタンスが
+     * 同じままであることを保証し、onboardingCompleted の再取得（サーバー再問い合わせ）を防ぐ。
+     */
+    private val _onboardingViewModel: OnboardingViewModel by lazy {
+        OnboardingViewModel(
+            apiClient = apiClient,
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+        )
+    }
+
+    fun getOnboardingViewModel(): OnboardingViewModel = _onboardingViewModel
 }
