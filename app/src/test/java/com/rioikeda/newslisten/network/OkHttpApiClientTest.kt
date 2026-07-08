@@ -3,6 +3,8 @@ package com.rioikeda.newslisten.network
 import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.StarRequest
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -578,5 +580,119 @@ class OkHttpApiClientTest {
         assertEquals("POST", recorded.method)
         assertEquals("/settings/onboarding/complete", recorded.path)
         assertEquals(true, response.onboardingCompleted)
+    }
+
+    // --- フェーズ17: Passkey（WebAuthn）issue #140 P17 ---
+
+    @Test
+    fun passkeyRegisterOptionsはPOSTでchallenge_idとoptionsを返す() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody("""{"challenge_id":"c-1","options":"{\"challenge\":\"abc\"}"}""")
+        )
+
+        val response = client.passkeyRegisterOptions()
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/auth/passkey/register/options", recorded.path)
+        assertEquals("c-1", response.challengeId)
+        assertEquals("""{"challenge":"abc"}""", response.options)
+    }
+
+    @Test
+    fun passkeyRegisterVerifyはPOSTでchallenge_idとcredentialボディを送る() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"status":"ok"}"""))
+        val credential = buildJsonObject { put("id", "cred-1") }
+
+        client.passkeyRegisterVerify("c-1", credential)
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/auth/passkey/register/verify", recorded.path)
+        assertEquals(
+            """{"challenge_id":"c-1","credential":{"id":"cred-1"}}""",
+            recorded.body.readUtf8(),
+        )
+    }
+
+    @Test
+    fun passkeyLoginOptionsはPOSTでusernameボディを送りchallenge_idとoptionsを返す() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody("""{"challenge_id":"c-2","options":"{\"challenge\":\"def\"}"}""")
+        )
+
+        val response = client.passkeyLoginOptions("u")
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/auth/passkey/login/options", recorded.path)
+        assertEquals("""{"username":"u"}""", recorded.body.readUtf8())
+        assertEquals("c-2", response.challengeId)
+        assertEquals("""{"challenge":"def"}""", response.options)
+    }
+
+    @Test
+    fun passkeyLoginOptionsはusernameがnullなら空ボディを送る() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody("""{"challenge_id":"c-2","options":"{}"}""")
+        )
+
+        client.passkeyLoginOptions(null)
+
+        assertEquals("{}", server.takeRequest().body.readUtf8())
+    }
+
+    @Test
+    fun passkeyLoginVerifyはPOSTでLoginResponseを返す() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody("""{"token":"t-1","user":{"username":"u","role":"member","display_name":"U"}}""")
+        )
+        val credential = buildJsonObject { put("id", "cred-1") }
+
+        val response = client.passkeyLoginVerify("c-1", credential)
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/auth/passkey/login/verify", recorded.path)
+        assertEquals(
+            """{"challenge_id":"c-1","credential":{"id":"cred-1"}}""",
+            recorded.body.readUtf8(),
+        )
+        assertEquals("t-1", response.token)
+        assertEquals("u", response.user.username)
+    }
+
+    @Test
+    fun listPasskeyCredentialsはGETでPasskeyCredentialsListResponseを返す() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200)
+                .setBody(
+                    """{"credentials":[{"credential_id":"cred-1","username":"u","name":null,""" +
+                        """"transports":[],"aaguid":null,"sign_count":0,""" +
+                        """"created_at":"2026-01-01T00:00:00+00:00","last_used_at":null}]}"""
+                )
+        )
+
+        val response = client.listPasskeyCredentials()
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        assertEquals("/auth/passkey/credentials", recorded.path)
+        assertEquals("cred-1", response.credentials.single().credentialId)
+    }
+
+    @Test
+    fun deletePasskeyCredentialはDELETEで指定IDへ送る() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"status":"ok"}"""))
+
+        client.deletePasskeyCredential("cred-1")
+
+        val recorded = server.takeRequest()
+        assertEquals("DELETE", recorded.method)
+        assertEquals("/auth/passkey/credentials/cred-1", recorded.path)
     }
 }

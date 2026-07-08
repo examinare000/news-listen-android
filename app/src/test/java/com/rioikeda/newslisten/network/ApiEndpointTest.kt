@@ -169,4 +169,43 @@ class ApiEndpointTest {
         assertEquals("/auth/sessions/revoke-others", ApiEndpoint.RevokeOtherSessions.path)
         assertEquals("POST", ApiEndpoint.RevokeOtherSessions.method)
     }
+
+    // --- フェーズ17: Passkey（WebAuthn）issue #140 P17 ---
+
+    @Test
+    fun passkeyRegisterOptionsはPOST_authPasskeyRegisterOptions() {
+        assertEquals("/auth/passkey/register/options", ApiEndpoint.PasskeyRegisterOptions.path)
+        assertEquals("POST", ApiEndpoint.PasskeyRegisterOptions.method)
+    }
+
+    @Test
+    fun passkeyRegisterVerifyはPOST_authPasskeyRegisterVerify() {
+        assertEquals("/auth/passkey/register/verify", ApiEndpoint.PasskeyRegisterVerify.path)
+        assertEquals("POST", ApiEndpoint.PasskeyRegisterVerify.method)
+    }
+
+    @Test
+    fun passkeyLoginOptionsはPOST_authPasskeyLoginOptions() {
+        assertEquals("/auth/passkey/login/options", ApiEndpoint.PasskeyLoginOptions.path)
+        assertEquals("POST", ApiEndpoint.PasskeyLoginOptions.method)
+    }
+
+    @Test
+    fun passkeyLoginVerifyはPOST_authPasskeyLoginVerify() {
+        assertEquals("/auth/passkey/login/verify", ApiEndpoint.PasskeyLoginVerify.path)
+        assertEquals("POST", ApiEndpoint.PasskeyLoginVerify.method)
+    }
+
+    @Test
+    fun passkeyCredentialsはGET_authPasskeyCredentials() {
+        assertEquals("/auth/passkey/credentials", ApiEndpoint.PasskeyCredentials.path)
+        assertEquals("GET", ApiEndpoint.PasskeyCredentials.method)
+    }
+
+    @Test
+    fun deletePasskeyCredentialはDELETE_authPasskeyCredentialsId() {
+        val endpoint = ApiEndpoint.DeletePasskeyCredential("cred-1")
+        assertEquals("/auth/passkey/credentials/cred-1", endpoint.path)
+        assertEquals("DELETE", endpoint.method)
+    }
 }

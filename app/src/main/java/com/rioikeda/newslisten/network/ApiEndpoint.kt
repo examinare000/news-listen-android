@@ -112,4 +112,24 @@ sealed class ApiEndpoint(val path: String, val method: String) {
 
     /** 初回オンボーディング完了を記録する。 */
     data object CompleteOnboarding : ApiEndpoint("/settings/onboarding/complete", "POST")
+
+    // --- フェーズ17: Passkey（WebAuthn）issue #140 P17 ---
+
+    /** パスキー登録オプションの取得（ログイン必須）。 */
+    data object PasskeyRegisterOptions : ApiEndpoint("/auth/passkey/register/options", "POST")
+
+    /** パスキー登録の検証（ログイン必須）。 */
+    data object PasskeyRegisterVerify : ApiEndpoint("/auth/passkey/register/verify", "POST")
+
+    /** パスキー認証オプションの取得（認証不要・discoverable credential フロー）。 */
+    data object PasskeyLoginOptions : ApiEndpoint("/auth/passkey/login/options", "POST")
+
+    /** パスキー認証の検証（認証不要）。 */
+    data object PasskeyLoginVerify : ApiEndpoint("/auth/passkey/login/verify", "POST")
+
+    /** ログインユーザーのパスキー一覧の取得。 */
+    data object PasskeyCredentials : ApiEndpoint("/auth/passkey/credentials", "GET")
+
+    /** 指定 ID のパスキーを削除する。 */
+    data class DeletePasskeyCredential(val id: String) : ApiEndpoint("/auth/passkey/credentials/$id", "DELETE")
 }

@@ -11,6 +11,10 @@ import com.rioikeda.newslisten.model.LoginRequest
 import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.NewsListenJson
 import com.rioikeda.newslisten.model.OnboardingStatusResponse
+import com.rioikeda.newslisten.model.PasskeyCredentialsListResponse
+import com.rioikeda.newslisten.model.PasskeyLoginOptionsRequest
+import com.rioikeda.newslisten.model.PasskeyOptionsResponse
+import com.rioikeda.newslisten.model.PasskeyVerifyRequest
 import com.rioikeda.newslisten.model.PasswordChangeRequest
 import com.rioikeda.newslisten.model.PlaybackPositionRequest
 import com.rioikeda.newslisten.model.PodcastListResponse
@@ -28,6 +32,7 @@ import com.rioikeda.newslisten.model.UserResponse
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -242,6 +247,46 @@ class OkHttpApiClient(
 
     override suspend fun completeOnboarding(): OnboardingStatusResponse =
         execute(buildRequest(ApiEndpoint.CompleteOnboarding), OnboardingStatusResponse.serializer())
+
+    override suspend fun passkeyRegisterOptions(): PasskeyOptionsResponse =
+        execute(buildRequest(ApiEndpoint.PasskeyRegisterOptions), PasskeyOptionsResponse.serializer())
+
+    override suspend fun passkeyRegisterVerify(challengeId: String, credential: JsonObject) {
+        executeVoid(
+            buildRequest(
+                ApiEndpoint.PasskeyRegisterVerify,
+                body = PasskeyVerifyRequest(challengeId = challengeId, credential = credential),
+                bodySerializer = PasskeyVerifyRequest.serializer(),
+            )
+        )
+    }
+
+    override suspend fun passkeyLoginOptions(username: String?): PasskeyOptionsResponse =
+        execute(
+            buildRequest(
+                ApiEndpoint.PasskeyLoginOptions,
+                body = PasskeyLoginOptionsRequest(username = username),
+                bodySerializer = PasskeyLoginOptionsRequest.serializer(),
+            ),
+            PasskeyOptionsResponse.serializer(),
+        )
+
+    override suspend fun passkeyLoginVerify(challengeId: String, credential: JsonObject): LoginResponse =
+        execute(
+            buildRequest(
+                ApiEndpoint.PasskeyLoginVerify,
+                body = PasskeyVerifyRequest(challengeId = challengeId, credential = credential),
+                bodySerializer = PasskeyVerifyRequest.serializer(),
+            ),
+            LoginResponse.serializer(),
+        )
+
+    override suspend fun listPasskeyCredentials(): PasskeyCredentialsListResponse =
+        execute(buildRequest(ApiEndpoint.PasskeyCredentials), PasskeyCredentialsListResponse.serializer())
+
+    override suspend fun deletePasskeyCredential(credentialId: String) {
+        executeVoid(buildRequest(ApiEndpoint.DeletePasskeyCredential(credentialId)))
+    }
 
     // region private helpers
 
