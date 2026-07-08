@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,6 +64,9 @@ fun AppScaffold(
     sessionsViewModel: SessionsViewModel,
 ) {
     var selectedTab by remember { mutableStateOf(0) }
+
+    // predictive back: トップ画面でない場合、戻る操作でトップ（index 0）へ戻す
+    BackHandler(enabled = selectedTab != 0) { selectedTab = 0 }
 
     // Get admin status from authViewModel
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
