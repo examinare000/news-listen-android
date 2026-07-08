@@ -125,6 +125,9 @@ dependencies {
     // Preferences DataStore: PreferencesStore の永続化実装（フェーズ10 P10 Task3）
     implementation(libs.androidx.datastore.preferences)
 
+    // Splash Screen API: cold start でのブランドスプラッシュ表示（フェーズ15）
+    implementation(libs.androidx.core.splashscreen)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
