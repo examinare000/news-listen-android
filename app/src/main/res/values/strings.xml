@@ -7,6 +7,7 @@
     <string name="login_username_label">ユーザーID</string>
     <string name="login_password_label">パスワード</string>
     <string name="login_button_label">ログイン</string>
+    <string name="login_passkey_button_label">パスキーでログイン</string>
 
     <!-- ローディング表示 -->
     <string name="loading_auth">認証を確認中…</string>
@@ -157,6 +158,14 @@
     <string name="settings_sessions_confirm_revoke_others_message">現在のデバイス以外のすべてのセッションが失効します。</string>
     <string name="settings_sessions_confirm_revoke_others_logout">ログアウト</string>
     <string name="settings_sessions_confirm_revoke_others_cancel">キャンセル</string>
+
+    <!-- パスキーセクション（フェーズ17 P17・issue #140） -->
+    <string name="settings_section_passkey">パスキー</string>
+    <string name="settings_passkey_empty">登録済みのパスキーはありません</string>
+    <string name="settings_passkey_add_button">パスキーを追加</string>
+    <string name="settings_passkey_unnamed">名称未設定のパスキー</string>
+    <string name="settings_passkey_created_at_label">登録: </string>
+    <string name="settings_passkey_delete_button_description">パスキーを削除</string>
 
     <string name="settings_logout_button">ログアウト</string>
 

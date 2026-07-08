@@ -47,6 +47,8 @@ import com.rioikeda.newslisten.account.SessionsViewModel
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.designsystem.DSSpacing
+import com.rioikeda.newslisten.passkey.PasskeyCredentialsViewModel
+import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
 import com.rioikeda.newslisten.preferences.ArticleOpenMode
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import com.rioikeda.newslisten.preferences.TimeFormat
@@ -63,6 +65,8 @@ import kotlinx.coroutines.launch
  * @param authViewModel AuthViewModel（アカウント操作時の認証状態反映）
  * @param accountViewModel AccountViewModel（表示名/パスワード変更）
  * @param sessionsViewModel SessionsViewModel（デバイス一覧・失効管理）
+ * @param passkeyRegistrationViewModel PasskeyRegistrationViewModel（パスキー登録・フェーズ17 P17）
+ * @param passkeyCredentialsViewModel PasskeyCredentialsViewModel（パスキー一覧・削除・フェーズ17 P17）
  * @param isAdmin admin ロール判定フラグ（RSS ソース編集権限）
  */
 @Composable
@@ -72,6 +76,8 @@ fun SettingsScreen(
     authViewModel: AuthViewModel,
     accountViewModel: AccountViewModel,
     sessionsViewModel: SessionsViewModel,
+    passkeyRegistrationViewModel: PasskeyRegistrationViewModel,
+    passkeyCredentialsViewModel: PasskeyCredentialsViewModel,
     isAdmin: Boolean = false,
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -84,6 +90,7 @@ fun SettingsScreen(
             viewModel.loadGenerationQuota()
             viewModel.loadListeningStreak()
             sessionsViewModel.loadSessions()
+            passkeyCredentialsViewModel.loadCredentials()
         }
     }
 
@@ -131,6 +138,15 @@ fun SettingsScreen(
     val sessionsErrorMessage by sessionsViewModel.errorMessage.collectAsStateWithLifecycle()
     val hasOtherSessions by sessionsViewModel.hasOtherSessions.collectAsStateWithLifecycle()
     val revokedOthersCount by sessionsViewModel.revokedOthersCount.collectAsStateWithLifecycle()
+
+    // PasskeyRegistrationViewModel state
+    val passkeyIsRegistering by passkeyRegistrationViewModel.isRegistering.collectAsStateWithLifecycle()
+    val passkeyRegistrationErrorMessage by passkeyRegistrationViewModel.errorMessage.collectAsStateWithLifecycle()
+
+    // PasskeyCredentialsViewModel state
+    val passkeyCredentials by passkeyCredentialsViewModel.credentials.collectAsStateWithLifecycle()
+    val passkeyCredentialsIsLoading by passkeyCredentialsViewModel.isLoading.collectAsStateWithLifecycle()
+    val passkeyCredentialsErrorMessage by passkeyCredentialsViewModel.errorMessage.collectAsStateWithLifecycle()
 
     // Local UI state for dialogs and forms
     var showAddSourceDialog by remember { mutableStateOf(false) }
@@ -725,6 +741,127 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+
+        // パスキーセクション（issue #140 P17）
+        item {
+            SettingsSectionHeader(stringResource(R.string.settings_section_passkey))
+        }
+
+        if (passkeyCredentials.isEmpty()) {
+            if (passkeyCredentialsIsLoading) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(40.dp))
+                    }
+                }
+            } else {
+                item {
+                    Text(
+                        text = stringResource(R.string.settings_passkey_empty),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
+            items(passkeyCredentials, key = { it.credentialId }) { credential ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = DSSpacing.s),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = credential.name ?: stringResource(R.string.settings_passkey_unnamed),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Text(
+                            text = "${stringResource(R.string.settings_passkey_created_at_label)}${credential.createdAt.take(10)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                passkeyCredentialsViewModel.deleteCredential(credential.credentialId)
+                            }
+                        },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.settings_passkey_delete_button_description),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (passkeyCredentialsErrorMessage != null) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(DSSpacing.m)
+                        .background(
+                            MaterialTheme.colorScheme.errorContainer,
+                            shape = MaterialTheme.shapes.small
+                        )
+                        .padding(DSSpacing.m),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = passkeyCredentialsErrorMessage ?: "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    TextButton(onClick = {
+                        coroutineScope.launch {
+                            passkeyCredentialsViewModel.loadCredentials()
+                        }
+                    }) {
+                        Text(stringResource(R.string.settings_retry_button))
+                    }
+                }
+            }
+        }
+
+        if (passkeyRegistrationErrorMessage != null) {
+            item {
+                Text(
+                    text = passkeyRegistrationErrorMessage ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+
+        item {
+            Button(
+                onClick = {
+                    coroutineScope.launch {
+                        passkeyRegistrationViewModel.register()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !passkeyIsRegistering
+            ) {
+                if (passkeyIsRegistering) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(stringResource(R.string.settings_passkey_add_button))
+                }
             }
         }
 

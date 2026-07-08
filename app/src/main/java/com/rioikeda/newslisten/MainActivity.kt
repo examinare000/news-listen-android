@@ -31,6 +31,7 @@ import com.rioikeda.newslisten.auth.LoginScreen
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.NewsListenTheme
 import com.rioikeda.newslisten.onboarding.OnboardingScreen
+import com.rioikeda.newslisten.passkey.CredentialManagerPasskeyProvider
 import com.rioikeda.newslisten.podcast.PodcastViewModel
 
 /**
@@ -89,6 +90,16 @@ class MainActivity : ComponentActivity() {
         val sessionsViewModel = appContainer.getSessionsViewModel()
         val onboardingViewModel = appContainer.getOnboardingViewModel()
 
+        // Passkey（フェーズ17 P17・issue #140・ADR-066）: CredentialManager はシステム UI
+        // 表示のため Activity Context を要求する。MainActivity は画面回転で再生成されるため
+        // （configChanges 非上書き）、これら2つの ViewModel は AppContainer の `by lazy`
+        // シングルトンにできず、都度このインスタンス（Activity）で構築する
+        // （詳細は AppContainer.createPasskeyRegistrationViewModel のコメント参照）。
+        val passkeyProvider = CredentialManagerPasskeyProvider(this)
+        val passkeyRegistrationViewModel = appContainer.createPasskeyRegistrationViewModel(passkeyProvider)
+        val passkeyLoginViewModel = appContainer.createPasskeyLoginViewModel(passkeyProvider)
+        val passkeyCredentialsViewModel = appContainer.getPasskeyCredentialsViewModel()
+
         setContent {
             NewsListenTheme {
                 // 起動時に refreshAuth() を一度だけ実行（トークン確認）
@@ -126,7 +137,7 @@ class MainActivity : ComponentActivity() {
 
                     is AuthState.Unauthenticated -> {
                         // ログイン画面
-                        LoginScreen(viewModel = authViewModel)
+                        LoginScreen(viewModel = authViewModel, passkeyLoginViewModel = passkeyLoginViewModel)
                     }
 
                     is AuthState.Authenticated -> {
@@ -152,7 +163,9 @@ class MainActivity : ComponentActivity() {
                                 preferencesStore,
                                 authViewModel,
                                 accountViewModel,
-                                sessionsViewModel
+                                sessionsViewModel,
+                                passkeyRegistrationViewModel,
+                                passkeyCredentialsViewModel
                             )
                         }
                     }

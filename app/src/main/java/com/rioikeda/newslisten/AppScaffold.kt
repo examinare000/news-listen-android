@@ -33,6 +33,8 @@ import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedScreen
 import com.rioikeda.newslisten.feed.FeedViewModel
+import com.rioikeda.newslisten.passkey.PasskeyCredentialsViewModel
+import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
 import com.rioikeda.newslisten.podcast.PodcastScreen
 import com.rioikeda.newslisten.podcast.PodcastViewModel
 import com.rioikeda.newslisten.preferences.PreferencesStore
@@ -52,6 +54,10 @@ import com.rioikeda.newslisten.settings.SettingsViewModel
  * @param authViewModel 認証状態 ViewModel（SettingsScreen の admin ゲート判定用）。
  * @param accountViewModel アカウント管理 ViewModel（AppContainer.getAccountViewModel() から供給・フェーズ11 P11 T3）。
  * @param sessionsViewModel デバイス管理 ViewModel（AppContainer.getSessionsViewModel() から供給・フェーズ11 P11 T4）。
+ * @param passkeyRegistrationViewModel パスキー登録 ViewModel（MainActivity が Activity 単位で
+ * 生成し供給する。フェーズ17 P17・issue #140）。
+ * @param passkeyCredentialsViewModel パスキー一覧・削除 ViewModel（AppContainer.
+ * getPasskeyCredentialsViewModel() から供給・フェーズ17 P17・issue #140）。
  */
 @Composable
 fun AppScaffold(
@@ -62,6 +68,8 @@ fun AppScaffold(
     authViewModel: AuthViewModel,
     accountViewModel: AccountViewModel,
     sessionsViewModel: SessionsViewModel,
+    passkeyRegistrationViewModel: PasskeyRegistrationViewModel,
+    passkeyCredentialsViewModel: PasskeyCredentialsViewModel,
 ) {
     var selectedTab by remember { mutableStateOf(0) }
 
@@ -93,6 +101,8 @@ fun AppScaffold(
                     authViewModel,
                     accountViewModel,
                     sessionsViewModel,
+                    passkeyRegistrationViewModel,
+                    passkeyCredentialsViewModel,
                     isAdmin
                 )
             }
