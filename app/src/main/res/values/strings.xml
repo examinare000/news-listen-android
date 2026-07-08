@@ -162,4 +162,13 @@
 
     <!-- エラーメッセージ -->
     <string name="settings_error_dialog_title">エラー</string>
+
+    <!-- 初回オンボーディング（フェーズ13・issue #140 P13） -->
+    <string name="onboarding_screen_title">おすすめサイト</string>
+    <string name="onboarding_description">気になるサイトを選んで購読しましょう。あとから設定でいつでも追加・削除できます。</string>
+    <string name="onboarding_subscribe_button">購読</string>
+    <string name="onboarding_subscribed_label">購読済み</string>
+    <string name="onboarding_retry_button">再試行</string>
+    <string name="onboarding_finish_button">完了</string>
+    <string name="onboarding_skip_button">スキップ</string>
 </resources>
