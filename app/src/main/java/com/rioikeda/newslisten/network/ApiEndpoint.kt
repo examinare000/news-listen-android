@@ -97,4 +97,11 @@ sealed class ApiEndpoint(val path: String, val method: String) {
 
     /** 自セッション以外の全セッションを失効させる。 */
     data object RevokeOtherSessions : ApiEndpoint("/auth/sessions/revoke-others", "POST")
+
+    /**
+     * クラッシュ/クライアントエラーを報告する（フェーズ12・issue #140）。
+     *
+     * 認証セッション不要（backend api/routers/client_errors.py: X-API-Key のみで受理）。
+     */
+    data object ReportClientError : ApiEndpoint("/client-errors", "POST")
 }

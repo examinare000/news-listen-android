@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.network
 
 import com.rioikeda.newslisten.model.ActionResponse
+import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.FeaturedSitesResponse
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
@@ -126,4 +127,11 @@ interface ApiClient {
 
     /** 自セッション以外の全セッションを失効させる（フェーズ11 P11）。 */
     suspend fun revokeOtherSessions(): RevokeSessionsResponse
+
+    /**
+     * クラッシュ/クライアントエラーを報告する（フェーズ12・issue #140）。
+     *
+     * 認証セッション不要（クラッシュは未ログイン時にも起き得るため）。202 を成功として扱う。
+     */
+    suspend fun reportClientError(report: ClientErrorReport)
 }

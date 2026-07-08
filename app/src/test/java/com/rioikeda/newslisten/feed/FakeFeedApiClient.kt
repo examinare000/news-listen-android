@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.feed
 
 import com.rioikeda.newslisten.model.ActionResponse
+import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.FeaturedSitesResponse
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
@@ -122,4 +123,7 @@ class FakeFeedApiClient(
 
     override suspend fun revokeOtherSessions(): RevokeSessionsResponse =
         error("revokeOtherSessions is out of scope for feed tests")
+
+    override suspend fun reportClientError(report: ClientErrorReport) =
+        error("reportClientError is out of scope for feed tests")
 }

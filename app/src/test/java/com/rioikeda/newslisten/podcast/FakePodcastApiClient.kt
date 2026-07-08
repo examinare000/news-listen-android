@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.podcast
 
 import com.rioikeda.newslisten.model.ActionResponse
+import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.FeaturedSitesResponse
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
@@ -129,4 +130,7 @@ class FakePodcastApiClient(
 
     override suspend fun revokeOtherSessions(): RevokeSessionsResponse =
         error("revokeOtherSessions is out of scope for podcast tests")
+
+    override suspend fun reportClientError(report: ClientErrorReport) =
+        error("reportClientError is out of scope for podcast tests")
 }

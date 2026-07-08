@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.network
 
 import com.rioikeda.newslisten.model.ActionResponse
+import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.DeviceTokenRequest
 import com.rioikeda.newslisten.model.FeaturedSitesResponse
 import com.rioikeda.newslisten.model.FeedResponse
@@ -224,6 +225,16 @@ class OkHttpApiClient(
 
     override suspend fun revokeOtherSessions(): RevokeSessionsResponse =
         execute(buildRequest(ApiEndpoint.RevokeOtherSessions), RevokeSessionsResponse.serializer())
+
+    override suspend fun reportClientError(report: ClientErrorReport) {
+        executeVoid(
+            buildRequest(
+                ApiEndpoint.ReportClientError,
+                body = report,
+                bodySerializer = ClientErrorReport.serializer(),
+            )
+        )
+    }
 
     // region private helpers
 

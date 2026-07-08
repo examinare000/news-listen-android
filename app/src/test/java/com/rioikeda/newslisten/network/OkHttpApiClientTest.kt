@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.network
 
+import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.StarRequest
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
@@ -519,5 +520,37 @@ class OkHttpApiClientTest {
         assertEquals("POST", recorded.method)
         assertEquals("/auth/sessions/revoke-others", recorded.path)
         assertEquals(2, response.revokedCount)
+    }
+
+    // --- フェーズ12: クラッシュ/クライアントエラー報告（issue #140） ---
+
+    @Test
+    fun reportClientErrorはPOSTでsource_kind_message_contextボディを送る() = runTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"status":"ok"}"""))
+
+        client.reportClientError(
+            ClientErrorReport(
+                source = "android",
+                kind = "crash",
+                message = "java.lang.RuntimeException",
+                context = mapOf("app_version" to "1.0.0"),
+            )
+        )
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/client-errors", recorded.path)
+        assertEquals(
+            """{"source":"android","kind":"crash","message":"java.lang.RuntimeException","context":{"app_version":"1.0.0"}}""",
+            recorded.body.readUtf8(),
+        )
+    }
+
+    @Test
+    fun reportClientErrorは202応答を成功として扱う() = runTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("""{"status":"ok"}"""))
+
+        // 例外が投げられなければ成功（202 Accepted を正常応答として扱う）。
+        client.reportClientError(ClientErrorReport(source = "android", kind = "crash"))
     }
 }

@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.settings
 
 import com.rioikeda.newslisten.model.ActionResponse
+import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.FeaturedSitesResponse
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
@@ -119,4 +120,7 @@ class FakeApiClient(
 
     override suspend fun revokeOtherSessions(): RevokeSessionsResponse =
         error("revokeOtherSessions is out of scope for settings tests")
+
+    override suspend fun reportClientError(report: ClientErrorReport) =
+        error("reportClientError is out of scope for settings tests")
 }
