@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -158,6 +159,7 @@ fun SettingsScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = DSSpacing.m),
         verticalArrangement = Arrangement.spacedBy(DSSpacing.m)
@@ -762,7 +764,9 @@ fun SettingsScreen(
             onDismissRequest = { showAddSourceDialog = false },
             title = { Text(stringResource(R.string.settings_rss_sources_add_dialog_title)) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(DSSpacing.m)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(DSSpacing.m)
+                ) {
                     TextField(
                         value = newSourceName,
                         onValueChange = { newSourceName = it },
@@ -806,7 +810,9 @@ fun SettingsScreen(
             onDismissRequest = { showEditSourceDialog = false },
             title = { Text(stringResource(R.string.settings_rss_sources_edit_dialog_title)) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(DSSpacing.m)) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(DSSpacing.m)
+                ) {
                     TextField(
                         value = editSourceName,
                         onValueChange = { editSourceName = it },
@@ -976,7 +982,11 @@ private fun AccountNameSection(
     onDisplayNameChange: (String) -> Unit,
     onSaveProfile: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(DSSpacing.s)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(DSSpacing.s)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(DSSpacing.s),
@@ -1021,7 +1031,11 @@ private fun PasswordChangeSection(
     onNewPasswordChange: (String) -> Unit,
     onChangePassword: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(DSSpacing.s)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(DSSpacing.s)
+    ) {
         TextField(
             value = currentPassword,
             onValueChange = onCurrentPasswordChange,
