@@ -331,6 +331,32 @@ class AuthViewModelTest {
         assertFalse(authenticatedCalled)
     }
 
+    // --- completePasskeyLogin（フェーズ17 P17: パスキーログイン成功時のセッション確立） ---
+
+    @Test
+    fun completePasskeyLoginでトークン保存しAuthenticatedになる() = runTest {
+        val sessionStore = InMemorySessionStore(initialToken = null)
+        val loginResponse = LoginResponse(token = "passkey-token", user = user)
+        val viewModel = newViewModel(sessionStore = sessionStore)
+
+        viewModel.completePasskeyLogin(loginResponse)
+
+        assertEquals("passkey-token", sessionStore.load())
+        assertEquals(AuthState.Authenticated(user), viewModel.authState.value)
+        assertNull(viewModel.loginErrorMessage.value)
+    }
+
+    @Test
+    fun completePasskeyLoginでonAuthenticatedが呼ばれる() = runTest {
+        var authenticatedCalled = false
+        val loginResponse = LoginResponse(token = "passkey-token", user = user)
+        val viewModel = newViewModel(onAuthenticated = { authenticatedCalled = true })
+
+        viewModel.completePasskeyLogin(loginResponse)
+
+        assertTrue(authenticatedCalled)
+    }
+
     // --- applyProfileUpdate（フェーズ11 P11 T2: 表示名更新のAuthState反映） ---
 
     @Test

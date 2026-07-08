@@ -128,6 +128,10 @@ dependencies {
     // Splash Screen API: cold start でのブランドスプラッシュ表示（フェーズ15）
     implementation(libs.androidx.core.splashscreen)
 
+    // Credential Manager: Passkey（WebAuthn）登録・認証（フェーズ17・issue #140 P17・ADR-066）
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)

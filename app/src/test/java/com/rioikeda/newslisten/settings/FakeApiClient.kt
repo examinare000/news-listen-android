@@ -8,6 +8,8 @@ import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.OnboardingStatusResponse
+import com.rioikeda.newslisten.model.PasskeyCredentialsListResponse
+import com.rioikeda.newslisten.model.PasskeyOptionsResponse
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
@@ -17,6 +19,7 @@ import com.rioikeda.newslisten.model.SessionsListResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
+import kotlinx.serialization.json.JsonObject
 
 /**
  * [SettingsViewModel] のテスト専用フェイク。
@@ -130,4 +133,21 @@ class FakeApiClient(
 
     override suspend fun completeOnboarding(): OnboardingStatusResponse =
         error("completeOnboarding is out of scope for settings tests")
+    override suspend fun passkeyRegisterOptions(): PasskeyOptionsResponse =
+        error("passkeyRegisterOptions is out of scope for settings tests")
+
+    override suspend fun passkeyRegisterVerify(challengeId: String, credential: JsonObject) =
+        error("passkeyRegisterVerify is out of scope for settings tests")
+
+    override suspend fun passkeyLoginOptions(username: String?): PasskeyOptionsResponse =
+        error("passkeyLoginOptions is out of scope for settings tests")
+
+    override suspend fun passkeyLoginVerify(challengeId: String, credential: JsonObject): LoginResponse =
+        error("passkeyLoginVerify is out of scope for settings tests")
+
+    override suspend fun listPasskeyCredentials(): PasskeyCredentialsListResponse =
+        error("listPasskeyCredentials is out of scope for settings tests")
+
+    override suspend fun deletePasskeyCredential(credentialId: String) =
+        error("deletePasskeyCredential is out of scope for settings tests")
 }

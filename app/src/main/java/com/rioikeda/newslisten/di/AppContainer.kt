@@ -25,6 +25,10 @@ import com.rioikeda.newslisten.notification.FcmTokenRegistrar
 import com.rioikeda.newslisten.observability.CrashReporter
 import com.rioikeda.newslisten.observability.DeviceInfo
 import com.rioikeda.newslisten.onboarding.OnboardingViewModel
+import com.rioikeda.newslisten.passkey.PasskeyCredentialsViewModel
+import com.rioikeda.newslisten.passkey.PasskeyLoginViewModel
+import com.rioikeda.newslisten.passkey.PasskeyProvider
+import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
 import com.rioikeda.newslisten.podcast.ExoPlayerController
 import com.rioikeda.newslisten.podcast.PodcastViewModel
 import com.rioikeda.newslisten.preferences.DataStorePreferencesStore
@@ -419,4 +423,60 @@ class AppContainer(context: Context) {
     }
 
     fun getOnboardingViewModel(): OnboardingViewModel = _onboardingViewModel
+
+    /**
+     * PasskeyCredentialsViewModel（設定画面のパスキー一覧・削除）を生成して返す
+     * （フェーズ17 P17・issue #140）。
+     *
+     * PasskeyRegistrationViewModel/PasskeyLoginViewModel と異なり [PasskeyProvider]
+     * （Activity Context 依存）を必要としないため、他の ViewModel と同じく AppContainer に
+     * `by lazy` シングルトンとして保持できる（画面回転をまたいで一覧状態を保持する）。
+     */
+    private val _passkeyCredentialsViewModel: PasskeyCredentialsViewModel by lazy {
+        PasskeyCredentialsViewModel(
+            apiClient = apiClient,
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+        )
+    }
+
+    fun getPasskeyCredentialsViewModel(): PasskeyCredentialsViewModel = _passkeyCredentialsViewModel
+
+    /**
+     * PasskeyRegistrationViewModel（設定画面「パスキーを追加」）を生成して返す
+     * （フェーズ17 P17・issue #140）。
+     *
+     * WHY `by lazy` シングルトンにしない: [PasskeyProvider] の実体（CredentialManager）は
+     * システム UI 表示のため Activity Context を要求し、MainActivity（Activity）の生存期間に
+     * 束縛される。MainActivity は画面回転で再生成される（本アプリは configChanges を上書きして
+     * いない）ため、Application スコープの AppContainer にはキャッシュできない。呼び出し元
+     * （MainActivity.onCreate）が都度そのときの Activity で構築した [passkeyProvider] を渡す
+     * ファクトリメソッドにした（登録セレモニーは短時間で完結するモーダル操作のため、回転時に
+     * 進行中状態＝isRegistering/errorMessage が失われても実害は小さいと判断）。
+     *
+     * onRegistered: 登録成功後に一覧（[PasskeyCredentialsViewModel]）へ即座に反映する。
+     */
+    fun createPasskeyRegistrationViewModel(passkeyProvider: PasskeyProvider): PasskeyRegistrationViewModel =
+        PasskeyRegistrationViewModel(
+            apiClient = apiClient,
+            passkeyProvider = passkeyProvider,
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+            onRegistered = { _passkeyCredentialsViewModel.loadCredentials() },
+        )
+
+    /**
+     * PasskeyLoginViewModel（ログイン画面「パスキーでログイン」）を生成して返す
+     * （フェーズ17 P17・issue #140）。`by lazy` にしない理由は
+     * [createPasskeyRegistrationViewModel] と同じ（[PasskeyProvider] の Activity Context 依存）。
+     *
+     * onLoginSuccess: verify 成功で得た LoginResponse を AuthViewModel に渡し、セッション確立
+     * （sessionStore 保存・authState 遷移・FCM 登録フック）を auth 層に一任する
+     * （[AuthViewModel.completePasskeyLogin] 参照）。
+     */
+    fun createPasskeyLoginViewModel(passkeyProvider: PasskeyProvider): PasskeyLoginViewModel =
+        PasskeyLoginViewModel(
+            apiClient = apiClient,
+            passkeyProvider = passkeyProvider,
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+            onLoginSuccess = { response -> _authViewModel.completePasskeyLogin(response) },
+        )
 }

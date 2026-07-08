@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.auth
 
+import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
@@ -177,6 +178,23 @@ class AuthViewModel(
         }
         sessionStore.clear()
         _authState.value = AuthState.Unauthenticated
+    }
+
+    /**
+     * パスキーログイン成功後にセッションを確立する（フェーズ17 P17）。
+     *
+     * [login] のトークン保存以降の処理（sessionStore.save → authState 遷移 → onAuthenticated）と
+     * 同じ手順を踏む。パスキー認証セレモニー自体（options 取得・Credential Manager 呼び出し・
+     * verify）は [com.rioikeda.newslisten.passkey.PasskeyLoginViewModel] の責務であり、
+     * ここでは verify 成功後の [LoginResponse] を受け取ってセッション確立のみを行う
+     * （auth 層がセッションの正本という既存の責務分担を維持するため、passkey 層から
+     * sessionStore/authState を直接操作させない設計）。
+     */
+    suspend fun completePasskeyLogin(response: LoginResponse): Unit = withContext(dispatcher) {
+        sessionStore.save(response.token)
+        _loginErrorMessage.value = null
+        _authState.value = AuthState.Authenticated(response.user)
+        onAuthenticated()
     }
 
     /**

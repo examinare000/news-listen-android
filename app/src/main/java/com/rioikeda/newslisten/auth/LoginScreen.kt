@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,18 +36,23 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.NewsListenTheme
+import com.rioikeda.newslisten.passkey.PasskeyLoginViewModel
 import kotlinx.coroutines.launch
 
 /**
- * ログイン画面。ユーザーID とパスワードでログインする。
+ * ログイン画面。ユーザーID とパスワードでログインする。パスキーでのログインにも対応する
+ * （フェーズ17 P17・issue #140）。
  *
  * 正本: ios/NewsListenApp/NewsListenApp/Auth/LoginView.swift（ユーザーID/パスワード入力・エラー表示）
- * のミラー。Passkey ログインは後続フェーズで実装予定。
+ * のミラー。
  *
  * @param viewModel ログイン ViewModel（AuthViewModel）
+ * @param passkeyLoginViewModel パスキーログイン ViewModel（MainActivity が Activity 単位で
+ * 生成し供給する。成功時のセッション確立は AuthViewModel.completePasskeyLogin 経由で行われ、
+ * authState の遷移をこの画面が直接購読している上位（MainActivity）が検知して画面遷移する）。
  */
 @Composable
-fun LoginScreen(viewModel: AuthViewModel) {
+fun LoginScreen(viewModel: AuthViewModel, passkeyLoginViewModel: PasskeyLoginViewModel) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
@@ -56,6 +62,10 @@ fun LoginScreen(viewModel: AuthViewModel) {
 
     // ログイン処理中か判定（AuthState が Authenticated に遷移するまでは isSubmitting = true）
     var isSubmitting by remember { mutableStateOf(false) }
+
+    // PasskeyLoginViewModel の状態を購読
+    val passkeyIsLoggingIn by passkeyLoginViewModel.isLoggingIn.collectAsStateWithLifecycle()
+    val passkeyErrorMessage by passkeyLoginViewModel.errorMessage.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -157,6 +167,45 @@ fun LoginScreen(viewModel: AuthViewModel) {
                     )
                 } else {
                     Text(stringResource(R.string.login_button_label))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(DSSpacing.m))
+
+            // パスキーログイン エラーメッセージ（issue #140 P17。ユーザーキャンセルは
+            // PasskeyLoginViewModel 側でエラー扱いしないため、ここには表示されない）。
+            passkeyErrorMessage?.let { error ->
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = DSSpacing.m)
+                )
+            }
+
+            // パスキーでログイン ボタン（issue #140 P17）
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        passkeyLoginViewModel.loginWithPasskey()
+                        // loginWithPasskey() 後、authState が Authenticated に遷移したら
+                        // 呼び出し元（MainActivity）で画面遷移する（パスワードログインと同じ導線）。
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !passkeyIsLoggingIn
+            ) {
+                if (passkeyIsLoggingIn) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .align(Alignment.CenterVertically)
+                            .padding(end = DSSpacing.s),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(stringResource(R.string.login_passkey_button_label))
                 }
             }
         }

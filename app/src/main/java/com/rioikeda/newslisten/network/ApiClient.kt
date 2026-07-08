@@ -8,6 +8,8 @@ import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.OnboardingStatusResponse
+import com.rioikeda.newslisten.model.PasskeyCredentialsListResponse
+import com.rioikeda.newslisten.model.PasskeyOptionsResponse
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
@@ -16,6 +18,7 @@ import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.model.SessionsListResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.model.UserResponse
+import kotlinx.serialization.json.JsonObject
 
 /**
  * バックエンド API への通信を担うクライアント（フェーズ2 スコープ）。
@@ -141,4 +144,32 @@ interface ApiClient {
 
     /** 初回オンボーディング完了をサーバーに記録する（フェーズ13・issue #140）。 */
     suspend fun completeOnboarding(): OnboardingStatusResponse
+
+    // --- フェーズ17: Passkey（WebAuthn）issue #140 P17 ---
+
+    /** パスキー登録オプションを取得する（ログイン必須）。 */
+    suspend fun passkeyRegisterOptions(): PasskeyOptionsResponse
+
+    /**
+     * パスキー登録を検証する（ログイン必須）。
+     *
+     * @param credential Credential Manager が返す registrationResponseJson を1段パースした JsonObject。
+     */
+    suspend fun passkeyRegisterVerify(challengeId: String, credential: JsonObject)
+
+    /** パスキー認証オプションを取得する（認証不要・discoverable credential フロー）。 */
+    suspend fun passkeyLoginOptions(username: String?): PasskeyOptionsResponse
+
+    /**
+     * パスキー認証を検証してセッションを確立する（認証不要）。
+     *
+     * @param credential Credential Manager が返す authenticationResponseJson を1段パースした JsonObject。
+     */
+    suspend fun passkeyLoginVerify(challengeId: String, credential: JsonObject): LoginResponse
+
+    /** ログインユーザーのパスキー一覧を取得する。 */
+    suspend fun listPasskeyCredentials(): PasskeyCredentialsListResponse
+
+    /** 指定 ID のパスキーを削除する。 */
+    suspend fun deletePasskeyCredential(credentialId: String)
 }
