@@ -54,11 +54,16 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // フェーズ14: R8/リソース縮小対応。本番署名鍵は Phase 7 で扱う予定のため、
+            // ここでは暫定的に debug 署名を流用してビルド・検証を可能にする。
+            // 本番リリース前に正式署名設定へ置き換え必須。
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -119,6 +124,9 @@ dependencies {
 
     // Preferences DataStore: PreferencesStore の永続化実装（フェーズ10 P10 Task3）
     implementation(libs.androidx.datastore.preferences)
+
+    // Splash Screen API: cold start でのブランドスプラッシュ表示（フェーズ15）
+    implementation(libs.androidx.core.splashscreen)
 
     // Testing
     testImplementation(libs.junit)

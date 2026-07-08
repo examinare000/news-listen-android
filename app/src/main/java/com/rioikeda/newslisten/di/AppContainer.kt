@@ -8,6 +8,8 @@ import androidx.core.content.ContextCompat
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.google.firebase.messaging.FirebaseMessaging
 import com.rioikeda.newslisten.BuildConfig
+import com.rioikeda.newslisten.account.AccountViewModel
+import com.rioikeda.newslisten.account.SessionsViewModel
 import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedViewModel
@@ -20,6 +22,9 @@ import com.rioikeda.newslisten.network.KeystoreSessionStore
 import com.rioikeda.newslisten.network.OkHttpApiClient
 import com.rioikeda.newslisten.network.SessionStore
 import com.rioikeda.newslisten.notification.FcmTokenRegistrar
+import com.rioikeda.newslisten.observability.CrashReporter
+import com.rioikeda.newslisten.observability.DeviceInfo
+import com.rioikeda.newslisten.onboarding.OnboardingViewModel
 import com.rioikeda.newslisten.podcast.ExoPlayerController
 import com.rioikeda.newslisten.podcast.PodcastViewModel
 import com.rioikeda.newslisten.preferences.DataStorePreferencesStore
@@ -29,6 +34,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -144,6 +150,38 @@ class AppContainer(context: Context) {
     )
 
     fun getFcmTokenRegistrar(): FcmTokenRegistrar = fcmTokenRegistrar
+
+    /**
+     * クラッシュレポータ（フェーズ12・issue #140）。
+     *
+     * 正本: ios/NewsListenApp/NewsListenApp/Observability/CrashReporter.swift のミラー。
+     * crashFile は filesDir 配下に置く（cacheDir と異なりストレージ逼迫時に OS が削除し得ない、
+     * 永続化すべきクラッシュレポートの保存先として妥当）。
+     */
+    private val crashReporter: CrashReporter = CrashReporter(
+        crashFile = File(appContext.filesDir, "crash_report.json"),
+        deviceInfo = DeviceInfo(appVersion = BuildConfig.VERSION_NAME, osVersion = Build.VERSION.RELEASE),
+        apiClient = apiClient,
+        dispatcher = Dispatchers.Default,
+    )
+
+    fun getCrashReporter(): CrashReporter = crashReporter
+
+    /**
+     * CrashReporter.flush（起動時の一度きりの送信）用の長寿命 CoroutineScope（フェーズ12・issue #140）。
+     *
+     * WHY SupervisorJob + Dispatchers.Default: preferencesScope と同じ理由で、
+     * Application.onCreate 内で都度 `CoroutineScope(Dispatchers.Default)` を生成する実装だと
+     * 他の長寿命スコープ（preferencesScope 等）と管理方針が揃わない。AppContainer が
+     * 依存グラフとスコープの両方を一元管理する既存パターンに合わせ、ここに集約する。
+     * flush 失敗がアプリの他の処理に伝播しないよう SupervisorJob を使う。
+     */
+    private val crashReporterScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** 永続化済みクラッシュレポートの送信を非同期に開始する（Application.onCreate から一度だけ呼ぶ）。 */
+    fun flushCrashReporter() {
+        crashReporterScope.launch { crashReporter.flush() }
+    }
 
     /**
      * PreferencesStore（フェーズ10 P10 Task3）用の長寿命 CoroutineScope。
@@ -316,4 +354,69 @@ class AppContainer(context: Context) {
     }
 
     fun getSettingsViewModel(): SettingsViewModel = _settingsViewModel
+
+    /**
+     * AccountViewModel（設定タブ「アカウント」セクション: 表示名更新・パスワード変更）を
+     * 生成して返す（フェーズ11 P11 T3）。
+     *
+     * Dispatcher: 他の ViewModel と同じ理由で Dispatchers.Default.limitedParallelism(1) を使う。
+     * 表示名・パスワード入力欄の読み取り→書き込みが複数スレッドで競合すると入力の取りこぼしが
+     * 起こり得るため、単一スレッドで直列化する。
+     *
+     * authViewModel: 表示名更新成功時に AuthState.Authenticated.user を書き換えるため、
+     * SettingsViewModel の isAdminProvider（関数注入）とは異なり AuthViewModel を直接注入する
+     * （詳細は [AccountViewModel] のクラスコメント参照）。
+     *
+     * by lazy でシングルトンキャッシュ化：画面回転時に AccountViewModel インスタンスが
+     * 同じままであることを保証し、入力中の表示名・パスワードやメッセージ表示が保持される。
+     */
+    private val _accountViewModel: AccountViewModel by lazy {
+        AccountViewModel(
+            apiClient = apiClient,
+            authViewModel = _authViewModel,
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+        )
+    }
+
+    fun getAccountViewModel(): AccountViewModel = _accountViewModel
+
+    /**
+     * SessionsViewModel（ログイン中デバイス一覧・個別/一括失効）を生成して返す
+     * （フェーズ11 P11 T4・issue #84 相当）。
+     *
+     * Dispatcher: FeedViewModel/SettingsViewModel と同じ理由で
+     * Dispatchers.Default.limitedParallelism(1) を使う。sessions リストの読み取り→書き込みが
+     * 複数スレッドで競合すると一覧の取りこぼしが起こり得るため、単一スレッドで直列化する。
+     *
+     * by lazy でシングルトンキャッシュ化：画面回転時に SessionsViewModel インスタンスが
+     * 同じままであることを保証し、sessions/revokedOthersCount 等の読み込み済み状態を保持する。
+     */
+    private val _sessionsViewModel: SessionsViewModel by lazy {
+        SessionsViewModel(
+            apiClient = apiClient,
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+        )
+    }
+
+    fun getSessionsViewModel(): SessionsViewModel = _sessionsViewModel
+
+    /**
+     * OnboardingViewModel（初回オンボーディング「おすすめサイト追加」ステップ）を生成して返す
+     * （フェーズ13・issue #140 P13）。
+     *
+     * Dispatcher: 他の ViewModel と同じ理由で Dispatchers.Default.limitedParallelism(1) を使う。
+     * featuredSites/addedIds の読み取り→書き込みが複数スレッドで競合すると購読済み判定の
+     * 取りこぼしが起こり得るため、単一スレッドで直列化する。
+     *
+     * by lazy でシングルトンキャッシュ化：画面回転時に OnboardingViewModel インスタンスが
+     * 同じままであることを保証し、onboardingCompleted の再取得（サーバー再問い合わせ）を防ぐ。
+     */
+    private val _onboardingViewModel: OnboardingViewModel by lazy {
+        OnboardingViewModel(
+            apiClient = apiClient,
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+        )
+    }
+
+    fun getOnboardingViewModel(): OnboardingViewModel = _onboardingViewModel
 }

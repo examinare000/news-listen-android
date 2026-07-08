@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.auth
 
+import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.SessionStore
@@ -176,6 +177,20 @@ class AuthViewModel(
         }
         sessionStore.clear()
         _authState.value = AuthState.Unauthenticated
+    }
+
+    /**
+     * プロフィール更新（表示名）成功後に [authState] へ反映する（フェーズ11 P11 T2）。
+     *
+     * iOS は appState.currentUser を直接更新する（AccountSettingsView.swift:308）が、Android は
+     * AuthState.Authenticated.user が不変・_authState が private のため、更新結果（呼び出し元の
+     * ApiClient.updateProfile 戻り値）を渡してもらい、ここで新しい Authenticated を発行する設計にした。
+     * ログアウト後の非同期競合等、Authenticated 以外の状態では何もしない（no-op）。
+     */
+    fun applyProfileUpdate(updatedUser: UserResponse) {
+        if (_authState.value is AuthState.Authenticated) {
+            _authState.value = AuthState.Authenticated(updatedUser)
+        }
     }
 
     private companion object {

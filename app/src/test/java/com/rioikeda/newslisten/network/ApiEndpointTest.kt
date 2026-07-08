@@ -136,4 +136,37 @@ class ApiEndpointTest {
         assertEquals("/users/me/listening-streak", ApiEndpoint.ListeningStreak.path)
         assertEquals("GET", ApiEndpoint.ListeningStreak.method)
     }
+
+    // --- フェーズ11 P11 Task1: アカウント管理 ---
+
+    @Test
+    fun updateProfileはPATCH_authMe() {
+        assertEquals("/auth/me", ApiEndpoint.UpdateProfile.path)
+        assertEquals("PATCH", ApiEndpoint.UpdateProfile.method)
+    }
+
+    @Test
+    fun changePasswordはPOST_authPassword() {
+        assertEquals("/auth/password", ApiEndpoint.ChangePassword.path)
+        assertEquals("POST", ApiEndpoint.ChangePassword.method)
+    }
+
+    @Test
+    fun listSessionsはGET_authSessions() {
+        assertEquals("/auth/sessions", ApiEndpoint.ListSessions.path)
+        assertEquals("GET", ApiEndpoint.ListSessions.method)
+    }
+
+    @Test
+    fun revokeSessionはDELETE_authSessionsId() {
+        val endpoint = ApiEndpoint.RevokeSession("s1")
+        assertEquals("/auth/sessions/s1", endpoint.path)
+        assertEquals("DELETE", endpoint.method)
+    }
+
+    @Test
+    fun revokeOtherSessionsはPOST_authSessionsRevokeOthers() {
+        assertEquals("/auth/sessions/revoke-others", ApiEndpoint.RevokeOtherSessions.path)
+        assertEquals("POST", ApiEndpoint.RevokeOtherSessions.method)
+    }
 }

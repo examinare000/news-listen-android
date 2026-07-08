@@ -1,15 +1,19 @@
 package com.rioikeda.newslisten.settings
 
 import com.rioikeda.newslisten.model.ActionResponse
+import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.FeaturedSitesResponse
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.LoginResponse
+import com.rioikeda.newslisten.model.OnboardingStatusResponse
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
+import com.rioikeda.newslisten.model.RevokeSessionsResponse
 import com.rioikeda.newslisten.model.RssSourcesResponse
+import com.rioikeda.newslisten.model.SessionsListResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
@@ -102,4 +106,28 @@ class FakeApiClient(
     override suspend fun fetchGenerationQuota(): GenerationQuotaResponse = onFetchGenerationQuota()
 
     override suspend fun fetchListeningStreak(): ListeningStreakResponse = onFetchListeningStreak()
+
+    override suspend fun updateProfile(displayName: String): UserResponse =
+        error("updateProfile is out of scope for settings tests")
+
+    override suspend fun changePassword(currentPassword: String, newPassword: String) =
+        error("changePassword is out of scope for settings tests")
+
+    override suspend fun listSessions(): SessionsListResponse =
+        error("listSessions is out of scope for settings tests")
+
+    override suspend fun revokeSession(id: String) =
+        error("revokeSession is out of scope for settings tests")
+
+    override suspend fun revokeOtherSessions(): RevokeSessionsResponse =
+        error("revokeOtherSessions is out of scope for settings tests")
+
+    override suspend fun reportClientError(report: ClientErrorReport) =
+        error("reportClientError is out of scope for settings tests")
+
+    override suspend fun fetchOnboardingStatus(): OnboardingStatusResponse =
+        error("fetchOnboardingStatus is out of scope for settings tests")
+
+    override suspend fun completeOnboarding(): OnboardingStatusResponse =
+        error("completeOnboarding is out of scope for settings tests")
 }

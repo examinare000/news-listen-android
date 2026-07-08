@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.rioikeda.newslisten.auth.AuthState
@@ -29,6 +30,7 @@ import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.auth.LoginScreen
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.NewsListenTheme
+import com.rioikeda.newslisten.onboarding.OnboardingScreen
 import com.rioikeda.newslisten.podcast.PodcastViewModel
 
 /**
@@ -65,6 +67,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Splash Screen API: cold start での splash 表示（フェーズ15）
+        // インストール順序: super.onCreate → installSplashScreen → enableEdgeToEdge
+        installSplashScreen()
         enableEdgeToEdge()
 
         // POST_NOTIFICATIONS ランタイム権限要求（API 33+ で未許可のときのみ）
@@ -80,6 +85,9 @@ class MainActivity : ComponentActivity() {
         val podcastViewModel = appContainer.getPodcastViewModel()
         val settingsViewModel = appContainer.getSettingsViewModel()
         val preferencesStore = appContainer.getPreferencesStore()
+        val accountViewModel = appContainer.getAccountViewModel()
+        val sessionsViewModel = appContainer.getSessionsViewModel()
+        val onboardingViewModel = appContainer.getOnboardingViewModel()
 
         setContent {
             NewsListenTheme {
@@ -122,8 +130,31 @@ class MainActivity : ComponentActivity() {
                     }
 
                     is AuthState.Authenticated -> {
-                        // メインアプリ（3 タブスカフォルド）
-                        AppScaffold(feedViewModel, podcastViewModel, settingsViewModel, preferencesStore, authViewModel)
+                        // 認証確立ごとに一度だけ初回オンボーディング状態を取得する
+                        // （iOS ContentView.task { appState.refreshOnboardingStatus() } 相当）。
+                        LaunchedEffect(Unit) {
+                            onboardingViewModel.refreshOnboardingStatus()
+                        }
+                        val onboardingCompleted =
+                            onboardingViewModel.onboardingCompleted.collectAsStateWithLifecycle()
+
+                        // onboarding_completed == false（明示的に未完了）のときだけ追加ステップを
+                        // 差し込む。取得前（null）は判定保留のため通常画面を表示する
+                        // （iOS onboardingBinding: `appState.onboardingCompleted == false` 準拠）。
+                        if (onboardingCompleted.value == false) {
+                            OnboardingScreen(viewModel = onboardingViewModel)
+                        } else {
+                            // メインアプリ（3 タブスカフォルド）
+                            AppScaffold(
+                                feedViewModel,
+                                podcastViewModel,
+                                settingsViewModel,
+                                preferencesStore,
+                                authViewModel,
+                                accountViewModel,
+                                sessionsViewModel
+                            )
+                        }
                     }
                 }
             }
