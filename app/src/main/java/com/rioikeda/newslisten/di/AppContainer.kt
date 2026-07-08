@@ -22,6 +22,8 @@ import com.rioikeda.newslisten.network.KeystoreSessionStore
 import com.rioikeda.newslisten.network.OkHttpApiClient
 import com.rioikeda.newslisten.network.SessionStore
 import com.rioikeda.newslisten.notification.FcmTokenRegistrar
+import com.rioikeda.newslisten.observability.CrashReporter
+import com.rioikeda.newslisten.observability.DeviceInfo
 import com.rioikeda.newslisten.podcast.ExoPlayerController
 import com.rioikeda.newslisten.podcast.PodcastViewModel
 import com.rioikeda.newslisten.preferences.DataStorePreferencesStore
@@ -31,6 +33,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
@@ -146,6 +149,38 @@ class AppContainer(context: Context) {
     )
 
     fun getFcmTokenRegistrar(): FcmTokenRegistrar = fcmTokenRegistrar
+
+    /**
+     * クラッシュレポータ（フェーズ12・issue #140）。
+     *
+     * 正本: ios/NewsListenApp/NewsListenApp/Observability/CrashReporter.swift のミラー。
+     * crashFile は filesDir 配下に置く（cacheDir と異なりストレージ逼迫時に OS が削除し得ない、
+     * 永続化すべきクラッシュレポートの保存先として妥当）。
+     */
+    private val crashReporter: CrashReporter = CrashReporter(
+        crashFile = File(appContext.filesDir, "crash_report.json"),
+        deviceInfo = DeviceInfo(appVersion = BuildConfig.VERSION_NAME, osVersion = Build.VERSION.RELEASE),
+        apiClient = apiClient,
+        dispatcher = Dispatchers.Default,
+    )
+
+    fun getCrashReporter(): CrashReporter = crashReporter
+
+    /**
+     * CrashReporter.flush（起動時の一度きりの送信）用の長寿命 CoroutineScope（フェーズ12・issue #140）。
+     *
+     * WHY SupervisorJob + Dispatchers.Default: preferencesScope と同じ理由で、
+     * Application.onCreate 内で都度 `CoroutineScope(Dispatchers.Default)` を生成する実装だと
+     * 他の長寿命スコープ（preferencesScope 等）と管理方針が揃わない。AppContainer が
+     * 依存グラフとスコープの両方を一元管理する既存パターンに合わせ、ここに集約する。
+     * flush 失敗がアプリの他の処理に伝播しないよう SupervisorJob を使う。
+     */
+    private val crashReporterScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** 永続化済みクラッシュレポートの送信を非同期に開始する（Application.onCreate から一度だけ呼ぶ）。 */
+    fun flushCrashReporter() {
+        crashReporterScope.launch { crashReporter.flush() }
+    }
 
     /**
      * PreferencesStore（フェーズ10 P10 Task3）用の長寿命 CoroutineScope。
