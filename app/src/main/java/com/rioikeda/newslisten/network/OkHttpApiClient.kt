@@ -10,6 +10,7 @@ import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.LoginRequest
 import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.NewsListenJson
+import com.rioikeda.newslisten.model.OnboardingStatusResponse
 import com.rioikeda.newslisten.model.PasswordChangeRequest
 import com.rioikeda.newslisten.model.PlaybackPositionRequest
 import com.rioikeda.newslisten.model.PodcastListResponse
@@ -235,6 +236,12 @@ class OkHttpApiClient(
             )
         )
     }
+
+    override suspend fun fetchOnboardingStatus(): OnboardingStatusResponse =
+        execute(buildRequest(ApiEndpoint.OnboardingStatus), OnboardingStatusResponse.serializer())
+
+    override suspend fun completeOnboarding(): OnboardingStatusResponse =
+        execute(buildRequest(ApiEndpoint.CompleteOnboarding), OnboardingStatusResponse.serializer())
 
     // region private helpers
 

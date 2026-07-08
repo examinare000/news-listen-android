@@ -7,6 +7,7 @@ import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.LoginResponse
+import com.rioikeda.newslisten.model.OnboardingStatusResponse
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
@@ -134,4 +135,10 @@ interface ApiClient {
      * 認証セッション不要（クラッシュは未ログイン時にも起き得るため）。202 を成功として扱う。
      */
     suspend fun reportClientError(report: ClientErrorReport)
+
+    /** 初回オンボーディング（おすすめサイト追加）の完了状態を取得する（フェーズ13・issue #140）。 */
+    suspend fun fetchOnboardingStatus(): OnboardingStatusResponse
+
+    /** 初回オンボーディング完了をサーバーに記録する（フェーズ13・issue #140）。 */
+    suspend fun completeOnboarding(): OnboardingStatusResponse
 }

@@ -7,6 +7,7 @@ import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.LoginResponse
+import com.rioikeda.newslisten.model.OnboardingStatusResponse
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
@@ -133,4 +134,10 @@ class FakePodcastApiClient(
 
     override suspend fun reportClientError(report: ClientErrorReport) =
         error("reportClientError is out of scope for podcast tests")
+
+    override suspend fun fetchOnboardingStatus(): OnboardingStatusResponse =
+        error("fetchOnboardingStatus is out of scope for podcast tests")
+
+    override suspend fun completeOnboarding(): OnboardingStatusResponse =
+        error("completeOnboarding is out of scope for podcast tests")
 }

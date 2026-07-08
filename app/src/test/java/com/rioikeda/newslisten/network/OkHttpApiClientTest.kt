@@ -553,4 +553,30 @@ class OkHttpApiClientTest {
         // 例外が投げられなければ成功（202 Accepted を正常応答として扱う）。
         client.reportClientError(ClientErrorReport(source = "android", kind = "crash"))
     }
+
+    // --- フェーズ13: 初回オンボーディング（issue #140 P13） ---
+
+    @Test
+    fun fetchOnboardingStatusはGETでOnboardingStatusResponseを返す() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"onboarding_completed":false}"""))
+
+        val response = client.fetchOnboardingStatus()
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        assertEquals("/settings/onboarding", recorded.path)
+        assertEquals(false, response.onboardingCompleted)
+    }
+
+    @Test
+    fun completeOnboardingはPOSTでOnboardingStatusResponseを返す() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"onboarding_completed":true}"""))
+
+        val response = client.completeOnboarding()
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/settings/onboarding/complete", recorded.path)
+        assertEquals(true, response.onboardingCompleted)
+    }
 }

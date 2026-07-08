@@ -104,4 +104,12 @@ sealed class ApiEndpoint(val path: String, val method: String) {
      * 認証セッション不要（backend api/routers/client_errors.py: X-API-Key のみで受理）。
      */
     data object ReportClientError : ApiEndpoint("/client-errors", "POST")
+
+    // --- フェーズ13: 初回オンボーディング（issue #140 P13） ---
+
+    /** 初回オンボーディングの完了状態を取得する。 */
+    data object OnboardingStatus : ApiEndpoint("/settings/onboarding", "GET")
+
+    /** 初回オンボーディング完了を記録する。 */
+    data object CompleteOnboarding : ApiEndpoint("/settings/onboarding/complete", "POST")
 }
