@@ -1,24 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 本体テーマ: Material Light ベースで edge-to-edge window chrome 対応（フェーズ15）
-         注: DayNight は API 29+ のため、values-night で dark mode 対応を実装 -->
+    <!-- Dark mode: ステータスバーアイコンを明色に設定（light mode 逆転）
+         API 29+ では DayNight が使えるが、26-28 では Light をベースに overrides で対応 -->
     <style name="Theme.NewsListen" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
-        <!-- window chrome: ステータスバー・ナビゲーションバー透過設定 -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <!-- light モード時はステータスバーアイコンを暗色に設定 -->
-        <item name="android:windowLightStatusBar">true</item>
+        <!-- dark モード時はステータスバーアイコンを明色に設定 -->
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 
-    <!-- Splash Screen テーマ: androidx.core.splashscreen で使用（フェーズ15）
+    <!-- Dark mode splash: 背景を dark paper に設定
          注: custom 属性（android: プレフィックスなし）は androidx.core.splashscreen ライブラリが
          全 API（26-30 compat 含む）で処理する。android: プレフィックス付き属性は不要。
          windowSplashScreenAnimatedIcon は adaptive icon を使用。見切れが発生した場合は
          foreground layer 専用ベクター素材に差し替えること。 -->
     <style name="Theme.NewsListen.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@android:color/white</item>
+        <item name="windowSplashScreenBackground">#14130F</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
         <item name="postSplashScreenTheme">@style/Theme.NewsListen</item>
     </style>

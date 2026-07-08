@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.rioikeda.newslisten.auth.AuthState
@@ -66,6 +67,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Splash Screen API: cold start での splash 表示（フェーズ15）
+        // インストール順序: super.onCreate → installSplashScreen → enableEdgeToEdge
+        installSplashScreen()
         enableEdgeToEdge()
 
         // POST_NOTIFICATIONS ランタイム権限要求（API 33+ で未許可のときのみ）
