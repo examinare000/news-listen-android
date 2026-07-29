@@ -13,6 +13,8 @@ import com.rioikeda.newslisten.account.SessionsViewModel
 import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedViewModel
+import com.rioikeda.newslisten.engagement.ApiListeningStreakStore
+import com.rioikeda.newslisten.engagement.ListeningStreakStore
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.AuthInterceptor
@@ -214,6 +216,19 @@ class AppContainer(context: Context) {
 
     fun getPreferencesStore(): PreferencesStore = preferencesStore
 
+    private val _listeningStreakStore: ApiListeningStreakStore = ApiListeningStreakStore(
+        apiClient = apiClient,
+        dispatcher = Dispatchers.Default.limitedParallelism(1),
+    )
+
+    fun getListeningStreakStore(): ListeningStreakStore = _listeningStreakStore
+
+    /**
+     * 内部アクセス用: AppScaffold で feedback をキャプチャ後に onStreakIncreased をセット。
+     * 型安全性のため ApiListeningStreakStore 型で直接公開（実装に依存する）。
+     */
+    internal fun getApiListeningStreakStore(): ApiListeningStreakStore = _listeningStreakStore
+
     /**
      * AuthViewModel（認証状態ゲーティング + ログイン）を生成して返す。
      *
@@ -279,6 +294,8 @@ class AppContainer(context: Context) {
      *
      * by lazy でシングルトンキャッシュ化：画面回転時に FeedViewModel インスタンスが同じ
      * ままであることを保証し、フィード一覧の状態が保持される。
+     *
+     * 要件3: onStarConfirmed は FeedScreen で feedback をキャプチャ後に設定。
      */
     private val _feedViewModel: FeedViewModel by lazy {
         FeedViewModel(
@@ -323,7 +340,8 @@ class AppContainer(context: Context) {
             playerController = _playerController,
             cacheManager = audioCacheManager,
             networkMonitor = networkMonitor,
-            dispatcher = Dispatchers.Default.limitedParallelism(1)
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+            listeningStreakStore = _listeningStreakStore,
         )
     }
 
@@ -354,6 +372,7 @@ class AppContainer(context: Context) {
             isAdminProvider = {
                 (_authViewModel.authState.value as? AuthState.Authenticated)?.user?.role == "admin"
             },
+            listeningStreakStore = _listeningStreakStore,
         )
     }
 

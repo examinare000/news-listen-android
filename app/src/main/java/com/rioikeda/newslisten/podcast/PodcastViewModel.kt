@@ -3,7 +3,10 @@ package com.rioikeda.newslisten.podcast
 import com.rioikeda.newslisten.core.PlaybackQueue
 import com.rioikeda.newslisten.core.PlaybackSource
 import com.rioikeda.newslisten.core.resolvePlaybackSource
+import com.rioikeda.newslisten.engagement.ListeningStreakStore
 import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.model.QuizAnswerRequest
+import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.AudioCacheException
@@ -41,6 +44,7 @@ class PodcastViewModel(
     private val cacheManager: AudioCacheManager,
     private val networkMonitor: NetworkMonitoring,
     private val dispatcher: CoroutineDispatcher,
+    private val listeningStreakStore: ListeningStreakStore? = null,
 ) {
     // 位置同期タイマー（15秒毎）を動かすための内部スコープ。play()/suspend 関数の呼び出しを跨いで
     // 生存する必要があるため、ViewModel 自身が Dispatcher から生成して保持する
@@ -304,6 +308,18 @@ class PodcastViewModel(
      * stopInternal() を呼び、状態を整合させる。
      */
     private suspend fun handlePlaybackEnded() {
+        // キューを書き換える前に完聴対象を確定する。currentPodcast は次の play() で差し替わるため、
+        // advance 後に読むと次エピソードを誤って完聴扱いする。
+        val completedPodcastId = _currentPodcast.value?.id
+        if (completedPodcastId != null) {
+            try {
+                apiClient.markCompleted(completedPodcastId)
+            } catch (_: ApiException) {
+                // 完聴記録は best-effort。失敗しても次エピソードへの遷移を止めない。
+            }
+            listeningStreakStore?.refresh()
+        }
+
         val (advanced, next) = _queue.value.advance()
         _queue.value = advanced
         val gateError = next?.let { playabilityError(it) }
@@ -311,7 +327,7 @@ class PodcastViewModel(
             play(next)
         } else {
             if (gateError != null) _errorMessage.value = gateError
-            stopInternal()
+            stopInternal(keepCurrentPodcast = next == null)
         }
     }
 
@@ -424,6 +440,17 @@ class PodcastViewModel(
     }
 
     /**
+     * 指定 Podcast の回答をサーバーへ送り、採点結果を返す。
+     *
+     * WHY podcastId を明示的に引数化: iOS PodcastViewModel.swift:411 と同形。シートが開かれた時点の
+     * Podcast を保持し、その後 currentPodcast が変わってもシート内では元の podcastId で一貫性を保つ。
+     * AudioPlayerSection は quizPodcast のスナップショット方式で実装する（要件1）。
+     */
+    suspend fun submitQuizAnswers(podcastId: String, answers: List<Int>): QuizAnswerResponse = withContext(dispatcher) {
+        apiClient.submitQuizAnswers(podcastId, QuizAnswerRequest(answers))
+    }
+
+    /**
      * [stopPlayback] の本体。既に dispatcher コンテキスト内（play 等）から直接呼べるよう分離。
      *
      * WHY: 何も再生していない（[_currentPodcast] が null）ならここで何もせず抜ける。
@@ -434,14 +461,16 @@ class PodcastViewModel(
      * あり、release() は「以後再利用不可」の終端操作（[PlayerController] の doc 参照）。
      * ここは「次のエピソードのために止める」操作なので stop() が正しい。
      */
-    private suspend fun stopInternal() {
+    private suspend fun stopInternal(keepCurrentPodcast: Boolean = false) {
         val podcastId = _currentPodcast.value?.id ?: return
         // 停止直前の位置を最後に一度だけ同期する（iOS stopPlayback():355 転記）。
         syncPosition(podcastId)
         syncJob?.cancel()
         syncJob = null
         playerController.stop()
-        _currentPodcast.value = null
+        if (!keepCurrentPodcast) {
+            _currentPodcast.value = null
+        }
     }
 
     /**

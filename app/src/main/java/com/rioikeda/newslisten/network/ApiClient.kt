@@ -13,6 +13,8 @@ import com.rioikeda.newslisten.model.PasskeyOptionsResponse
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
+import com.rioikeda.newslisten.model.QuizAnswerRequest
+import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.model.RevokeSessionsResponse
 import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.model.SessionsListResponse
@@ -52,6 +54,16 @@ interface ApiClient {
 
     /** 指定 Podcast の再生位置を更新する。レスポンスは更新後の Podcast 全体。 */
     suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse
+
+    /** 完聴を best-effort で記録する呼び出し元のための API。 */
+    suspend fun markCompleted(id: String) {
+        error("markCompleted is not stubbed for id=$id")
+    }
+
+    /** 公開設問への回答をサーバーで採点する。 */
+    suspend fun submitQuizAnswers(id: String, request: QuizAnswerRequest): QuizAnswerResponse {
+        error("submitQuizAnswers is not stubbed for id=$id")
+    }
 
     /** ユーザー設定選択（難易度・再生速度）を取得する。 */
     suspend fun fetchPreferences(): PreferencesResponse

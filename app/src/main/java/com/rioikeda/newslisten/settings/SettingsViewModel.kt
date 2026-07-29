@@ -1,5 +1,7 @@
 package com.rioikeda.newslisten.settings
 
+import com.rioikeda.newslisten.engagement.ApiListeningStreakStore
+import com.rioikeda.newslisten.engagement.ListeningStreakStore
 import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
@@ -42,6 +44,8 @@ class SettingsViewModel(
      * 呼び出し時点で都度評価する関数にしている。
      */
     private val isAdminProvider: () -> Boolean = { false },
+    private val listeningStreakStore: ListeningStreakStore =
+        ApiListeningStreakStore(apiClient, dispatcher),
 ) {
     private val _sources = MutableStateFlow<List<RssSource>>(emptyList())
     val sources: StateFlow<List<RssSource>> = _sources.asStateFlow()
@@ -67,11 +71,8 @@ class SettingsViewModel(
     val generationQuotaLoadFailed: StateFlow<Boolean> = _generationQuotaLoadFailed.asStateFlow()
 
     /** 聴取ストリーク（issue #165）。未取得・取得失敗時は `null`。 */
-    private val _listeningStreak = MutableStateFlow<ListeningStreakResponse?>(null)
-    val listeningStreak: StateFlow<ListeningStreakResponse?> = _listeningStreak.asStateFlow()
-
-    private val _listeningStreakLoadFailed = MutableStateFlow(false)
-    val listeningStreakLoadFailed: StateFlow<Boolean> = _listeningStreakLoadFailed.asStateFlow()
+    val listeningStreak: StateFlow<ListeningStreakResponse?> = listeningStreakStore.listeningStreak
+    val listeningStreakLoadFailed: StateFlow<Boolean> = listeningStreakStore.loadFailed
 
     /** RSS ソース一覧を取得して [sources] を更新する。失敗時は [errorMessage] に反映する。 */
     suspend fun loadSources(): Unit = withContext(dispatcher) {
@@ -167,18 +168,7 @@ class SettingsViewModel(
      * 聴取ストリーク（連続聴取日数）を取得する（issue #165）。
      * 404 時は graceful degradation: セクション非表示（[listeningStreakLoadFailed] は立てない）。
      */
-    suspend fun loadListeningStreak(): Unit = withContext(dispatcher) {
-        try {
-            _listeningStreak.value = apiClient.fetchListeningStreak()
-            _listeningStreakLoadFailed.value = false
-        } catch (e: ApiException.HttpError) {
-            _listeningStreak.value = null
-            _listeningStreakLoadFailed.value = e.code != 404
-        } catch (e: ApiException) {
-            _listeningStreak.value = null
-            _listeningStreakLoadFailed.value = true
-        }
-    }
+    suspend fun loadListeningStreak() = listeningStreakStore.refresh()
 
     /**
      * デフォルト難易度をサーバーへ同期する。

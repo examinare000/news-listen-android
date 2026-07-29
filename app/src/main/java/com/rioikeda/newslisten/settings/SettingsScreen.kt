@@ -88,7 +88,6 @@ fun SettingsScreen(
             viewModel.loadSources()
             viewModel.loadFeaturedSites()
             viewModel.loadGenerationQuota()
-            viewModel.loadListeningStreak()
             sessionsViewModel.loadSessions()
             passkeyCredentialsViewModel.loadCredentials()
         }

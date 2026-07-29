@@ -137,6 +137,20 @@ class ApiEndpointTest {
         assertEquals("GET", ApiEndpoint.ListeningStreak.method)
     }
 
+    @Test
+    fun `完聴記録はPodcast固有URLへPOSTする`() {
+        val endpoint = ApiEndpoint.MarkCompleted("p1")
+        assertEquals("/podcasts/p1/completed", endpoint.path)
+        assertEquals("POST", endpoint.method)
+    }
+
+    @Test
+    fun `クイズ回答はPodcast固有URLへPOSTする`() {
+        val endpoint = ApiEndpoint.SubmitQuizAnswers("p1")
+        assertEquals("/podcasts/p1/quiz-answers", endpoint.path)
+        assertEquals("POST", endpoint.method)
+    }
+
     // --- フェーズ11 P11 Task1: アカウント管理 ---
 
     @Test

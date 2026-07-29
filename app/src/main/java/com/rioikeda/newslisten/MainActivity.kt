@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
         val podcastViewModel = appContainer.getPodcastViewModel()
         val settingsViewModel = appContainer.getSettingsViewModel()
         val preferencesStore = appContainer.getPreferencesStore()
+        val listeningStreakStore = appContainer.getListeningStreakStore()
         val accountViewModel = appContainer.getAccountViewModel()
         val sessionsViewModel = appContainer.getSessionsViewModel()
         val onboardingViewModel = appContainer.getOnboardingViewModel()
@@ -165,7 +166,8 @@ class MainActivity : ComponentActivity() {
                                 accountViewModel,
                                 sessionsViewModel,
                                 passkeyRegistrationViewModel,
-                                passkeyCredentialsViewModel
+                                passkeyCredentialsViewModel,
+                                listeningStreakStore,
                             )
                         }
                     }

@@ -34,6 +34,12 @@ sealed class ApiEndpoint(val path: String, val method: String) {
     /** 指定 ID の Podcast の再生位置を更新。 */
     data class UpdatePlaybackPosition(val id: String) : ApiEndpoint("/podcasts/$id/position", "PATCH")
 
+    /** 指定 Podcast の完聴を記録する。 */
+    data class MarkCompleted(val id: String) : ApiEndpoint("/podcasts/$id/completed", "POST")
+
+    /** 指定 Podcast のクイズ回答を送信し採点する。 */
+    data class SubmitQuizAnswers(val id: String) : ApiEndpoint("/podcasts/$id/quiz-answers", "POST")
+
     /** ユーザー設定選択（難易度・再生速度）を取得。 */
     data object Preferences : ApiEndpoint("/settings/preferences", "GET")
 

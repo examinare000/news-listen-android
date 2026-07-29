@@ -21,6 +21,8 @@ import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
 import com.rioikeda.newslisten.model.ProfileUpdateRequest
+import com.rioikeda.newslisten.model.QuizAnswerRequest
+import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.model.RevokeSessionsResponse
 import com.rioikeda.newslisten.model.RssSourceCreateRequest
 import com.rioikeda.newslisten.model.RssSourceUpdateRequest
@@ -111,6 +113,20 @@ class OkHttpApiClient(
                 bodySerializer = PlaybackPositionRequest.serializer(),
             ),
             PodcastResponse.serializer(),
+        )
+
+    override suspend fun markCompleted(id: String) {
+        executeVoid(buildRequest(ApiEndpoint.MarkCompleted(id)))
+    }
+
+    override suspend fun submitQuizAnswers(id: String, request: QuizAnswerRequest): QuizAnswerResponse =
+        execute(
+            buildRequest(
+                ApiEndpoint.SubmitQuizAnswers(id),
+                body = request,
+                bodySerializer = QuizAnswerRequest.serializer(),
+            ),
+            QuizAnswerResponse.serializer(),
         )
 
     override suspend fun fetchPreferences(): PreferencesResponse =
