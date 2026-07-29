@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -45,6 +46,8 @@ import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.designsystem.DSFeedbackVocabulary
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.rememberDSFeedback
+import com.rioikeda.newslisten.learning.LearningScreen
+import com.rioikeda.newslisten.learning.LearningViewModel
 import com.rioikeda.newslisten.passkey.PasskeyCredentialsViewModel
 import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
 import com.rioikeda.newslisten.podcast.PodcastScreen
@@ -54,10 +57,10 @@ import com.rioikeda.newslisten.settings.SettingsScreen
 import com.rioikeda.newslisten.settings.SettingsViewModel
 
 /**
- * メインのアプリケーション スカフォルド。3 タブ（フィード / Podcast / 設定）を Material3 NavigationBar で提供する。
+ * メインのアプリケーション スカフォルド。4 タブ（フィード / Podcast / 学習 / 設定）を Material3 NavigationBar で提供する。
  *
  * 正本: ios/NewsListenApp/NewsListenApp/NewsListenAppApp.swift:73-108（ContentView）のミラー。
- * iOS の TabView と同型の Material3 BottomNavigationBar 実装。各タブはプレースホルダ（フェーズ4以降で実装）。
+ * iOS の TabView と同型の Material3 BottomNavigationBar 実装。
  *
  * @param feedViewModel フィード タブの ViewModel（AppContainer.getFeedViewModel() から供給）。
  * @param podcastViewModel Podcast タブの ViewModel（AppContainer.getPodcastViewModel() から供給）。
@@ -75,6 +78,7 @@ import com.rioikeda.newslisten.settings.SettingsViewModel
 fun AppScaffold(
     feedViewModel: FeedViewModel,
     podcastViewModel: PodcastViewModel,
+    learningViewModel: LearningViewModel,
     settingsViewModel: SettingsViewModel,
     preferencesStore: PreferencesStore,
     authViewModel: AuthViewModel,
@@ -83,6 +87,7 @@ fun AppScaffold(
     passkeyRegistrationViewModel: PasskeyRegistrationViewModel,
     passkeyCredentialsViewModel: PasskeyCredentialsViewModel,
     listeningStreakStore: ListeningStreakStore,
+    appContainer: com.rioikeda.newslisten.di.AppContainer? = null,
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val feedback = rememberDSFeedback(preferencesStore)
@@ -121,6 +126,11 @@ fun AppScaffold(
             screen = { PodcastScreen(podcastViewModel, feedback) }
         ),
         TabItem(
+            label = stringResource(R.string.tab_learning),
+            icon = Icons.Filled.Create,
+            screen = { LearningScreen(learningViewModel, feedback, appContainer = appContainer) }
+        ),
+        TabItem(
             label = stringResource(R.string.tab_settings),
             icon = Icons.Filled.Settings,
             screen = {
@@ -140,7 +150,7 @@ fun AppScaffold(
 
     Scaffold(
         topBar = {
-            if (selectedTab != 2 && shouldShowStreakBadge(listeningStreak)) {
+            if (selectedTab != 3 && shouldShowStreakBadge(listeningStreak)) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()

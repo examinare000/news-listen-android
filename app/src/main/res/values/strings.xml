@@ -15,6 +15,7 @@
     <!-- タブラベル -->
     <string name="tab_feed">フィード</string>
     <string name="tab_podcast">Podcast</string>
+    <string name="tab_learning">学習</string>
     <string name="tab_settings">設定</string>
 
     <!-- プレースホルダ -->
@@ -180,4 +181,39 @@
     <string name="onboarding_retry_button">再試行</string>
     <string name="onboarding_finish_button">完了</string>
     <string name="onboarding_skip_button">スキップ</string>
+
+    <!-- 学習画面 -->
+    <string name="learning_screen_title">学習</string>
+    <string name="learning_progress_title">今週の進捗</string>
+    <string name="learning_achievements_title">実績</string>
+    <string name="learning_achievements_unlocked">解錠: %s</string>
+    <string name="learning_achievements_unlocked_notify">実績を解錠しました</string>
+    <string name="learning_vocabulary_title">登録語彙</string>
+    <string name="learning_vocabulary_count">%d語</string>
+    <string name="learning_vocabulary_load_failed">登録語彙を読み込めませんでした</string>
+    <string name="learning_vocabulary_test_button">単語テスト</string>
+    <string name="learning_vocabulary_test_hint">期日が来た単語を最大10語テストします</string>
+    <string name="learning_weekly_history_title">週次履歴</string>
+    <string name="learning_weekly_history_fact">目標: %d → 実績: %d</string>
+    <string name="learning_monthly_activity_title">月別活動</string>
+    <string name="learning_monthly_activity_fact">%d日</string>
+    <string name="learning_loading">学習データを読み込んでいます</string>
+    <string name="learning_load_failed">学習データを取得できませんでした</string>
+    <string name="learning_load_failed_retry">しばらくしてから再度お試しください</string>
+    <string name="learning_retry_button">再試行</string>
+
+    <!-- 学習蓄積・クイズセクション -->
+    <string name="learning_accumulation_title">学習の蓄積</string>
+    <string name="learning_accumulation_episodes">完聴エピソード数: %d本</string>
+    <string name="learning_accumulation_vocabulary">習得語彙数: %d語</string>
+    <string name="learning_accumulation_difficulty">現在のレベル: %s</string>
+    <string name="learning_quiz_title">クイズ成績</string>
+    <string name="learning_quiz_episodes">出題エピソード数: %d本</string>
+    <string name="learning_quiz_rate">平均正答率: %.1f%%</string>
+    <string name="learning_quiz_rate_unconfirmed">平均正答率: 未確定</string>
+    <string name="learning_quiz_trend">最新のトレンド</string>
+
+    <!-- ハードコード日本語の stringResource 化 -->
+    <string name="streak_format">%d日連続</string>
+    <string name="close_button">閉じる</string>
 </resources>
