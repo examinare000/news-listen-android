@@ -190,6 +190,17 @@ class SettingsViewModel(
             onSuccess = { preferencesStore.setDefaultPlaybackSpeed(value) },
         )
 
+    suspend fun syncWeeklyGoalEpisodes(value: Int): Boolean {
+        if (value !in WEEKLY_GOAL_OPTIONS) {
+            _errorMessage.value = PREFERENCES_SYNC_ERROR_MESSAGE
+            return false
+        }
+        return syncPreference(
+            operation = { apiClient.updateWeeklyGoalEpisodes(value) },
+            onSuccess = { preferencesStore.setWeeklyGoalEpisodes(value) },
+        )
+    }
+
     /**
      * 設定同期の成否を共通化する内部ヘルパー（iOS SettingsViewModel.swift:215-227 の
      * `syncPreference` 相当）。成功時のみ [onSuccess] を呼び、値を [preferencesStore] に
@@ -199,20 +210,30 @@ class SettingsViewModel(
         operation: suspend () -> Unit,
         onSuccess: suspend () -> Unit,
     ): Boolean = withContext(dispatcher) {
+        // WHY: 連打などで複数リクエストが競合したとき、古い応答（成功/失敗とも）が
+        // 最新の状態を上書きしないよう、呼び出し連番で最新以外の応答を無視する
+        // （iOS SettingsViewModel の stale ガードと同型）。stale は true を返して
+        // 呼び出し元のロールバックも抑止する。
+        val ticket = syncSequence.incrementAndGet()
         try {
             operation()
+            if (ticket != syncSequence.get()) return@withContext true
             onSuccess()
             _errorMessage.value = null
             true
         } catch (e: ApiException) {
+            if (ticket != syncSequence.get()) return@withContext true
             _errorMessage.value = PREFERENCES_SYNC_ERROR_MESSAGE
             false
         }
     }
 
+    private val syncSequence = java.util.concurrent.atomic.AtomicLong(0)
+
     private companion object {
         const val SOURCES_ERROR_MESSAGE = "RSSソースの操作に失敗しました"
         const val ADMIN_ONLY_ERROR_MESSAGE = "この操作には管理者権限が必要です"
         const val PREFERENCES_SYNC_ERROR_MESSAGE = "設定の保存に失敗しました"
+        val WEEKLY_GOAL_OPTIONS = setOf(3, 5, 7, 10)
     }
 }

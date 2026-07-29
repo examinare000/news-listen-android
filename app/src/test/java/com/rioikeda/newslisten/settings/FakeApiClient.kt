@@ -42,6 +42,8 @@ class FakeApiClient(
         { error("fetchFeaturedSites is not stubbed") },
     private val onUpdatePreferences: suspend (defaultDifficulty: String?, defaultPlaybackSpeed: Double?) -> PreferencesResponse =
         { _, _ -> error("updatePreferences is not stubbed") },
+    private val onUpdateWeeklyGoalEpisodes: suspend (weeklyGoalEpisodes: Int) -> PreferencesResponse =
+        { error("updateWeeklyGoalEpisodes is not stubbed") },
     private val onFetchGenerationQuota: suspend () -> GenerationQuotaResponse =
         { error("fetchGenerationQuota is not stubbed") },
     private val onFetchListeningStreak: suspend () -> ListeningStreakResponse =
@@ -105,6 +107,9 @@ class FakeApiClient(
 
     override suspend fun updatePreferences(defaultDifficulty: String?, defaultPlaybackSpeed: Double?): PreferencesResponse =
         onUpdatePreferences(defaultDifficulty, defaultPlaybackSpeed)
+
+    override suspend fun updateWeeklyGoalEpisodes(weeklyGoalEpisodes: Int): PreferencesResponse =
+        onUpdateWeeklyGoalEpisodes(weeklyGoalEpisodes)
 
     override suspend fun fetchGenerationQuota(): GenerationQuotaResponse = onFetchGenerationQuota()
 

@@ -87,6 +87,18 @@ sealed class ApiEndpoint(val path: String, val method: String) {
     /** 聴取ストリーク（連続聴取日数）を取得する（フェーズ10 P10、issue #165）。 */
     data object ListeningStreak : ApiEndpoint("/users/me/listening-streak", "GET")
 
+    data object LearningDashboard : ApiEndpoint("/users/me/learning-dashboard", "GET")
+
+    data object Vocabulary : ApiEndpoint("/vocabulary", "GET")
+
+    data object SaveVocabulary : ApiEndpoint("/vocabulary", "POST")
+
+    data class DeleteVocabulary(val id: String) : ApiEndpoint("/vocabulary/$id", "DELETE")
+
+    data object VocabularyTestSession : ApiEndpoint("/vocabulary/test-session", "GET")
+
+    data object VocabularyTestResult : ApiEndpoint("/vocabulary/test-result", "POST")
+
     // --- フェーズ11 P11 Task1: アカウント管理 ---
 
     /** プロフィール（表示名）を更新する。 */

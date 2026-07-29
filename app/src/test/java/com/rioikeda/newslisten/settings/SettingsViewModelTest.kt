@@ -10,8 +10,11 @@ import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -361,5 +364,90 @@ class SettingsViewModelTest {
         assertFalse(result)
         assertEquals(1.0, preferencesStore.defaultPlaybackSpeed.value, 0.0)
         assertTrue(viewModel.errorMessage.value != null)
+    }
+
+    @Test
+    fun `週次目標の更新成功時だけPreferencesStoreへ書き戻す`() = runTest {
+        val preferencesStore = InMemoryPreferencesStore(initialWeeklyGoalEpisodes = 3)
+        var receivedGoal = 0
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(
+                onUpdateWeeklyGoalEpisodes = { goal ->
+                    receivedGoal = goal
+                    PreferencesResponse(
+                        defaultDifficulty = "toeic_600",
+                        defaultPlaybackSpeed = 1.0,
+                        digestEnabled = false,
+                        digestArticleCount = 3,
+                        weeklyGoalEpisodes = goal,
+                    )
+                },
+            ),
+            preferencesStore = preferencesStore,
+        )
+
+        val result = viewModel.syncWeeklyGoalEpisodes(7)
+
+        assertTrue(result)
+        assertEquals(7, receivedGoal)
+        assertEquals(7, preferencesStore.weeklyGoalEpisodes.value)
+    }
+
+    @Test
+    fun `許容外の週次目標はAPIへ送らず保持する`() = runTest {
+        val preferencesStore = InMemoryPreferencesStore(initialWeeklyGoalEpisodes = 3)
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(
+                onUpdateWeeklyGoalEpisodes = {
+                    throw AssertionError("許容外の目標でAPIを呼んではならない")
+                },
+            ),
+            preferencesStore = preferencesStore,
+        )
+
+        val result = viewModel.syncWeeklyGoalEpisodes(4)
+
+        assertFalse(result)
+        assertEquals(3, preferencesStore.weeklyGoalEpisodes.value)
+    }
+
+    @Test
+    fun `古いリクエストの失敗応答は最新の成功を上書きしない`() = runTest {
+        val preferencesStore = InMemoryPreferencesStore(initialWeeklyGoalEpisodes = 3)
+        val firstGate = CompletableDeferred<Unit>()
+        var callCount = 0
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(
+                onUpdateWeeklyGoalEpisodes = { goal ->
+                    callCount += 1
+                    if (callCount == 1) {
+                        // 先発リクエストを保留し、後発成功の後に失敗として届かせる
+                        firstGate.await()
+                        throw ApiException.HttpError(500, "stale failure")
+                    }
+                    PreferencesResponse(
+                        defaultDifficulty = "toeic_600",
+                        defaultPlaybackSpeed = 1.0,
+                        digestEnabled = false,
+                        digestArticleCount = 3,
+                        weeklyGoalEpisodes = goal,
+                    )
+                },
+            ),
+            preferencesStore = preferencesStore,
+        )
+
+        val first = async { viewModel.syncWeeklyGoalEpisodes(5) }
+        runCurrent()
+        val second = async { viewModel.syncWeeklyGoalEpisodes(7) }
+        runCurrent()
+        assertTrue(second.await())
+        assertEquals(7, preferencesStore.weeklyGoalEpisodes.value)
+
+        firstGate.complete(Unit)
+        // stale な失敗はロールバック不要の true・エラー表示なし・最新値を保持
+        assertTrue(first.await())
+        assertEquals(7, preferencesStore.weeklyGoalEpisodes.value)
+        assertNull(viewModel.errorMessage.value)
     }
 }

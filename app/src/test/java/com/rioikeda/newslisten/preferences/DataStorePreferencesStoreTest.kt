@@ -30,13 +30,30 @@ class DataStorePreferencesStoreTest {
 
         assertTrue(store.sfxEnabled.value)
         assertTrue(store.hapticsEnabled.value)
+        assertEquals(3, store.weeklyGoalEpisodes.value)
 
         store.setSfxEnabled(false)
         store.setHapticsEnabled(false)
+        store.setWeeklyGoalEpisodes(7)
         advanceUntilIdle()
 
         assertFalse(store.sfxEnabled.value)
         assertFalse(store.hapticsEnabled.value)
+        assertEquals(7, store.weeklyGoalEpisodes.value)
+    }
+
+    @Test
+    fun `表示済み実績IDをDataStoreへ重複なく永続化する`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val file = File.createTempFile("prefs_achievements", ".preferences_pb").apply { deleteOnExit() }
+        val store = dispatcher.newStore(file)
+        advanceUntilIdle()
+
+        store.markAchievementsSeen(setOf("streak_7", "completed_10"))
+        store.markAchievementsSeen(setOf("streak_7"))
+        advanceUntilIdle()
+
+        assertEquals(setOf("streak_7", "completed_10"), store.seenAchievementIds.value)
     }
 
     /**
@@ -63,6 +80,7 @@ class DataStorePreferencesStoreTest {
         assertEquals(1.0, store.defaultPlaybackSpeed.value, 0.0)
         assertEquals(ArticleOpenMode.IN_APP, store.articleOpenMode.value)
         assertEquals(TimeFormat.ABSOLUTE, store.timeFormat.value)
+        assertEquals(3, store.weeklyGoalEpisodes.value)
     }
 
     @Test

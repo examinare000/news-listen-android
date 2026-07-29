@@ -33,6 +33,12 @@ interface PreferencesStore {
     /** 操作触覚を有効にする端末ローカル設定。既定 true。 */
     val hapticsEnabled: StateFlow<Boolean>
 
+    /** サーバー同期する週あたりの完聴目標。旧サーバー欠損時の既定値は3。 */
+    val weeklyGoalEpisodes: StateFlow<Int>
+
+    /** 実績解錠の祝福を重複表示しないため、端末で表示済みの実績ID。 */
+    val seenAchievementIds: StateFlow<Set<String>>
+
     /** 既定の英語難易度を更新し永続化する。 */
     suspend fun setDefaultDifficulty(code: String)
 
@@ -48,4 +54,8 @@ interface PreferencesStore {
     suspend fun setSfxEnabled(enabled: Boolean)
 
     suspend fun setHapticsEnabled(enabled: Boolean)
+
+    suspend fun setWeeklyGoalEpisodes(episodes: Int)
+
+    suspend fun markAchievementsSeen(ids: Set<String>)
 }

@@ -14,4 +14,5 @@ data class PreferencesResponse(
     @SerialName("default_playback_speed") val defaultPlaybackSpeed: Double,
     @SerialName("digest_enabled") val digestEnabled: Boolean,
     @SerialName("digest_article_count") val digestArticleCount: Int,
+    @SerialName("weekly_goal_episodes") val weeklyGoalEpisodes: Int? = null,
 )

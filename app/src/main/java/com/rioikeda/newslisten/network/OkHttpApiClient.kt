@@ -7,6 +7,7 @@ import com.rioikeda.newslisten.model.FeaturedSitesResponse
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
+import com.rioikeda.newslisten.model.LearningDashboardResponse
 import com.rioikeda.newslisten.model.LoginRequest
 import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.NewsListenJson
@@ -31,9 +32,17 @@ import com.rioikeda.newslisten.model.SessionsListResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.model.UpdatePreferencesRequest
 import com.rioikeda.newslisten.model.UserResponse
+import com.rioikeda.newslisten.model.DeleteVocabularyResponse
+import com.rioikeda.newslisten.model.SaveVocabularyRequest
+import com.rioikeda.newslisten.model.VocabularyItemResponse
+import com.rioikeda.newslisten.model.VocabularyListResponse
+import com.rioikeda.newslisten.model.VocabularyTestResultItemRequest
+import com.rioikeda.newslisten.model.VocabularyTestResultResponse
+import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonObject
 import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -209,6 +218,56 @@ class OkHttpApiClient(
 
     override suspend fun fetchListeningStreak(): ListeningStreakResponse =
         execute(buildRequest(ApiEndpoint.ListeningStreak), ListeningStreakResponse.serializer())
+
+    override suspend fun fetchLearningDashboard(): LearningDashboardResponse =
+        execute(buildRequest(ApiEndpoint.LearningDashboard), LearningDashboardResponse.serializer())
+
+    override suspend fun updateWeeklyGoalEpisodes(weeklyGoalEpisodes: Int): PreferencesResponse =
+        execute(
+            buildRequest(
+                ApiEndpoint.UpdatePreferences,
+                body = UpdatePreferencesRequest(weeklyGoalEpisodes = weeklyGoalEpisodes),
+                bodySerializer = UpdatePreferencesRequest.serializer(),
+            ),
+            PreferencesResponse.serializer(),
+        )
+
+    override suspend fun saveVocabulary(podcastId: String, term: String): VocabularyItemResponse =
+        execute(
+            buildRequest(
+                ApiEndpoint.SaveVocabulary,
+                body = SaveVocabularyRequest(podcastId = podcastId, term = term),
+                bodySerializer = SaveVocabularyRequest.serializer(),
+            ),
+            VocabularyItemResponse.serializer(),
+        )
+
+    override suspend fun fetchVocabulary(): VocabularyListResponse =
+        execute(buildRequest(ApiEndpoint.Vocabulary), VocabularyListResponse.serializer())
+
+    override suspend fun deleteVocabulary(vocabularyId: String): DeleteVocabularyResponse =
+        execute(
+            buildRequest(ApiEndpoint.DeleteVocabulary(vocabularyId)),
+            DeleteVocabularyResponse.serializer(),
+        )
+
+    override suspend fun fetchVocabularyTestSession(): VocabularyTestSessionResponse =
+        execute(
+            buildRequest(ApiEndpoint.VocabularyTestSession),
+            VocabularyTestSessionResponse.serializer(),
+        )
+
+    override suspend fun submitVocabularyTestResults(
+        results: List<VocabularyTestResultItemRequest>,
+    ): VocabularyTestResultResponse =
+        execute(
+            buildRequest(
+                ApiEndpoint.VocabularyTestResult,
+                body = results,
+                bodySerializer = ListSerializer(VocabularyTestResultItemRequest.serializer()),
+            ),
+            VocabularyTestResultResponse.serializer(),
+        )
 
     override suspend fun updateProfile(displayName: String): UserResponse =
         execute(
