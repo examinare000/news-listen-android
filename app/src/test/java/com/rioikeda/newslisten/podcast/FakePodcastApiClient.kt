@@ -18,6 +18,8 @@ import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.model.SessionsListResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.model.UserResponse
+import com.rioikeda.newslisten.model.VocabularyItemResponse
+import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.network.ApiClient
 import kotlinx.serialization.json.JsonObject
 
@@ -40,6 +42,10 @@ class FakePodcastApiClient(
     private val onMarkCompleted: suspend (id: String) -> Unit = {},
     private val onSubmitQuizAnswers: suspend (podcastId: String, request: com.rioikeda.newslisten.model.QuizAnswerRequest) -> com.rioikeda.newslisten.model.QuizAnswerResponse =
         { podcastId, _ -> error("submitQuizAnswers is not stubbed for podcastId=$podcastId") },
+    private val onFetchVocabulary: suspend () -> VocabularyListResponse =
+        { VocabularyListResponse(emptyList(), 0) },
+    private val onSaveVocabulary: suspend (podcastId: String, term: String) -> VocabularyItemResponse =
+        { podcastId, term -> error("saveVocabulary is not stubbed for podcastId=$podcastId term=$term") },
 ) : ApiClient {
     /** fetchPodcasts が呼ばれた回数。 */
     var fetchPodcastsCallCount = 0
@@ -56,6 +62,7 @@ class FakePodcastApiClient(
 
     /** markCompleted に渡された完聴 ID。 */
     val markCompletedCalls: MutableList<String> = mutableListOf()
+    val saveVocabularyCalls: MutableList<Pair<String, String>> = mutableListOf()
 
     override suspend fun fetchPodcasts(): PodcastListResponse {
         fetchPodcastsCallCount++
@@ -82,6 +89,13 @@ class FakePodcastApiClient(
         request: com.rioikeda.newslisten.model.QuizAnswerRequest,
     ): com.rioikeda.newslisten.model.QuizAnswerResponse =
         onSubmitQuizAnswers(podcastId, request)
+
+    override suspend fun fetchVocabulary(): VocabularyListResponse = onFetchVocabulary()
+
+    override suspend fun saveVocabulary(podcastId: String, term: String): VocabularyItemResponse {
+        saveVocabularyCalls += podcastId to term
+        return onSaveVocabulary(podcastId, term)
+    }
 
     override suspend fun login(username: String, password: String): LoginResponse =
         error("login is out of scope for podcast tests")

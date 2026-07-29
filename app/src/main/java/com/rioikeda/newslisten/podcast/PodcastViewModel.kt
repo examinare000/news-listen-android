@@ -95,6 +95,12 @@ class PodcastViewModel(
     /** ダウンロード済み（キャッシュ済み）Podcast ID の集合。 */
     val downloadedIds: StateFlow<Set<String>> = _downloadedIds.asStateFlow()
 
+    private val _registeredVocabularyKeys = MutableStateFlow<Set<String>>(emptySet())
+    val registeredVocabularyKeys: StateFlow<Set<String>> = _registeredVocabularyKeys.asStateFlow()
+
+    private val _savingVocabularyKeys = MutableStateFlow<Set<String>>(emptySet())
+    val savingVocabularyKeys: StateFlow<Set<String>> = _savingVocabularyKeys.asStateFlow()
+
     /**
      * 進行中ダウンロードの Job 追跡（[cancelDownloadsAndClearCache] からの明示的キャンセル用）。
      *
@@ -130,6 +136,38 @@ class PodcastViewModel(
         }
         _isLoading.value = false
     }
+
+    /** 語彙グロッサリの習得済み表示用。失敗してもPodcast本体の利用を妨げない。 */
+    suspend fun loadVocabularyRegistrations(): Unit = withContext(dispatcher) {
+        try {
+            _registeredVocabularyKeys.value = apiClient.fetchVocabulary().vocabulary
+                .mapTo(mutableSetOf()) { vocabularyKey(it.podcastId, it.term) }
+        } catch (_: ApiException) {
+            // best-effort: 未取得時はボタンを通常表示し、登録POSTの冪等性へ委ねる。
+        }
+    }
+
+    suspend fun saveVocabulary(podcastId: String, term: String): Unit = withContext(dispatcher) {
+        val key = vocabularyKey(podcastId, term)
+        if (key in _registeredVocabularyKeys.value || key in _savingVocabularyKeys.value) {
+            return@withContext
+        }
+        _savingVocabularyKeys.value += key
+        try {
+            val saved = apiClient.saveVocabulary(podcastId, term)
+            _registeredVocabularyKeys.value += vocabularyKey(saved.podcastId, saved.term)
+        } catch (_: ApiException) {
+            _errorMessage.value = VOCABULARY_SAVE_ERROR_MESSAGE
+        } finally {
+            _savingVocabularyKeys.value -= key
+        }
+    }
+
+    fun isVocabularyRegistered(podcastId: String, term: String): Boolean =
+        vocabularyKey(podcastId, term) in _registeredVocabularyKeys.value
+
+    private fun vocabularyKey(podcastId: String, term: String): String =
+        "$podcastId::${term.trim().lowercase()}"
 
     /**
      * ローカルキャッシュから、ダウンロード済み ID を同期する。
@@ -517,5 +555,6 @@ class PodcastViewModel(
 
     private companion object {
         const val POSITION_SYNC_INTERVAL_MS = 15_000L
+        const val VOCABULARY_SAVE_ERROR_MESSAGE = "語彙の登録に失敗しました"
     }
 }

@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -46,6 +47,8 @@ import com.rioikeda.newslisten.designsystem.DSFeedback
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.TranscriptSegment
 import com.rioikeda.newslisten.model.VocabularyEntry
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * 再生中の Podcast を操作するプレイヤー UI セクション。
@@ -64,6 +67,9 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
     val currentTime by viewModel.positionSeconds.collectAsState()
     val duration by viewModel.durationSeconds.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
+    val registeredVocabularyKeys by viewModel.registeredVocabularyKeys.collectAsState()
+    val savingVocabularyKeys by viewModel.savingVocabularyKeys.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
 
     var isTranscriptExpanded by remember { mutableStateOf(false) }
     var isVocabularyExpanded by remember(currentPodcast?.id) { mutableStateOf(false) }
@@ -117,10 +123,19 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
             }
 
             currentPodcast?.vocabulary?.takeIf { !it.isNullOrEmpty() }?.let { entries ->
+                val podcastId = currentPodcast?.id ?: return@let
                 VocabularySection(
+                    podcastId = podcastId,
                     entries = entries,
                     isExpanded = isVocabularyExpanded,
                     onToggle = { isVocabularyExpanded = !isVocabularyExpanded },
+                    registeredVocabularyKeys = registeredVocabularyKeys,
+                    savingVocabularyKeys = savingVocabularyKeys,
+                    onSave = { term ->
+                        coroutineScope.launch {
+                            viewModel.saveVocabulary(podcastId, term)
+                        }
+                    },
                 )
             }
 
@@ -277,9 +292,13 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
 /** 語・日本語の意味・例文を同じまとまりとして読める折りたたみグロッサリ。 */
 @Composable
 private fun VocabularySection(
+    podcastId: String,
     entries: List<VocabularyEntry>,
     isExpanded: Boolean,
     onToggle: () -> Unit,
+    registeredVocabularyKeys: Set<String>,
+    savingVocabularyKeys: Set<String>,
+    onSave: (String) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         // 要件11: タップ領域を最小48dp確保（デフォルト heightIn(min=)で可能だが、padding との相互作用考慮）
@@ -325,26 +344,46 @@ private fun VocabularySection(
                 verticalArrangement = Arrangement.spacedBy(DSSpacing.m),
             ) {
                 entries.forEach { entry ->
-                    // 要件11: 子孫の二重読み上げ回避、要件8: term を serif に
                     Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .semantics(mergeDescendants = true) {
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(DSSpacing.xs),
+                    ) {
+                        Column(
+                            modifier = Modifier.semantics(mergeDescendants = true) {
                                 contentDescription =
                                     "${entry.term}。意味: ${entry.meaningJa}。例文: ${entry.example}"
                             },
-                        verticalArrangement = Arrangement.spacedBy(DSSpacing.xs),
-                    ) {
-                        Text(entry.term, style = MaterialTheme.typography.titleLarge)
-                        Text(entry.meaningJa, style = MaterialTheme.typography.bodyLarge)
-                        // 要件8: 例文を italic に
-                        Text(
-                            entry.example,
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                            ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        ) {
+                            Text(entry.term, style = MaterialTheme.typography.titleLarge)
+                            Text(entry.meaningJa, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                entry.example,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        val key = "$podcastId::${entry.term.trim().lowercase()}"
+                        val isRegistered = key in registeredVocabularyKeys
+                        val isSaving = key in savingVocabularyKeys
+                        Button(
+                            onClick = { onSave(entry.term) },
+                            enabled = !isRegistered && !isSaving,
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .alpha(if (isRegistered) 0.5f else 1f)
+                                .semantics {
+                                    contentDescription = if (isRegistered) {
+                                        "${entry.term}は登録済み"
+                                    } else {
+                                        "${entry.term}を習得語彙に登録"
+                                    }
+                                },
+                        ) {
+                            Text(if (isRegistered) "登録済み" else if (isSaving) "登録中" else "習得")
+                        }
                     }
                 }
             }

@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -37,7 +40,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -123,6 +130,7 @@ fun SettingsScreen(
     val timeFormat by preferencesStore.timeFormat.collectAsStateWithLifecycle()
     val sfxEnabled by preferencesStore.sfxEnabled.collectAsStateWithLifecycle()
     val hapticsEnabled by preferencesStore.hapticsEnabled.collectAsStateWithLifecycle()
+    val weeklyGoalEpisodes by preferencesStore.weeklyGoalEpisodes.collectAsStateWithLifecycle()
 
     // AccountViewModel state
     val displayName by accountViewModel.displayName.collectAsStateWithLifecycle()
@@ -162,16 +170,18 @@ fun SettingsScreen(
     var selectedSpeedIndex by remember { mutableIntStateOf(-1) }
     var selectedArticleOpenModeIndex by remember { mutableIntStateOf(-1) }
     var selectedTimeFormatIndex by remember { mutableIntStateOf(-1) }
+    var selectedWeeklyGoalIndex by remember { mutableIntStateOf(-1) }
     var showRevokeOthersConfirmDialog by remember { mutableStateOf(false) }
 
     // Initialize selected indices
-    LaunchedEffect(defaultDifficulty, defaultPlaybackSpeed, articleOpenMode, timeFormat) {
+    LaunchedEffect(defaultDifficulty, defaultPlaybackSpeed, articleOpenMode, timeFormat, weeklyGoalEpisodes) {
         selectedDifficultyIndex = Difficulty.entries.indexOfFirst { it.code == defaultDifficulty }
             .takeIf { it >= 0 } ?: 0
         selectedSpeedIndex = PLAYBACK_SPEEDS.indexOfFirst { it == defaultPlaybackSpeed }
             .takeIf { it >= 0 } ?: PLAYBACK_SPEEDS.indexOfFirst { it == 1.0 }
         selectedArticleOpenModeIndex = ArticleOpenMode.entries.indexOf(articleOpenMode)
         selectedTimeFormatIndex = TimeFormat.entries.indexOf(timeFormat)
+        selectedWeeklyGoalIndex = WEEKLY_GOAL_OPTIONS.indexOf(weeklyGoalEpisodes).coerceAtLeast(0)
     }
 
     LazyColumn(
@@ -265,6 +275,42 @@ fun SettingsScreen(
                 onCheckedChange = { enabled ->
                     coroutineScope.launch { preferencesStore.setHapticsEnabled(enabled) }
                 },
+            )
+        }
+
+        item {
+            SettingsSectionHeader(stringResource(R.string.settings_section_learning_goal))
+            Text(
+                text = stringResource(R.string.settings_weekly_goal_label),
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(bottom = DSSpacing.s),
+            )
+            LearningGoalChipRow(
+                selectedIndex = selectedWeeklyGoalIndex,
+                onSelectionChange = { index ->
+                    val previous = selectedWeeklyGoalIndex
+                    selectedWeeklyGoalIndex = index
+                    coroutineScope.launch {
+                        if (!viewModel.syncWeeklyGoalEpisodes(WEEKLY_GOAL_OPTIONS[index])) {
+                            selectedWeeklyGoalIndex = previous
+                        }
+                    }
+                }
+            )
+            Text(
+                text = stringResource(
+                    R.string.settings_weekly_goal_daily_average,
+                    weeklyGoalEpisodes / 7.0,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = DSSpacing.m),
+            )
+            Text(
+                text = stringResource(R.string.settings_weekly_goal_quota_distinction),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = DSSpacing.s),
             )
         }
 
@@ -1267,5 +1313,32 @@ private fun formatSessionDateLine(
     return line
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LearningGoalChipRow(
+    selectedIndex: Int,
+    onSelectionChange: (Int) -> Unit
+) {
+    FlowRow(
+        // 単一選択グループ: TalkBack に「独立チェックボックス 4 個」でなくラジオ選択として伝える
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(DSSpacing.s),
+    ) {
+        WEEKLY_GOAL_OPTIONS.forEachIndexed { index, goal ->
+            FilterChip(
+                selected = selectedIndex == index,
+                onClick = { onSelectionChange(index) },
+                modifier = Modifier.semantics { role = Role.RadioButton },
+                label = {
+                    Text(stringResource(R.string.settings_weekly_goal_option, goal))
+                },
+            )
+        }
+    }
+}
+
 // Settings screen specific playback speeds (5-step: iOS SettingsView.swift:44)
 private val PLAYBACK_SPEEDS = listOf(0.75, 1.0, 1.25, 1.5, 2.0)
+private val WEEKLY_GOAL_OPTIONS = listOf(3, 5, 7, 10)

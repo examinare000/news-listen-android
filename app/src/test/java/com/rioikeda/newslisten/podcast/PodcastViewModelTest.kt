@@ -6,6 +6,8 @@ import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.model.QuizGradeResult
+import com.rioikeda.newslisten.model.VocabularyItemResponse
+import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.FakeFileSystem
@@ -1149,6 +1151,59 @@ class PodcastViewModelTest {
             assertEquals(500, e.code)
         }
     }
+
+    @Test
+    fun `登録語彙の初期取得成功で習得済み判定へ反映する`() = runTest {
+        val apiClient = FakePodcastApiClient(
+            onFetchVocabulary = {
+                VocabularyListResponse(
+                    vocabulary = listOf(vocabularyItem("p1", "Resilient")),
+                    count = 1,
+                )
+            },
+        )
+        val viewModel = newViewModel(apiClient, FakePlayerController())
+
+        viewModel.loadVocabularyRegistrations()
+
+        assertTrue(viewModel.isVocabularyRegistered("p1", " resilient "))
+    }
+
+    @Test
+    fun `登録語彙の初期取得失敗はPodcast表示を妨げない`() = runTest {
+        val apiClient = FakePodcastApiClient(
+            onFetchVocabulary = { throw ApiException.HttpError(500) },
+        )
+        val viewModel = newViewModel(apiClient, FakePlayerController())
+
+        viewModel.loadVocabularyRegistrations()
+
+        assertTrue(viewModel.registeredVocabularyKeys.value.isEmpty())
+        assertNull(viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `語彙の習得登録は冪等で同じ語を二重送信しない`() = runTest {
+        val apiClient = FakePodcastApiClient(
+            onSaveVocabulary = { podcastId, term -> vocabularyItem(podcastId, term) },
+        )
+        val viewModel = newViewModel(apiClient, FakePlayerController())
+
+        viewModel.saveVocabulary("p1", "Resilient")
+        viewModel.saveVocabulary("p1", " resilient ")
+
+        assertEquals(listOf("p1" to "Resilient"), apiClient.saveVocabularyCalls)
+        assertTrue(viewModel.isVocabularyRegistered("p1", "resilient"))
+    }
+
+    private fun vocabularyItem(podcastId: String, term: String) = VocabularyItemResponse(
+        vocabularyId = "${podcastId}__${term.trim().lowercase()}",
+        podcastId = podcastId,
+        term = term,
+        meaning = "回復力のある",
+        example = "The system is resilient.",
+        registeredAt = "2026-07-29T03:00:00+00:00",
+    )
 }
 
 private class FakeListeningStreakStore : ListeningStreakStore {

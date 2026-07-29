@@ -113,6 +113,13 @@
     <string name="settings_generation_quota_limited">本日の残り生成回数: %d / %d</string>
     <string name="settings_generation_quota_failed">生成残回数の取得に失敗しました</string>
 
+    <!-- 学習目標セクション（生成クォータとは明確に分離） -->
+    <string name="settings_section_learning_goal">学習目標</string>
+    <string name="settings_weekly_goal_label">週あたりの目標</string>
+    <string name="settings_weekly_goal_option">%d 本/週</string>
+    <string name="settings_weekly_goal_daily_average">1 日あたり平均 %.1f 本</string>
+    <string name="settings_weekly_goal_quota_distinction">この目標は学習ペースの目安です。生成クォータ（新しいエピソードを生成できる月あたりの上限）とは別のもので、目標を超えても・達成できなくても機能は制限されません。達成できなかった週も履歴は残ります。</string>
+
     <!-- 聴取ストリークセクション -->
     <string name="settings_section_listening_streak">聴取ストリーク</string>
     <string name="settings_listening_streak_days">%d日連続</string>
@@ -201,6 +208,36 @@
     <string name="learning_load_failed">学習データを取得できませんでした</string>
     <string name="learning_load_failed_retry">しばらくしてから再度お試しください</string>
     <string name="learning_retry_button">再試行</string>
+
+    <!-- 単語テスト画面 -->
+    <string name="vocabulary_test_screen_title">単語テスト</string>
+    <string name="vocabulary_test_preparing">単語を準備しています</string>
+    <string name="vocabulary_test_submitting">結果を記録しています</string>
+    <string name="vocabulary_test_empty">いま復習する単語はありません</string>
+    <string name="vocabulary_test_self_assessment_question">この単語を知っていますか？</string>
+    <string name="vocabulary_test_self_assessment_hint">← まだ　／　知ってる →</string>
+    <string name="vocabulary_test_button_unknown">まだ</string>
+    <string name="vocabulary_test_button_known">知ってる</string>
+    <string name="vocabulary_test_button_unknown_hint">この単語を意味選択で再確認します</string>
+    <string name="vocabulary_test_button_known_hint">次の単語へ進みます</string>
+    <string name="vocabulary_test_retest_question">意味を選んでください</string>
+    <string name="vocabulary_test_correct">正解</string>
+    <string name="vocabulary_test_correct_answer">正解: %s</string>
+    <string name="vocabulary_test_result_title">今回の記録</string>
+    <string name="vocabulary_test_result_known_count">知ってる %d語</string>
+    <string name="vocabulary_test_result_all_known">すべて知っている単語でした</string>
+    <string name="vocabulary_test_result_retest_count">再確認 %d語中 %d正解</string>
+    <string name="vocabulary_test_result_note">復習の間隔は自動で調整されます。</string>
+    <string name="vocabulary_test_button_retry">もう一度テスト</string>
+    <string name="vocabulary_test_button_back">ダッシュボードへ戻る</string>
+    <string name="vocabulary_test_load_error">単語テストを読み込めませんでした</string>
+    <string name="vocabulary_test_submit_error">結果の送信に失敗しました。お手数ですがもう一度お試しください。</string>
+    <string name="vocabulary_test_submit_retry">再試行</string>
+    <string name="vocabulary_test_progress">%d / %d</string>
+    <string name="vocabulary_test_empty_sub">次の学習タイミングで、またここに単語が届きます。</string>
+    <string name="vocabulary_test_submit_error_note">ご回答は保存されていますので、再度送信できます。</string>
+    <string name="vocabulary_test_back_to_learning">学習へ戻る</string>
+    <string name="vocabulary_test_submit_error_hint">ご回答は保存されていますので、再度送信できます。</string>
 
     <!-- 学習蓄積・クイズセクション -->
     <string name="learning_accumulation_title">学習の蓄積</string>

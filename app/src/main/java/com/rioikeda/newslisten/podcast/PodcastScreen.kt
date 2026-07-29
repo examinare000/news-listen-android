@@ -235,5 +235,6 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
     // 初期化：一覧を読み込む
     LaunchedEffect(Unit) {
         viewModel.fetchPodcasts()
+        viewModel.loadVocabularyRegistrations()
     }
 }
