@@ -31,5 +31,7 @@ data class PodcastResponse(
     @SerialName("playback_position_seconds") val playbackPositionSeconds: Double = 0.0,
     val title: String = "",
     val segments: List<TranscriptSegment>? = null,
+    val vocabulary: List<VocabularyEntry>? = null,
+    val quiz: List<QuizQuestion>? = null,
     @SerialName("created_at") val createdAt: String,
 ) : QueueItem
