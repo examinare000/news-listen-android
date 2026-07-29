@@ -3,6 +3,7 @@ package com.rioikeda.newslisten.preferences
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -55,6 +56,16 @@ class DataStorePreferencesStore(
         .map { TimeFormat.fromCode(it[KEY_TIME_FORMAT]) }
         .stateIn(scope, SharingStarted.Eagerly, TimeFormat.DEFAULT)
 
+    override val sfxEnabled: StateFlow<Boolean> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[KEY_SFX_ENABLED] ?: true }
+        .stateIn(scope, SharingStarted.Eagerly, true)
+
+    override val hapticsEnabled: StateFlow<Boolean> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[KEY_HAPTICS_ENABLED] ?: true }
+        .stateIn(scope, SharingStarted.Eagerly, true)
+
     override suspend fun setDefaultDifficulty(code: String) {
         dataStore.edit { it[KEY_DEFAULT_DIFFICULTY] = code }
     }
@@ -71,11 +82,21 @@ class DataStorePreferencesStore(
         dataStore.edit { it[KEY_TIME_FORMAT] = format.code }
     }
 
+    override suspend fun setSfxEnabled(enabled: Boolean) {
+        dataStore.edit { it[KEY_SFX_ENABLED] = enabled }
+    }
+
+    override suspend fun setHapticsEnabled(enabled: Boolean) {
+        dataStore.edit { it[KEY_HAPTICS_ENABLED] = enabled }
+    }
+
     private companion object {
         const val DEFAULT_PLAYBACK_SPEED = 1.0
         val KEY_DEFAULT_DIFFICULTY = stringPreferencesKey("default_difficulty")
         val KEY_DEFAULT_PLAYBACK_SPEED = doublePreferencesKey("default_playback_speed")
         val KEY_ARTICLE_OPEN_MODE = stringPreferencesKey("article_open_mode")
         val KEY_TIME_FORMAT = stringPreferencesKey("time_format")
+        val KEY_SFX_ENABLED = booleanPreferencesKey("sfx_enabled")
+        val KEY_HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
     }
 }

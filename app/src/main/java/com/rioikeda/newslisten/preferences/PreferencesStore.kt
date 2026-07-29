@@ -27,6 +27,12 @@ interface PreferencesStore {
     /** 記事の日付表記。既定値 [TimeFormat.DEFAULT]（ABSOLUTE）。 */
     val timeFormat: StateFlow<TimeFormat>
 
+    /** 短い肯定音を有効にする端末ローカル設定。既定 true。 */
+    val sfxEnabled: StateFlow<Boolean>
+
+    /** 操作触覚を有効にする端末ローカル設定。既定 true。 */
+    val hapticsEnabled: StateFlow<Boolean>
+
     /** 既定の英語難易度を更新し永続化する。 */
     suspend fun setDefaultDifficulty(code: String)
 
@@ -38,4 +44,8 @@ interface PreferencesStore {
 
     /** 記事の日付表記を更新し永続化する。 */
     suspend fun setTimeFormat(format: TimeFormat)
+
+    suspend fun setSfxEnabled(enabled: Boolean)
+
+    suspend fun setHapticsEnabled(enabled: Boolean)
 }

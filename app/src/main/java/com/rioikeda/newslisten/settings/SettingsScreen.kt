@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -120,6 +121,8 @@ fun SettingsScreen(
     val defaultPlaybackSpeed by preferencesStore.defaultPlaybackSpeed.collectAsStateWithLifecycle()
     val articleOpenMode by preferencesStore.articleOpenMode.collectAsStateWithLifecycle()
     val timeFormat by preferencesStore.timeFormat.collectAsStateWithLifecycle()
+    val sfxEnabled by preferencesStore.sfxEnabled.collectAsStateWithLifecycle()
+    val hapticsEnabled by preferencesStore.hapticsEnabled.collectAsStateWithLifecycle()
 
     // AccountViewModel state
     val displayName by accountViewModel.displayName.collectAsStateWithLifecycle()
@@ -244,6 +247,24 @@ fun SettingsScreen(
                         preferencesStore.setTimeFormat(TimeFormat.entries[index])
                     }
                 }
+            )
+        }
+
+        item {
+            SettingsSectionHeader("フィードバック")
+            FeedbackToggleRow(
+                label = "効果音",
+                checked = sfxEnabled,
+                onCheckedChange = { enabled ->
+                    coroutineScope.launch { preferencesStore.setSfxEnabled(enabled) }
+                },
+            )
+            FeedbackToggleRow(
+                label = "ハプティクス",
+                checked = hapticsEnabled,
+                onCheckedChange = { enabled ->
+                    coroutineScope.launch { preferencesStore.setHapticsEnabled(enabled) }
+                },
             )
         }
 
@@ -1011,6 +1032,25 @@ fun SettingsScreen(
                     Text(stringResource(R.string.settings_sessions_confirm_revoke_others_cancel))
                 }
             }
+        )
+    }
+}
+
+@Composable
+private fun FeedbackToggleRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
         )
     }
 }

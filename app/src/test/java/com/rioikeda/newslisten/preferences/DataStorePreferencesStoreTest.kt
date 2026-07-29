@@ -9,6 +9,8 @@ import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
@@ -19,6 +21,23 @@ import java.io.File
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DataStorePreferencesStoreTest {
+    @Test
+    fun `フィードバック設定は既定で有効でDataStoreへ永続化する`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val file = File.createTempFile("prefs_feedback", ".preferences_pb").apply { deleteOnExit() }
+        val store = dispatcher.newStore(file)
+        advanceUntilIdle()
+
+        assertTrue(store.sfxEnabled.value)
+        assertTrue(store.hapticsEnabled.value)
+
+        store.setSfxEnabled(false)
+        store.setHapticsEnabled(false)
+        advanceUntilIdle()
+
+        assertFalse(store.sfxEnabled.value)
+        assertFalse(store.hapticsEnabled.value)
+    }
 
     /**
      * [DataStore][androidx.datastore.core.DataStore] は同一ファイルへの同時アクティブインスタンスを

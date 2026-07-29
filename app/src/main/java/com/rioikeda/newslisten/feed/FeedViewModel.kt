@@ -35,6 +35,12 @@ class FeedViewModel(
      */
     private val preferencesStore: PreferencesStore,
 ) {
+    /**
+     * Star 操作の確定ジェスチャ直後に呼ぶコールバック（フィードバック発火用）。
+     * 要件3: swipeConfirm の発火位置をサーバ commit 時から確定ジェスチャの瞬間へ移動。
+     * FeedScreen で feedback をキャプチャ後に設定される。
+     */
+    var onStarConfirmed: () -> Unit = {}
     private val _articles = MutableStateFlow<List<ArticleResponse>>(emptyList())
     val articles: StateFlow<List<ArticleResponse>> = _articles.asStateFlow()
 
@@ -124,6 +130,9 @@ class FeedViewModel(
      * （連続スワイプ時に新しい操作の反映が前操作の通信完了を待たないようにするため）。
      *
      * 正本: FeedViewModel.swift:80-93。
+     *
+     * 要件3: Star 操作の確定ジェスチャ直後に onStarConfirmed フィードバックを発火。
+     * サーバ commit 前（ここで確定ジェスチャ直後）に鳴らす。
      */
     private suspend fun stage(article: ArticleResponse, kind: PendingArticleAction.Kind, difficulty: String? = null) {
         val previous = _pendingAction.value
@@ -131,6 +140,10 @@ class FeedViewModel(
         if (index >= 0) {
             _articles.value = _articles.value.toMutableList().apply { removeAt(index) }
             _pendingAction.value = PendingArticleAction(article, index, kind, difficulty)
+            // Star 操作の確定ジェスチャ直後にフィードバック発火（Dismiss は付けない）
+            if (kind == PendingArticleAction.Kind.STAR) {
+                onStarConfirmed()
+            }
         } else {
             // 対象がリフレッシュ等で一覧から消えている。新規 staging はせず、直前の保留のみ確定する。
             _pendingAction.value = null
@@ -170,6 +183,9 @@ class FeedViewModel(
     /**
      * 指定の保留操作をサーバへ送信する。失敗時は記事を元の位置へ戻し [errorMessage] に反映する。
      * 正本: FeedViewModel.swift:112-131。
+     *
+     * WHY swipeConfirm は stage() で既に発火: 要件3により、サーバ commit 成功時ではなく
+     * 確定ジェスチャ直後（stage() 時）に発火させる。ここでは commit 結果にのみ対応。
      */
     private suspend fun commit(pending: PendingArticleAction) {
         try {
