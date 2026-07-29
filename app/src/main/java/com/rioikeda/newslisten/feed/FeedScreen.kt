@@ -59,6 +59,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.designsystem.DSSpacing
+import com.rioikeda.newslisten.designsystem.DSFeedback
+import com.rioikeda.newslisten.designsystem.DSFeedbackVocabulary
 import com.rioikeda.newslisten.designsystem.RelevanceBar
 import com.rioikeda.newslisten.model.ArticleResponse
 import com.rioikeda.newslisten.preferences.TimeFormat
@@ -74,7 +76,7 @@ import java.time.Instant
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FeedScreen(viewModel: FeedViewModel) {
+fun FeedScreen(viewModel: FeedViewModel, feedback: DSFeedback) {
     val articles by viewModel.articles.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -92,6 +94,13 @@ fun FeedScreen(viewModel: FeedViewModel) {
     var isSelectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var expandedId by remember { mutableStateOf<String?>(null) }
+
+    // 要件3: Star 操作の確定ジェスチャ直後に swipeConfirm フィードバック発火
+    LaunchedEffect(feedback) {
+        viewModel.onStarConfirmed = {
+            feedback.play(DSFeedbackVocabulary.SWIPE_CONFIRM)
+        }
+    }
 
     // ツールバー色：MaterialTheme.colorScheme.background（ダークテーマ対応）
     val toolbarColor = MaterialTheme.colorScheme.background.toArgb()

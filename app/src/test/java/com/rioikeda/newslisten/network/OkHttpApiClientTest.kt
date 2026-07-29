@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.network
 
 import com.rioikeda.newslisten.model.ClientErrorReport
+import com.rioikeda.newslisten.model.QuizAnswerRequest
 import com.rioikeda.newslisten.model.StarRequest
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.buildJsonObject
@@ -397,6 +398,41 @@ class OkHttpApiClientTest {
         assertEquals("/users/me/listening-streak", server.takeRequest().path)
         assertEquals(3, response.currentStreakDays)
         assertTrue(response.todayListened)
+    }
+
+    @Test
+    fun `完聴記録は空ボディのPOSTで送る`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        client.markCompleted("p1")
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/podcasts/p1/completed", recorded.path)
+    }
+
+    @Test
+    fun `クイズ回答をPOSTして採点結果を返す`() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """
+                    {
+                      "correct_count":1,"total":1,"correct_rate":1.0,
+                      "results":[
+                        {"question_index":0,"selected_index":2,"correct_index":2,"is_correct":true}
+                      ]
+                    }
+                """.trimIndent()
+            )
+        )
+
+        val response = client.submitQuizAnswers("p1", QuizAnswerRequest(listOf(2)))
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/podcasts/p1/quiz-answers", recorded.path)
+        assertEquals("""{"answers":[2]}""", recorded.body.readUtf8())
+        assertEquals(1, response.correctCount)
     }
 
     // --- フェーズ11 P11 Task1: アカウント管理 ---

@@ -1,7 +1,13 @@
 package com.rioikeda.newslisten.podcast
 
+import com.rioikeda.newslisten.engagement.ListeningStreakStore
+import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.model.QuizAnswerResponse
+import com.rioikeda.newslisten.model.QuizGradeResult
+import com.rioikeda.newslisten.model.VocabularyItemResponse
+import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.FakeFileSystem
@@ -9,6 +15,8 @@ import com.rioikeda.newslisten.network.StubNetworkMonitor
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -56,8 +64,16 @@ class PodcastViewModelTest {
         playerController: FakePlayerController,
         cacheManager: AudioCacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
         networkMonitor: StubNetworkMonitor = StubNetworkMonitor(initialIsOnline = true),
+        listeningStreakStore: ListeningStreakStore? = null,
     ): PodcastViewModel =
-        PodcastViewModel(apiClient, playerController, cacheManager, networkMonitor, StandardTestDispatcher(testScheduler))
+        PodcastViewModel(
+            apiClient,
+            playerController,
+            cacheManager,
+            networkMonitor,
+            StandardTestDispatcher(testScheduler),
+            listeningStreakStore,
+        )
 
     // --- fetchPodcasts ---
 
@@ -417,28 +433,61 @@ class PodcastViewModelTest {
     // --- 再生完了で停止 ---
 
     @Test
-    fun 再生完了イベントでstopPlaybackが呼ばれタイマーが止まる() = runTest {
+    fun `再生完了イベントではキュー遷移前のPodcast IDを完聴記録する`() = runTest {
         val fresh = podcast(id = "p1")
+        lateinit var viewModel: PodcastViewModel
+        var currentIdWhenMarked: String? = null
         val apiClient = FakePodcastApiClient(
             onFetchPodcast = { fresh },
             onUpdatePlaybackPosition = { _, _ -> fresh },
+            onMarkCompleted = { currentIdWhenMarked = viewModel.currentPodcast.value?.id },
         )
         val player = FakePlayerController()
-        val viewModel = newViewModel(apiClient, player)
+        viewModel = newViewModel(apiClient, player)
         viewModel.play(podcast(id = "p1"))
         player.setPosition(99.0)
 
         player.completePlayback()
         runCurrent()
 
+        assertEquals(listOf("p1"), apiClient.markCompletedCalls)
+        assertEquals("p1", currentIdWhenMarked)
         assertEquals(1, player.stopCallCount)
-        assertNull(viewModel.currentPodcast.value)
+        assertEquals(fresh, viewModel.currentPodcast.value)
         assertEquals(listOf("p1" to 99.0), apiClient.updatePlaybackPositionCalls)
 
         // タイマーは既に止まっているため、時間を進めても追加の PATCH は飛ばない。
         advanceTimeBy(30_000)
         runCurrent()
         assertEquals(listOf("p1" to 99.0), apiClient.updatePlaybackPositionCalls)
+    }
+
+    @Test
+    fun `完聴記録が失敗しても次のPodcastへ遷移してstreakを再取得する`() = runTest {
+        val p1 = podcast(id = "p1")
+        val p2 = podcast(id = "p2")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> if (id == "p1") p1 else p2 },
+            onUpdatePlaybackPosition = { id, _ -> if (id == "p1") p1 else p2 },
+            onMarkCompleted = { throw ApiException.NetworkError(IOException("offline")) },
+        )
+        val streakStore = FakeListeningStreakStore()
+        val player = FakePlayerController()
+        val viewModel = newViewModel(
+            apiClient = apiClient,
+            playerController = player,
+            listeningStreakStore = streakStore,
+        )
+        viewModel.playNow(p1)
+        viewModel.playNext(p2)
+
+        player.completePlayback()
+        runCurrent()
+
+        assertEquals(p2, viewModel.currentPodcast.value)
+        assertEquals(1, streakStore.refreshCallCount)
+        assertEquals(2, player.playCallCount)
+        viewModel.stopPlayback()
     }
 
     // --- PlayerController の release()/stop() 契約
@@ -700,7 +749,7 @@ class PodcastViewModelTest {
     }
 
     @Test
-    fun 再生完了でキュー末尾なら停止する() = runTest {
+    fun `再生完了でキュー末尾ならプレイヤーだけ停止してPodcastを保持する`() = runTest {
         val p1 = podcast(id = "p1")
         val apiClient = queueApiClient(p1)
         val player = FakePlayerController()
@@ -711,7 +760,7 @@ class PodcastViewModelTest {
         player.completePlayback()
         runCurrent()
 
-        assertNull(viewModel.currentPodcast.value)
+        assertEquals(p1, viewModel.currentPodcast.value)
         assertEquals(1, player.stopCallCount)
     }
 
@@ -1001,5 +1050,169 @@ class PodcastViewModelTest {
 
         assertFalse(cacheManager.isCached("p1"))
         assertEquals(emptySet<String>(), viewModel.downloadedIds.value)
+    }
+
+    // --- submitQuizAnswers（要件1: podcastId 明示化） ---
+
+    @Test
+    fun submitQuizAnswersは指定のpodcastIdで送信する() = runTest {
+        val quizResponse = QuizAnswerResponse(
+            correctCount = 2,
+            total = 3,
+            correctRate = 2.0 / 3.0,
+            results = listOf(
+                QuizGradeResult(
+                    questionIndex = 0,
+                    isCorrect = true,
+                    correctIndex = 0,
+                    selectedIndex = 0,
+                ),
+                QuizGradeResult(
+                    questionIndex = 1,
+                    isCorrect = true,
+                    correctIndex = 1,
+                    selectedIndex = 1,
+                ),
+                QuizGradeResult(
+                    questionIndex = 2,
+                    isCorrect = false,
+                    correctIndex = 2,
+                    selectedIndex = 0,
+                ),
+            ),
+        )
+        var submittedId = ""
+        val apiClient = FakePodcastApiClient(
+            onSubmitQuizAnswers = { podcastId, _ ->
+                submittedId = podcastId
+                quizResponse
+            },
+        )
+        val viewModel = newViewModel(apiClient, FakePlayerController())
+
+        val response = viewModel.submitQuizAnswers("podcast-1", listOf(0, 1, 0))
+
+        assertEquals("podcast-1", submittedId)
+        assertEquals(2, response.correctCount)
+        assertEquals(3, response.total)
+    }
+
+    @Test
+    fun submitQuizAnswersの送信前にcurrentPodcastが変わっても指定podcastIdで送信する() = runTest {
+        val p1 = podcast(id = "p1")
+        val p2 = podcast(id = "p2")
+        val quizResponse = QuizAnswerResponse(
+            correctCount = 1,
+            total = 1,
+            correctRate = 1.0,
+            results = listOf(
+                QuizGradeResult(
+                    questionIndex = 0,
+                    isCorrect = true,
+                    correctIndex = 0,
+                    selectedIndex = 0,
+                ),
+            ),
+        )
+        var submittedId = ""
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> if (id == "p1") p1 else p2 },
+            onSubmitQuizAnswers = { podcastId, _ ->
+                submittedId = podcastId
+                quizResponse
+            },
+            onUpdatePlaybackPosition = { id, _ -> if (id == "p1") p1 else p2 },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+
+        viewModel.play(p1)
+        viewModel.play(p2)
+
+        val response = viewModel.submitQuizAnswers("p1", listOf(0))
+
+        assertEquals("p1", submittedId)
+        assertEquals(p2, viewModel.currentPodcast.value)
+
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun submitQuizAnswersが失敗時は例外をスロー() = runTest {
+        val apiClient = FakePodcastApiClient(
+            onSubmitQuizAnswers = { _, _ -> throw ApiException.HttpError(500) },
+        )
+        val viewModel = newViewModel(apiClient, FakePlayerController())
+
+        try {
+            viewModel.submitQuizAnswers("podcast-1", listOf(0))
+            throw AssertionError("例外をスロー予定")
+        } catch (e: ApiException.HttpError) {
+            assertEquals(500, e.code)
+        }
+    }
+
+    @Test
+    fun `登録語彙の初期取得成功で習得済み判定へ反映する`() = runTest {
+        val apiClient = FakePodcastApiClient(
+            onFetchVocabulary = {
+                VocabularyListResponse(
+                    vocabulary = listOf(vocabularyItem("p1", "Resilient")),
+                    count = 1,
+                )
+            },
+        )
+        val viewModel = newViewModel(apiClient, FakePlayerController())
+
+        viewModel.loadVocabularyRegistrations()
+
+        assertTrue(viewModel.isVocabularyRegistered("p1", " resilient "))
+    }
+
+    @Test
+    fun `登録語彙の初期取得失敗はPodcast表示を妨げない`() = runTest {
+        val apiClient = FakePodcastApiClient(
+            onFetchVocabulary = { throw ApiException.HttpError(500) },
+        )
+        val viewModel = newViewModel(apiClient, FakePlayerController())
+
+        viewModel.loadVocabularyRegistrations()
+
+        assertTrue(viewModel.registeredVocabularyKeys.value.isEmpty())
+        assertNull(viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `語彙の習得登録は冪等で同じ語を二重送信しない`() = runTest {
+        val apiClient = FakePodcastApiClient(
+            onSaveVocabulary = { podcastId, term -> vocabularyItem(podcastId, term) },
+        )
+        val viewModel = newViewModel(apiClient, FakePlayerController())
+
+        viewModel.saveVocabulary("p1", "Resilient")
+        viewModel.saveVocabulary("p1", " resilient ")
+
+        assertEquals(listOf("p1" to "Resilient"), apiClient.saveVocabularyCalls)
+        assertTrue(viewModel.isVocabularyRegistered("p1", "resilient"))
+    }
+
+    private fun vocabularyItem(podcastId: String, term: String) = VocabularyItemResponse(
+        vocabularyId = "${podcastId}__${term.trim().lowercase()}",
+        podcastId = podcastId,
+        term = term,
+        meaning = "回復力のある",
+        example = "The system is resilient.",
+        registeredAt = "2026-07-29T03:00:00+00:00",
+    )
+}
+
+private class FakeListeningStreakStore : ListeningStreakStore {
+    override val listeningStreak: StateFlow<ListeningStreakResponse?> = MutableStateFlow(null)
+    override val loadFailed: StateFlow<Boolean> = MutableStateFlow(false)
+    var refreshCallCount = 0
+        private set
+
+    override suspend fun refresh() {
+        refreshCallCount++
     }
 }

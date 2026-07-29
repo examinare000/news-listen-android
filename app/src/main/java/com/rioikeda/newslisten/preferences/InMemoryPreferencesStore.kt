@@ -16,6 +16,10 @@ class InMemoryPreferencesStore(
     initialDefaultPlaybackSpeed: Double = DEFAULT_PLAYBACK_SPEED,
     initialArticleOpenMode: ArticleOpenMode = ArticleOpenMode.DEFAULT,
     initialTimeFormat: TimeFormat = TimeFormat.DEFAULT,
+    initialSfxEnabled: Boolean = true,
+    initialHapticsEnabled: Boolean = true,
+    initialWeeklyGoalEpisodes: Int = 3,
+    initialSeenAchievementIds: Set<String> = emptySet(),
 ) : PreferencesStore {
     private val _defaultDifficulty = MutableStateFlow(initialDefaultDifficulty)
     override val defaultDifficulty: StateFlow<String> = _defaultDifficulty.asStateFlow()
@@ -28,6 +32,18 @@ class InMemoryPreferencesStore(
 
     private val _timeFormat = MutableStateFlow(initialTimeFormat)
     override val timeFormat: StateFlow<TimeFormat> = _timeFormat.asStateFlow()
+
+    private val _sfxEnabled = MutableStateFlow(initialSfxEnabled)
+    override val sfxEnabled: StateFlow<Boolean> = _sfxEnabled.asStateFlow()
+
+    private val _hapticsEnabled = MutableStateFlow(initialHapticsEnabled)
+    override val hapticsEnabled: StateFlow<Boolean> = _hapticsEnabled.asStateFlow()
+
+    private val _weeklyGoalEpisodes = MutableStateFlow(initialWeeklyGoalEpisodes)
+    override val weeklyGoalEpisodes: StateFlow<Int> = _weeklyGoalEpisodes.asStateFlow()
+
+    private val _seenAchievementIds = MutableStateFlow(initialSeenAchievementIds)
+    override val seenAchievementIds: StateFlow<Set<String>> = _seenAchievementIds.asStateFlow()
 
     override suspend fun setDefaultDifficulty(code: String) {
         _defaultDifficulty.value = code
@@ -43,6 +59,22 @@ class InMemoryPreferencesStore(
 
     override suspend fun setTimeFormat(format: TimeFormat) {
         _timeFormat.value = format
+    }
+
+    override suspend fun setSfxEnabled(enabled: Boolean) {
+        _sfxEnabled.value = enabled
+    }
+
+    override suspend fun setHapticsEnabled(enabled: Boolean) {
+        _hapticsEnabled.value = enabled
+    }
+
+    override suspend fun setWeeklyGoalEpisodes(episodes: Int) {
+        _weeklyGoalEpisodes.value = episodes
+    }
+
+    override suspend fun markAchievementsSeen(ids: Set<String>) {
+        _seenAchievementIds.value += ids
     }
 
     private companion object {

@@ -123,6 +123,7 @@ class AuthViewModel(
             val preferences = apiClient.fetchPreferences()
             preferencesStore.setDefaultDifficulty(preferences.defaultDifficulty)
             preferencesStore.setDefaultPlaybackSpeed(preferences.defaultPlaybackSpeed)
+            preferences.weeklyGoalEpisodes?.let { preferencesStore.setWeeklyGoalEpisodes(it) }
             _preferencesSyncFailed.value = false
         } catch (e: ApiException) {
             _preferencesSyncFailed.value = true

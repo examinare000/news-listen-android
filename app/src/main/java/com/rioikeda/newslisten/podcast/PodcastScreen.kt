@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSSpacing
+import com.rioikeda.newslisten.designsystem.DSFeedback
 import com.rioikeda.newslisten.model.PodcastResponse
 
 /**
@@ -53,7 +54,7 @@ import com.rioikeda.newslisten.model.PodcastResponse
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun PodcastScreen(viewModel: PodcastViewModel) {
+fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
     val podcasts by viewModel.podcasts.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
@@ -201,7 +202,7 @@ fun PodcastScreen(viewModel: PodcastViewModel) {
 
         // プレイヤー表示エリア（再生中のときのみ）
         if (currentPodcast != null) {
-            AudioPlayerSection(viewModel = viewModel)
+            AudioPlayerSection(viewModel = viewModel, feedback = feedback)
         }
     }
 
@@ -234,5 +235,6 @@ fun PodcastScreen(viewModel: PodcastViewModel) {
     // 初期化：一覧を読み込む
     LaunchedEffect(Unit) {
         viewModel.fetchPodcasts()
+        viewModel.loadVocabularyRegistrations()
     }
 }

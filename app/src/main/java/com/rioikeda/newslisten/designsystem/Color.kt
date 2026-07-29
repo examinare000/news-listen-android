@@ -1,7 +1,9 @@
 package com.rioikeda.newslisten.designsystem
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 // iOS Editorial デザインシステムの色トークン
@@ -19,6 +21,7 @@ private val DSOnAccentLight = Color(0xFFFBF9F4)
 // accentSoft ライト: accent に alpha 0.10 を適用（DSColor.swift 準拠）
 private val DSAccentSoftLight = DSAccentLight.copy(alpha = 0.10f)
 private val DSDangerLight = Color(0xFFC0392B)
+private val DSSuccessLight = Color(0xFF4F7A3A)
 private val DSStarLight = Color(0xFFC8902E) // 金
 
 // ダークモード
@@ -33,6 +36,7 @@ private val DSOnAccentDark = Color(0xFF14130F)
 // accentSoft ダーク: accent に alpha 0.16 を適用（DSColor.swift 準拠）
 private val DSAccentSoftDark = DSAccentDark.copy(alpha = 0.16f)
 private val DSDangerDark = Color(0xFFE57373)
+private val DSSuccessDark = Color(0xFF8BB87A)
 private val DSStarDark = Color(0xFFE0B65C) // 金
 
 // Material3 ColorScheme の構築（android-design.md §5.2 の写像に従う）
@@ -84,3 +88,12 @@ internal val DarkColorScheme = darkColorScheme(
     onSecondaryContainer = DSInkSecondaryDark,
 )
 
+/** Material の標準スロットにない Editorial 成功色を design system から追加提供する。
+ *
+ * WHY 背景色ベース判定: 参照比較（this == LightColorScheme）は ColorScheme.equals() が
+ * 値の等価性チェックを行うため、参照同一性が保証されない不安定な判定だった。
+ * 背景色 paper で判定することで、テーマモード（light vs dark）を確実に識別。
+ * より安定した ColorScheme 判定パターン。
+ */
+val androidx.compose.material3.ColorScheme.success: Color
+    get() = if (this.background == DSPaperLight) DSSuccessLight else DSSuccessDark

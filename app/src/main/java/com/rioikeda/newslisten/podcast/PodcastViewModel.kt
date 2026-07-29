@@ -3,7 +3,10 @@ package com.rioikeda.newslisten.podcast
 import com.rioikeda.newslisten.core.PlaybackQueue
 import com.rioikeda.newslisten.core.PlaybackSource
 import com.rioikeda.newslisten.core.resolvePlaybackSource
+import com.rioikeda.newslisten.engagement.ListeningStreakStore
 import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.model.QuizAnswerRequest
+import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.AudioCacheException
@@ -41,6 +44,7 @@ class PodcastViewModel(
     private val cacheManager: AudioCacheManager,
     private val networkMonitor: NetworkMonitoring,
     private val dispatcher: CoroutineDispatcher,
+    private val listeningStreakStore: ListeningStreakStore? = null,
 ) {
     // 位置同期タイマー（15秒毎）を動かすための内部スコープ。play()/suspend 関数の呼び出しを跨いで
     // 生存する必要があるため、ViewModel 自身が Dispatcher から生成して保持する
@@ -91,6 +95,12 @@ class PodcastViewModel(
     /** ダウンロード済み（キャッシュ済み）Podcast ID の集合。 */
     val downloadedIds: StateFlow<Set<String>> = _downloadedIds.asStateFlow()
 
+    private val _registeredVocabularyKeys = MutableStateFlow<Set<String>>(emptySet())
+    val registeredVocabularyKeys: StateFlow<Set<String>> = _registeredVocabularyKeys.asStateFlow()
+
+    private val _savingVocabularyKeys = MutableStateFlow<Set<String>>(emptySet())
+    val savingVocabularyKeys: StateFlow<Set<String>> = _savingVocabularyKeys.asStateFlow()
+
     /**
      * 進行中ダウンロードの Job 追跡（[cancelDownloadsAndClearCache] からの明示的キャンセル用）。
      *
@@ -126,6 +136,38 @@ class PodcastViewModel(
         }
         _isLoading.value = false
     }
+
+    /** 語彙グロッサリの習得済み表示用。失敗してもPodcast本体の利用を妨げない。 */
+    suspend fun loadVocabularyRegistrations(): Unit = withContext(dispatcher) {
+        try {
+            _registeredVocabularyKeys.value = apiClient.fetchVocabulary().vocabulary
+                .mapTo(mutableSetOf()) { vocabularyKey(it.podcastId, it.term) }
+        } catch (_: ApiException) {
+            // best-effort: 未取得時はボタンを通常表示し、登録POSTの冪等性へ委ねる。
+        }
+    }
+
+    suspend fun saveVocabulary(podcastId: String, term: String): Unit = withContext(dispatcher) {
+        val key = vocabularyKey(podcastId, term)
+        if (key in _registeredVocabularyKeys.value || key in _savingVocabularyKeys.value) {
+            return@withContext
+        }
+        _savingVocabularyKeys.value += key
+        try {
+            val saved = apiClient.saveVocabulary(podcastId, term)
+            _registeredVocabularyKeys.value += vocabularyKey(saved.podcastId, saved.term)
+        } catch (_: ApiException) {
+            _errorMessage.value = VOCABULARY_SAVE_ERROR_MESSAGE
+        } finally {
+            _savingVocabularyKeys.value -= key
+        }
+    }
+
+    fun isVocabularyRegistered(podcastId: String, term: String): Boolean =
+        vocabularyKey(podcastId, term) in _registeredVocabularyKeys.value
+
+    private fun vocabularyKey(podcastId: String, term: String): String =
+        "$podcastId::${term.trim().lowercase()}"
 
     /**
      * ローカルキャッシュから、ダウンロード済み ID を同期する。
@@ -304,6 +346,18 @@ class PodcastViewModel(
      * stopInternal() を呼び、状態を整合させる。
      */
     private suspend fun handlePlaybackEnded() {
+        // キューを書き換える前に完聴対象を確定する。currentPodcast は次の play() で差し替わるため、
+        // advance 後に読むと次エピソードを誤って完聴扱いする。
+        val completedPodcastId = _currentPodcast.value?.id
+        if (completedPodcastId != null) {
+            try {
+                apiClient.markCompleted(completedPodcastId)
+            } catch (_: ApiException) {
+                // 完聴記録は best-effort。失敗しても次エピソードへの遷移を止めない。
+            }
+            listeningStreakStore?.refresh()
+        }
+
         val (advanced, next) = _queue.value.advance()
         _queue.value = advanced
         val gateError = next?.let { playabilityError(it) }
@@ -311,7 +365,7 @@ class PodcastViewModel(
             play(next)
         } else {
             if (gateError != null) _errorMessage.value = gateError
-            stopInternal()
+            stopInternal(keepCurrentPodcast = next == null)
         }
     }
 
@@ -424,6 +478,17 @@ class PodcastViewModel(
     }
 
     /**
+     * 指定 Podcast の回答をサーバーへ送り、採点結果を返す。
+     *
+     * WHY podcastId を明示的に引数化: iOS PodcastViewModel.swift:411 と同形。シートが開かれた時点の
+     * Podcast を保持し、その後 currentPodcast が変わってもシート内では元の podcastId で一貫性を保つ。
+     * AudioPlayerSection は quizPodcast のスナップショット方式で実装する（要件1）。
+     */
+    suspend fun submitQuizAnswers(podcastId: String, answers: List<Int>): QuizAnswerResponse = withContext(dispatcher) {
+        apiClient.submitQuizAnswers(podcastId, QuizAnswerRequest(answers))
+    }
+
+    /**
      * [stopPlayback] の本体。既に dispatcher コンテキスト内（play 等）から直接呼べるよう分離。
      *
      * WHY: 何も再生していない（[_currentPodcast] が null）ならここで何もせず抜ける。
@@ -434,14 +499,16 @@ class PodcastViewModel(
      * あり、release() は「以後再利用不可」の終端操作（[PlayerController] の doc 参照）。
      * ここは「次のエピソードのために止める」操作なので stop() が正しい。
      */
-    private suspend fun stopInternal() {
+    private suspend fun stopInternal(keepCurrentPodcast: Boolean = false) {
         val podcastId = _currentPodcast.value?.id ?: return
         // 停止直前の位置を最後に一度だけ同期する（iOS stopPlayback():355 転記）。
         syncPosition(podcastId)
         syncJob?.cancel()
         syncJob = null
         playerController.stop()
-        _currentPodcast.value = null
+        if (!keepCurrentPodcast) {
+            _currentPodcast.value = null
+        }
     }
 
     /**
@@ -488,5 +555,6 @@ class PodcastViewModel(
 
     private companion object {
         const val POSITION_SYNC_INTERVAL_MS = 15_000L
+        const val VOCABULARY_SAVE_ERROR_MESSAGE = "語彙の登録に失敗しました"
     }
 }

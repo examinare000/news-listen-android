@@ -6,6 +6,7 @@ import com.rioikeda.newslisten.model.FeaturedSitesResponse
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
+import com.rioikeda.newslisten.model.LearningDashboardResponse
 import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.OnboardingStatusResponse
 import com.rioikeda.newslisten.model.PasskeyCredentialsListResponse
@@ -13,11 +14,19 @@ import com.rioikeda.newslisten.model.PasskeyOptionsResponse
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
+import com.rioikeda.newslisten.model.QuizAnswerRequest
+import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.model.RevokeSessionsResponse
 import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.model.SessionsListResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.model.UserResponse
+import com.rioikeda.newslisten.model.DeleteVocabularyResponse
+import com.rioikeda.newslisten.model.VocabularyItemResponse
+import com.rioikeda.newslisten.model.VocabularyListResponse
+import com.rioikeda.newslisten.model.VocabularyTestResultItemRequest
+import com.rioikeda.newslisten.model.VocabularyTestResultResponse
+import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -25,7 +34,7 @@ import kotlinx.serialization.json.JsonObject
  *
  * 正本: ios/NewsListenApp/NewsListenApp/Networking/APIClient.swift のミラー。
  */
-interface ApiClient {
+interface ApiClient : LearningApi, VocabularyTestApi {
     /** ログインしてセッショントークンとユーザー情報を取得する。 */
     suspend fun login(username: String, password: String): LoginResponse
 
@@ -52,6 +61,16 @@ interface ApiClient {
 
     /** 指定 Podcast の再生位置を更新する。レスポンスは更新後の Podcast 全体。 */
     suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse
+
+    /** 完聴を best-effort で記録する呼び出し元のための API。 */
+    suspend fun markCompleted(id: String) {
+        error("markCompleted is not stubbed for id=$id")
+    }
+
+    /** 公開設問への回答をサーバーで採点する。 */
+    suspend fun submitQuizAnswers(id: String, request: QuizAnswerRequest): QuizAnswerResponse {
+        error("submitQuizAnswers is not stubbed for id=$id")
+    }
 
     /** ユーザー設定選択（難易度・再生速度）を取得する。 */
     suspend fun fetchPreferences(): PreferencesResponse
@@ -106,6 +125,36 @@ interface ApiClient {
 
     /** 聴取ストリーク（連続聴取日数）を取得する（フェーズ10 P10、issue #165）。 */
     suspend fun fetchListeningStreak(): ListeningStreakResponse
+
+    override suspend fun fetchLearningDashboard(): LearningDashboardResponse {
+        error("fetchLearningDashboard is not stubbed")
+    }
+
+    suspend fun updateWeeklyGoalEpisodes(weeklyGoalEpisodes: Int): PreferencesResponse {
+        error("updateWeeklyGoalEpisodes is not stubbed for goal=$weeklyGoalEpisodes")
+    }
+
+    suspend fun saveVocabulary(podcastId: String, term: String): VocabularyItemResponse {
+        error("saveVocabulary is not stubbed for podcastId=$podcastId term=$term")
+    }
+
+    override suspend fun fetchVocabulary(): VocabularyListResponse {
+        error("fetchVocabulary is not stubbed")
+    }
+
+    suspend fun deleteVocabulary(vocabularyId: String): DeleteVocabularyResponse {
+        error("deleteVocabulary is not stubbed for vocabularyId=$vocabularyId")
+    }
+
+    override suspend fun fetchVocabularyTestSession(): VocabularyTestSessionResponse {
+        error("fetchVocabularyTestSession is not stubbed")
+    }
+
+    override suspend fun submitVocabularyTestResults(
+        results: List<VocabularyTestResultItemRequest>,
+    ): VocabularyTestResultResponse {
+        error("submitVocabularyTestResults is not stubbed")
+    }
 
     /** プロフィール（表示名）を更新し、更新後のユーザー情報を返す（フェーズ11 P11）。 */
     suspend fun updateProfile(displayName: String): UserResponse

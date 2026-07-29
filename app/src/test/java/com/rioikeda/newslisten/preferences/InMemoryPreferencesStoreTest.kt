@@ -2,6 +2,8 @@ package com.rioikeda.newslisten.preferences
 
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -9,6 +11,19 @@ import org.junit.Test
  * （既定値・set→get・StateFlow 反映）そのものを固定する（フェーズ10 P10 Task3）。
  */
 class InMemoryPreferencesStoreTest {
+    @Test
+    fun `フィードバック設定は既定で有効で更新できる`() = runTest {
+        val store = InMemoryPreferencesStore()
+
+        assertTrue(store.sfxEnabled.value)
+        assertTrue(store.hapticsEnabled.value)
+
+        store.setSfxEnabled(false)
+        store.setHapticsEnabled(false)
+
+        assertFalse(store.sfxEnabled.value)
+        assertFalse(store.hapticsEnabled.value)
+    }
 
     @Test
     fun 既定値はDifficultyのDEFAULT_速度1_0_ArticleOpenModeのIN_APP_TimeFormatのABSOLUTEである() = runTest {

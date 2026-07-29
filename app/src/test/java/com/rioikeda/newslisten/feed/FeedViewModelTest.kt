@@ -169,6 +169,28 @@ class FeedViewModelTest {
     }
 
     @Test
+    fun `Starはstage時（確定ジェスチャ直後）にonStarConfirmedコールバックを呼ぶ`() = runTest {
+        val target = article("1")
+        val apiClient = FakeFeedApiClient(
+            onFetchFeed = { FeedResponse(listOf(target), "2026-07-01") },
+            onStarArticle = { id, _ -> ActionResponse("ok", id) },
+        )
+        val viewModel = newViewModel(apiClient)
+        viewModel.loadFeed()
+
+        var confirmCount = 0
+        viewModel.onStarConfirmed = { confirmCount++ }
+
+        viewModel.star(target)
+        // 要件3: Star操作はstage（スワイプ確定ジェスチャ）直後に発火、commit前に呼ばれる
+        assertEquals(1, confirmCount)
+
+        // commit成功後に再度呼ばれることはない
+        viewModel.commitPending()
+        assertEquals(1, confirmCount)
+    }
+
+    @Test
     fun loadFeedは取得前に保留中アクションをcommitする() = runTest {
         val target = article("1")
         // サーバがまだ dismiss を反映していない状態を模し、2回目の fetch でも target を返す

@@ -84,8 +84,10 @@ class MainActivity : ComponentActivity() {
         val authViewModel = appContainer.getAuthViewModel()
         val feedViewModel = appContainer.getFeedViewModel()
         val podcastViewModel = appContainer.getPodcastViewModel()
+        val learningViewModel = appContainer.getLearningViewModel()
         val settingsViewModel = appContainer.getSettingsViewModel()
         val preferencesStore = appContainer.getPreferencesStore()
+        val listeningStreakStore = appContainer.getListeningStreakStore()
         val accountViewModel = appContainer.getAccountViewModel()
         val sessionsViewModel = appContainer.getSessionsViewModel()
         val onboardingViewModel = appContainer.getOnboardingViewModel()
@@ -155,17 +157,20 @@ class MainActivity : ComponentActivity() {
                         if (onboardingCompleted.value == false) {
                             OnboardingScreen(viewModel = onboardingViewModel)
                         } else {
-                            // メインアプリ（3 タブスカフォルド）
+                            // メインアプリ（4 タブスカフォルド）
                             AppScaffold(
                                 feedViewModel,
                                 podcastViewModel,
+                                learningViewModel,
                                 settingsViewModel,
                                 preferencesStore,
                                 authViewModel,
                                 accountViewModel,
                                 sessionsViewModel,
                                 passkeyRegistrationViewModel,
-                                passkeyCredentialsViewModel
+                                passkeyCredentialsViewModel,
+                                listeningStreakStore,
+                                appContainer,
                             )
                         }
                     }

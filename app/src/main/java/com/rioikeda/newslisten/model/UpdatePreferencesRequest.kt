@@ -19,4 +19,5 @@ data class UpdatePreferencesRequest(
     @SerialName("default_playback_speed") val defaultPlaybackSpeed: Double? = null,
     @SerialName("digest_enabled") val digestEnabled: Boolean? = null,
     @SerialName("digest_article_count") val digestArticleCount: Int? = null,
+    @SerialName("weekly_goal_episodes") val weeklyGoalEpisodes: Int? = null,
 )

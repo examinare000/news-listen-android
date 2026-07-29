@@ -18,6 +18,8 @@ import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.model.SessionsListResponse
 import com.rioikeda.newslisten.model.StarRequest
 import com.rioikeda.newslisten.model.UserResponse
+import com.rioikeda.newslisten.model.VocabularyItemResponse
+import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.network.ApiClient
 import kotlinx.serialization.json.JsonObject
 
@@ -37,6 +39,13 @@ class FakePodcastApiClient(
         { id, _ -> error("updatePlaybackPosition is not stubbed for id=$id") },
     private val onDownloadAudio: suspend (url: String) -> ByteArray =
         { error("downloadAudio is not stubbed") },
+    private val onMarkCompleted: suspend (id: String) -> Unit = {},
+    private val onSubmitQuizAnswers: suspend (podcastId: String, request: com.rioikeda.newslisten.model.QuizAnswerRequest) -> com.rioikeda.newslisten.model.QuizAnswerResponse =
+        { podcastId, _ -> error("submitQuizAnswers is not stubbed for podcastId=$podcastId") },
+    private val onFetchVocabulary: suspend () -> VocabularyListResponse =
+        { VocabularyListResponse(emptyList(), 0) },
+    private val onSaveVocabulary: suspend (podcastId: String, term: String) -> VocabularyItemResponse =
+        { podcastId, term -> error("saveVocabulary is not stubbed for podcastId=$podcastId term=$term") },
 ) : ApiClient {
     /** fetchPodcasts が呼ばれた回数。 */
     var fetchPodcastsCallCount = 0
@@ -51,6 +60,10 @@ class FakePodcastApiClient(
     /** downloadAudio に渡された url の呼び出し履歴。 */
     val downloadAudioCalls: MutableList<String> = mutableListOf()
 
+    /** markCompleted に渡された完聴 ID。 */
+    val markCompletedCalls: MutableList<String> = mutableListOf()
+    val saveVocabularyCalls: MutableList<Pair<String, String>> = mutableListOf()
+
     override suspend fun fetchPodcasts(): PodcastListResponse {
         fetchPodcastsCallCount++
         return onFetchPodcasts()
@@ -64,6 +77,24 @@ class FakePodcastApiClient(
     override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse {
         updatePlaybackPositionCalls.add(id to positionSeconds)
         return onUpdatePlaybackPosition(id, positionSeconds)
+    }
+
+    override suspend fun markCompleted(id: String) {
+        markCompletedCalls.add(id)
+        onMarkCompleted(id)
+    }
+
+    override suspend fun submitQuizAnswers(
+        podcastId: String,
+        request: com.rioikeda.newslisten.model.QuizAnswerRequest,
+    ): com.rioikeda.newslisten.model.QuizAnswerResponse =
+        onSubmitQuizAnswers(podcastId, request)
+
+    override suspend fun fetchVocabulary(): VocabularyListResponse = onFetchVocabulary()
+
+    override suspend fun saveVocabulary(podcastId: String, term: String): VocabularyItemResponse {
+        saveVocabularyCalls += podcastId to term
+        return onSaveVocabulary(podcastId, term)
     }
 
     override suspend fun login(username: String, password: String): LoginResponse =

@@ -8,11 +8,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -29,7 +32,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -38,7 +43,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSSpacing
+import com.rioikeda.newslisten.designsystem.DSFeedback
+import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.TranscriptSegment
+import com.rioikeda.newslisten.model.VocabularyEntry
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * 再生中の Podcast を操作するプレイヤー UI セクション。
@@ -51,14 +61,20 @@ import com.rioikeda.newslisten.model.TranscriptSegment
  * - 再生速度セグメント
  */
 @Composable
-fun AudioPlayerSection(viewModel: PodcastViewModel) {
+fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
     val currentPodcast by viewModel.currentPodcast.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
     val currentTime by viewModel.positionSeconds.collectAsState()
     val duration by viewModel.durationSeconds.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
+    val registeredVocabularyKeys by viewModel.registeredVocabularyKeys.collectAsState()
+    val savingVocabularyKeys by viewModel.savingVocabularyKeys.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
 
     var isTranscriptExpanded by remember { mutableStateOf(false) }
+    var isVocabularyExpanded by remember(currentPodcast?.id) { mutableStateOf(false) }
+    // クイズシート用スナップショット: ボタン押下時の Podcast を保持し、送信ずっと表示
+    var quizPodcast: PodcastResponse? by remember { mutableStateOf(null as PodcastResponse?) }
 
     Box(
         modifier = Modifier
@@ -104,6 +120,43 @@ fun AudioPlayerSection(viewModel: PodcastViewModel) {
                         onToggle = { isTranscriptExpanded = !isTranscriptExpanded }
                     )
                 }
+            }
+
+            currentPodcast?.vocabulary?.takeIf { !it.isNullOrEmpty() }?.let { entries ->
+                val podcastId = currentPodcast?.id ?: return@let
+                VocabularySection(
+                    podcastId = podcastId,
+                    entries = entries,
+                    isExpanded = isVocabularyExpanded,
+                    onToggle = { isVocabularyExpanded = !isVocabularyExpanded },
+                    registeredVocabularyKeys = registeredVocabularyKeys,
+                    savingVocabularyKeys = savingVocabularyKeys,
+                    onSave = { term ->
+                        coroutineScope.launch {
+                            viewModel.saveVocabulary(podcastId, term)
+                        }
+                    },
+                )
+            }
+
+            currentPodcast?.takeIf { !it.quiz.isNullOrEmpty() }?.let { podcast ->
+                Button(
+                    onClick = { quizPodcast = podcast },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "聴き終わったら試す" },
+                ) {
+                    Text("聴き終わったら試す")
+                }
+            }
+
+            quizPodcast?.let { podcast ->
+                QuizSheet(
+                    podcast = podcast,
+                    feedback = feedback,
+                    submit = viewModel::submitQuizAnswers,
+                    onDismiss = { quizPodcast = null },
+                )
             }
 
             // シークバー
@@ -232,6 +285,108 @@ fun AudioPlayerSection(viewModel: PodcastViewModel) {
                 onSpeedChange = { viewModel.setSpeed(it) },
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+}
+
+/** 語・日本語の意味・例文を同じまとまりとして読める折りたたみグロッサリ。 */
+@Composable
+private fun VocabularySection(
+    podcastId: String,
+    entries: List<VocabularyEntry>,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    registeredVocabularyKeys: Set<String>,
+    savingVocabularyKeys: Set<String>,
+    onSave: (String) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // 要件11: タップ領域を最小48dp確保（デフォルト heightIn(min=)で可能だが、padding との相互作用考慮）
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onToggle)
+                .semantics {
+                    contentDescription = if (isExpanded) {
+                        "語彙グロッサリを折りたたむ"
+                    } else {
+                        "語彙グロッサリを展開する"
+                    }
+                }
+                .padding(vertical = DSSpacing.s),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // 要件8: 見出しを serif スタイルに
+            Text(
+                "語彙グロッサリ（${entries.size}語）",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // 要件11: 「▼」「▶」を Icon で表現（装飾のため contentDescription なし）
+            Icon(
+                imageVector = if (isExpanded) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (isExpanded) {
+            // 要件9: fontScale 対応で最大高さを計算
+            val density = LocalDensity.current
+            val maxHeight = with(density) { (200.dp * density.fontScale).coerceAtLeast(150.dp) }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = maxHeight)
+                    .verticalScroll(rememberScrollState())
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(DSSpacing.s),
+                verticalArrangement = Arrangement.spacedBy(DSSpacing.m),
+            ) {
+                entries.forEach { entry ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(DSSpacing.xs),
+                    ) {
+                        Column(
+                            modifier = Modifier.semantics(mergeDescendants = true) {
+                                contentDescription =
+                                    "${entry.term}。意味: ${entry.meaningJa}。例文: ${entry.example}"
+                            },
+                        ) {
+                            Text(entry.term, style = MaterialTheme.typography.titleLarge)
+                            Text(entry.meaningJa, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                entry.example,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        val key = "$podcastId::${entry.term.trim().lowercase()}"
+                        val isRegistered = key in registeredVocabularyKeys
+                        val isSaving = key in savingVocabularyKeys
+                        Button(
+                            onClick = { onSave(entry.term) },
+                            enabled = !isRegistered && !isSaving,
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .alpha(if (isRegistered) 0.5f else 1f)
+                                .semantics {
+                                    contentDescription = if (isRegistered) {
+                                        "${entry.term}は登録済み"
+                                    } else {
+                                        "${entry.term}を習得語彙に登録"
+                                    }
+                                },
+                        ) {
+                            Text(if (isRegistered) "登録済み" else if (isSaving) "登録中" else "習得")
+                        }
+                    }
+                }
+            }
         }
     }
 }
