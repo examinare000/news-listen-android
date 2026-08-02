@@ -32,3 +32,10 @@ launcher icon をサービスアイコン（iOS AppIcon-1024.png 準拠）へ差
 
 - XML 配線・PNG 5 密度・VectorDrawable 座標計算（24×2.75=66・translate 21）・スコープはすべて健全。local.properties / google-services.json は gitignore 済みでコミット非対象を確認。
 - 指摘: monochrome の strokeWidth が移植元 BrandLogo.tsx の 2.5 に対し 2 へ無断変更 → 2.5 へ統一して解消（メインセッション適用）。
+
+## 2026-08-03 エミュレータ実表示検証（メインセッション）
+
+AVD `newslisten_e2e`（ヘッドレス・swiftshader）に assembleDebug APK を導入して実測:
+- **アプリドロワー**: 円形マスクで新聞＋波形が明瞭に表示。他アプリのアイコンと並べて視認性・意匠とも問題なし。
+- **スプラッシュ**（`Theme.NewsListen.Starting` の `windowSplashScreenAnimatedIcon=@mipmap/ic_launcher`）: 懸念だった「foreground 層のみ描画で紺のフルブリード矩形が露出する」事象は発生せず、adaptive icon が円形マスクで正常表示（白背景中央に紺円＋アートワーク）。themes.xml のコメントが警告する foreground 専用素材への差し替えは不要と判断。
+- 証跡スクリーンショット 2 枚はセッション成果物としてオーナーへ提示済み。
