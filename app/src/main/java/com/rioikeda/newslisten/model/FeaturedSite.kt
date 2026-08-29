@@ -16,6 +16,7 @@ data class FeaturedSite(
     @SerialName("thumbnail_url") val thumbnailUrl: String? = null,
     val description: String? = null,
     val order: Int = 0,
+    val category: String? = null,
 )
 
 /**

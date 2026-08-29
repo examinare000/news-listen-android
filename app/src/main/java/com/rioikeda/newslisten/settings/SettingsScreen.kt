@@ -55,6 +55,8 @@ import com.rioikeda.newslisten.account.SessionsViewModel
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.designsystem.DSSpacing
+import com.rioikeda.newslisten.model.FeaturedCategory
+import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.passkey.PasskeyCredentialsViewModel
 import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
 import com.rioikeda.newslisten.preferences.ArticleOpenMode
@@ -421,39 +423,55 @@ fun SettingsScreen(
             item {
                 SettingsSectionHeader(stringResource(R.string.settings_section_featured_sites))
             }
-            items(featuredSites) { site ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = DSSpacing.s),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = site.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        if (site.description != null) {
+
+            val grouped = FeaturedCategory.groupByCategoryInOrder(featuredSites)
+            val categories = FeaturedCategory.getDisplayOrderCategories(grouped)
+
+            categories.forEach { category ->
+                val sitesInCategory = grouped[category] ?: emptyList()
+                item {
+                    Text(
+                        text = stringResource(FeaturedCategory.getCategoryLabel(category)),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(top = DSSpacing.m, bottom = DSSpacing.s),
+                    )
+                }
+                items(sitesInCategory) { site ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = DSSpacing.s),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = site.description!!,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = site.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onBackground
                             )
-                        }
-                    }
-                    Button(
-                        onClick = {
-                            coroutineScope.launch {
-                                viewModel.addSource(site.name, site.url)
+                            if (site.description != null) {
+                                Text(
+                                    text = site.description!!,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
-                    ) {
-                        Text(stringResource(R.string.settings_featured_sites_subscribe_button))
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    viewModel.addSource(site.name, site.url)
+                                }
+                            }
+                        ) {
+                            Text(stringResource(R.string.settings_featured_sites_subscribe_button))
+                        }
                     }
                 }
             }
+
             if (featuredSitesLoadFailed) {
                 item {
                     Row(

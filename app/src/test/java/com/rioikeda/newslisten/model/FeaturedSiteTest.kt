@@ -50,4 +50,35 @@ class FeaturedSiteTest {
         assertNull(site.description)
         assertEquals(0, site.order)
     }
+
+    @Test
+    fun categoryフィールドが指定される() {
+        val json = """
+            {
+              "sites": [
+                {
+                  "id": "site-1",
+                  "name": "TechCrunch",
+                  "url": "https://example.com/techcrunch.xml",
+                  "category": "tech"
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val response = NewsListenJson.decodeFromString(FeaturedSitesResponse.serializer(), json)
+
+        val site = response.sites[0]
+        assertEquals("tech", site.category)
+    }
+
+    @Test
+    fun categoryフィールドが省略時はnullになる() {
+        val json = """{"sites": [{"id": "site-1", "name": "NHK", "url": "https://example.com/nhk.xml"}]}"""
+
+        val response = NewsListenJson.decodeFromString(FeaturedSitesResponse.serializer(), json)
+
+        val site = response.sites[0]
+        assertNull(site.category)
+    }
 }
