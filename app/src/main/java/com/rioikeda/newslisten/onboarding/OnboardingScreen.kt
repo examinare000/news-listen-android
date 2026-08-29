@@ -25,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSSpacing
+import com.rioikeda.newslisten.model.FeaturedCategory
 import com.rioikeda.newslisten.model.FeaturedSite
 import kotlinx.coroutines.launch
 
@@ -77,12 +78,26 @@ fun OnboardingScreen(
         }
 
         LazyColumn(modifier = Modifier.weight(1f)) {
-            items(featuredSites) { site ->
-                FeaturedSiteRow(
-                    site = site,
-                    subscribed = addedIds.contains(site.id),
-                    onSubscribe = { coroutineScope.launch { viewModel.subscribe(site) } },
-                )
+            val grouped = FeaturedCategory.groupByCategoryInOrder(featuredSites)
+            val categories = FeaturedCategory.getDisplayOrderCategories(grouped)
+
+            categories.forEach { category ->
+                val sitesInCategory = grouped[category] ?: emptyList()
+                item {
+                    Text(
+                        text = stringResource(FeaturedCategory.getCategoryLabel(category)),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(top = DSSpacing.m, bottom = DSSpacing.s),
+                    )
+                }
+                items(sitesInCategory) { site ->
+                    FeaturedSiteRow(
+                        site = site,
+                        subscribed = addedIds.contains(site.id),
+                        onSubscribe = { coroutineScope.launch { viewModel.subscribe(site) } },
+                    )
+                }
             }
         }
 

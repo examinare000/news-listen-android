@@ -107,6 +107,13 @@
     <string name="settings_featured_sites_failed">おすすめサイトの取得に失敗しました</string>
     <string name="settings_featured_sites_subscribe_button">購読</string>
 
+    <!-- おすすめサイトカテゴリ -->
+    <string name="featured_category_tech">テクノロジー</string>
+    <string name="featured_category_business">ビジネス</string>
+    <string name="featured_category_sports">スポーツ</string>
+    <string name="featured_category_entertainment">芸能</string>
+    <string name="featured_category_culture">カルチャー</string>
+
     <!-- Podcast 生成セクション -->
     <string name="settings_section_generation_quota">Podcast 生成</string>
     <string name="settings_generation_quota_unlimited">本日の生成回数: 無制限</string>
