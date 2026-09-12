@@ -118,4 +118,45 @@ class PodcastDecodingTest {
         assertEquals(1, list.podcasts.size)
         assertTrue(list.podcasts[0].id == "p1")
     }
+
+    // ──────────────────────────────────────────────
+    // ADR-094 第一段階（Issue #237）: TranscriptSegment.role
+    //
+    // WHY: 正本 backend/shared/models.py の TranscriptSegment.role（fact|commentary|null）に
+    // 合わせ、Android 側にも省略可フィールドとして role を追加済み。以下は present/absent/null
+    // の 3 経路のデコード契約を固定する回帰テスト群。
+    // ──────────────────────────────────────────────
+
+    @Test
+    fun TranscriptSegmentはroleキーがあればデコードできる() {
+        val json = """
+            {"speaker": "A", "text": "Rust is fast.", "role": "fact"}
+        """.trimIndent()
+
+        val segment = NewsListenJson.decodeFromString(TranscriptSegment.serializer(), json)
+
+        assertEquals("fact", segment.role)
+    }
+
+    @Test
+    fun TranscriptSegmentはroleキーが無ければnullにフォールバックする() {
+        val json = """
+            {"speaker": "A", "text": "Rust is fast."}
+        """.trimIndent()
+
+        val segment = NewsListenJson.decodeFromString(TranscriptSegment.serializer(), json)
+
+        assertNull(segment.role)
+    }
+
+    @Test
+    fun TranscriptSegmentはroleがnullでもデコードできる() {
+        val json = """
+            {"speaker": "A", "text": "Rust is fast.", "role": null}
+        """.trimIndent()
+
+        val segment = NewsListenJson.decodeFromString(TranscriptSegment.serializer(), json)
+
+        assertNull(segment.role)
+    }
 }

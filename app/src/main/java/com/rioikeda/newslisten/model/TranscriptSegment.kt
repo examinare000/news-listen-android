@@ -12,4 +12,8 @@ import kotlinx.serialization.Serializable
 data class TranscriptSegment(
     val speaker: String,
     val text: String,
+    // ADR-094 第一段階（issue #237）: 役割ラベル（"fact" | "commentary"）。
+    // backend は常にキーを返す（未設定時 null）が、role 無しの旧レスポンスでも
+    // このプロパティの既定値（null）によりキー欠落時もデコード可能。
+    val role: String? = null,
 )
