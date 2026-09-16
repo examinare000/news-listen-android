@@ -19,6 +19,7 @@
 5. **`di/AppContainer`**: `AuthInterceptor.onUnauthorized` を `AuthViewModel` の失効通知経路へ配線する。
 6. **`AppContainer.onLogoutCleanup` → `onSubjectLeave` rename**（SG-R18、挙動不変・**独立コミット**）。logout 経路に加え、失効通知（`onUnauthorized`）からも呼ぶ。
 7. **`AuthViewModel` の `CleanupIncomplete(parts)`**: 主体離脱の cleanup 手順（音声・FCM）は各手順を独立 try/catch にし、失敗した手順名を `CleanupIncomplete(parts)` として StateFlow に残す（OB-C10）。認証状態の遷移は cleanup の成否で止めない。
+8. **主体離脱の順序変更（SG-X3 確定・共有仕様 §6.5）**: 現行の `AuthViewModel.kt:174-181`（`onLogoutCleanup()` の完了を待ってから `sessionStore.clear()` → `Unauthenticated`）を、**`sessionStore.clear()` → `Unauthenticated` → `onSubjectLeave()`（後始末は完了を待たず、失敗は `CleanupIncomplete` で観測）** の順に改める。logout・失効の両経路で同じ順序。既存テストが cleanup 完了後の遷移を pin していれば仕様変更として反転する。
 8. **`SessionStore.save`**: 失敗を呼出元へ返す（`Boolean` か `Result`）。`AuthViewModel.login` は保存失敗時に `Authenticated` へ遷移せずエラー表示する（`InMemorySessionStoreTest` に失敗注入で確認）。
 
 ## 契約（CI → T の対応）
@@ -26,7 +27,7 @@
 |---|---|---|
 | CI-T10 | `refreshAuth`: `Unauthorized` のみ `clear` + `Unauthenticated`。`NetworkError` / `HttpError(5xx)` / `DecodingError` は `Unknown` 維持＋トークン保持＋`lastFailure` | T-T10（既存 `AuthViewModelTest.kt:95` を反転） |
 | CI-T11 | 三点一致かつ `Authorization` 付与リクエストの 401 のときのみ `onUnauthorized` を 1 回呼ぶ。トークン無し（login / passkey）・非一致 host の 401 では呼ばない。ヘッダ付与契約（CI-A13/A14）は不変 | T-T11（既存 `AuthInterceptorTest` の `FakeChain` に応答を持たせる） |
-| CI-T12 | 失効通知後: `Unauthenticated`、`sessionStore.load()==null`、cleanup 2 手順（音声・FCM）が呼ばれる。logout も同じ事後条件（**再生停止は S2 で追加**、本 slice の T-T12 では検証しない） | T-T12: Fake の呼出観測（再生停止部分を除く） |
+| CI-T12 | 失効通知後: `Unauthenticated`、`sessionStore.load()==null`、cleanup 2 手順（音声・FCM）が呼ばれる。logout も同じ事後条件。**遷移は cleanup 完了を待たない**（cleanup を遅延させる Fake でも `Unauthenticated` が先に観測される。SG-X3）。**再生停止は S2 で追加**、本 slice の T-T12 では検証しない | T-T12: Fake の呼出観測と順序（再生停止部分を除く）。SL-01・SL-02 の行 ID を含む |
 | CI-T13 | cleanup の一部が失敗しても残りは実行され、`CleanupIncomplete(parts)` が観測可能。再実行で同じ事後条件 | T-T13 |
 | CI-T14 | `save` 失敗は呼出元へ返り、`login` は `Authenticated` へ遷移しない | T-T14（`InMemorySessionStoreTest` に失敗注入） |
 | CI-T21 | `login` が `Unauthorized` を受けたとき文言は「ユーザーIDまたはパスワードが正しくありません」、`onUnauthorized` は発火しない | T-T21（既存 `AuthViewModelTest` の login 401 ケースを `Unauthorized` へ置換） |

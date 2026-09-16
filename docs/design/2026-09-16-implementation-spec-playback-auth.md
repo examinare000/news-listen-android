@@ -6,6 +6,12 @@
 
 > 設計原則（本書の判断順）: actor の目的 → use case → その判断に必要な概念・不変条件 → 契約 → カプセル（公開操作と隠す技術）→ 依存方向 → 移行。pattern 名・class 数は成果にしない。1 実装しかない箇所に factory / Strategy を作らない（Boundary RO1〜RO8 を踏襲）。設計書に実装コードを載せない。
 
+
+> **追記（2026-09-16・共有仕様 §6.7 の確定による上書き）**: 親 docs `shared-playback-spec.md` §6.7 の Selection Gate が user 判断で確定し、本書の次の記述を上書きする（本書は改訂せず、この追記と各 slice の order `docs/plan/2026-09-16-design-review-refactor/` を優先する）。
+> - SG-X1: 完聴時に `duration` を明示送信する（SG-R14 のとおり。3 platform 共通で確定）。
+> - SG-X3: 主体離脱は **cleanup 完了を待たず**、`sessionStore.clear()` → `Unauthenticated` → `onSubjectLeave()` の順にする（§3.2 の遷移表の事後条件は同じ。順序だけ改める。S0 で実施）。
+> - SG-X4: **一時停止中の 15 秒 PATCH はやめる**（SG-R9「現行維持」を置換。backend は位置 PATCH 到達ごとに `listeningDays` を書くため、U1 は「依存する」で解消。CI-T19 に一時停止中の非送信を追加）。
+
 ## 0. Decision frame と function_plan
 
 ```yaml

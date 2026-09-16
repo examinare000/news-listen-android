@@ -2,23 +2,22 @@
 
 2026-09-16 の android 設計レビュー（`android/docs/research-reports/2026-09-16-code-design-review.md`）と user 承認済みの Implementation Spec（`android/docs/design/2026-09-16-implementation-spec-playback-auth.md`）を、takt の `sdd-governed` ワークフローへ slice 単位で委譲するための指示書（order）一式。正本は Spec であり、本フォルダの各 order は Spec の該当 slice を takt の 1 タスクに切り出したもの。実装完了後、本フォルダは削除し、確定内容は親 docs の `design/android-design.md`（§7 target 節を現状記述へ書き換え）へ移す（`agent-rules/30` の plan ライフサイクル）。
 
-共有仕様の先行 PR（親 docs `shared-playback-spec.md` §6.4 resume 規則・§6.5 主体離脱の事後条件の新節）は news-listen-docs #133 で **完了**（main 済み）。ただし §6.7 の Selection Gate SG-X1〜SG-X5 は **pending**。gate が pending の項目は各 order で現行値を pin する。
+共有仕様の先行 PR（親 docs `shared-playback-spec.md` §6.4 resume 規則・§6.5 主体離脱の事後条件の新節）は news-listen-docs #133 で **完了**（main 済み）。§6.7 の Selection Gate SG-X1〜SG-X5 も 2026-09-16 に user 判断で **全て確定**し、各 order は確定値を実装対象に含む。
 
 ## slice と投入順
 
 | 順 | order | 内容 | 依存 | Selection Gate | 切替方式 |
 |---|---|---|---|---|---|
-| 1 | [S0-auth.md](S0-auth.md) | `ApiException.Unauthorized`・`refreshAuth` の分岐・`AuthInterceptor.onUnauthorized`（発火条件は三点一致＋`Authorization` 付与 401 のみ）・`onLogoutCleanup → onSubjectLeave` rename（音声＋FCM のみ、再生停止は S2）・`CleanupIncomplete`・`SessionStore.save` の失敗返却 | なし | なし | 小ステップ |
+| 1 | [S0-auth.md](S0-auth.md) | `ApiException.Unauthorized`・`refreshAuth` の分岐・`AuthInterceptor.onUnauthorized`（発火条件は三点一致＋`Authorization` 付与 401 のみ）・`onLogoutCleanup → onSubjectLeave` rename（音声＋FCM のみ、再生停止は S2）・主体離脱の順序を「トークン破棄 → 未認証 → 後始末」へ（SG-X3）・`CleanupIncomplete`・`SessionStore.save` の失敗返却 | なし | SG-X3 確定: 待たない | 小ステップ |
 | 2 | [S1-test-foundation.md](S1-test-foundation.md) | `BaseFakeApiClient`（全メソッド error）と 9 Fake の継承化、production interface の throwing default 9 箇所削除、`PodcastApi`（5 メソッド）切り出し、`FakePodcastApi`、`FakePlayerController` の `state` 注入 | S0 | なし | 挙動不変 |
-| 3 | [S2-playback.md](S2-playback.md) | `PlaybackState` union・`PlaybackSession`（11 遷移）・`ResumeRule`・Queue `init`／`setQueue` dedupe・速度 8 段統一と既定速度適用・`nowPlaying`・`_currentPodcast` 削除・完聴順序・`invalidate`・`stopForSubjectLeave`・位置同期の送信条件・UI 3 ファイルの読み替え | S1 | **SG-X1 / SG-X3 / SG-X4** が pending の間は現行値で pin | **一括切替**（特性テスト 8 ファイル＋T-T20 green が入口条件） |
+| 3 | [S2-playback.md](S2-playback.md) | `PlaybackState` union・`PlaybackSession`（11 遷移）・`ResumeRule`・Queue `init`／`setQueue` dedupe・速度 8 段統一と既定速度適用・`nowPlaying`・`_currentPodcast` 削除・完聴順序・`invalidate`・`stopForSubjectLeave`・位置同期の送信条件・UI 3 ファイルの読み替え | S1 | SG-X1 確定: 完聴時に `duration` を明示送信・SG-X4 確定: 一時停止中は送らない | **一括切替**（特性テスト 8 ファイル＋T-T20 green が入口条件） |
 | 4 | [S3-ci.md](S3-ci.md) | `ci.yml` を `testDebugUnitTest` / `lintDebug` / `assembleDebug` の独立ステップに、`jvmToolchain(17)` | S2 | なし | — |
 | 保留 | （S4） | RF6 全面（意味型）・RF8（Screen owner 分散）・RF9（週目標・難易度の値域）・RF10（UiState 排他）・RF2 | 学習機能・設定サイクル | — | order 未作成 |
 
-- Selection Gate の正本は親 docs `design/shared-playback-spec.md` §6.7（SG-X1〜SG-X5、owner: user）。pending を選択済みとして扱わない。
-- **S2 が依存する gate と pin 内容**:
-  - **SG-X1**（完聴時にサーバーへ送る位置。候補 (a) 0 / (b) duration＝Android Spec SG-R14）: pending の間は Android の**現行挙動（完聴時点の再生位置をそのまま送る。`PodcastViewModel.kt:538` の `positionSeconds`）で pin**する。SG-R14 の「明示的に duration を送る」は本計画では実装せず、SG-X1 が (b) で satisfied になってから差分 PR として起票する。
-  - **SG-X3**（主体離脱で cleanup 完了を待つか。候補 (a) 待たない / (b) 待つ＝Android 現行）: pending の間は**現行の「待つ」を維持**する。
-  - **SG-X4**（一時停止中も位置を周期送信するか。候補 (a) 送る＝Android 現行 / (b) 再生中のみ）: pending の間は**現行の「送る」を維持**する。
+- 共有仕様 §6.7 の Selection Gate は 2026-09-16 に確定済み（確定値は §6.4〜§6.6 本文）。Android に効く 3 点:
+  - **SG-X1**: 完聴時に **`duration` を明示的に 1 回送る**（Android Spec SG-R14 のとおり。S2 で実装）。
+  - **SG-X3**: cleanup 完了を**待たない**。順序を「トークン破棄 → 未認証 → 後始末」に改める（Android 現行は待つ。S0 で変更し、`AuthViewModelTest` の順序 pin を反転）。
+  - **SG-X4**: **一時停止中は周期送信しない**（Android 現行は送る。S2 で 15 秒 timer を再生中に限定。backend は位置 PATCH 到達ごとに `listeningDays` を書くため、一時停止中の送信は streak を水増しする）。
   - SG-X2（web の resume 規則追随）・SG-X5（iOS の速度段数）は Android に無関係。
 - 他モジュールとの契約: パスワード規則は backend 正本（[ADR-101](../../../../docs/adr/101-password-policy-cross-client-unification.md)）。Android は現状の文言のまま変更なしのため、本フォルダに order を作らない。
 - 共有仕様 §6.4／§6.5（新節）は news-listen-docs #133 で main 済み。S2 の準拠テストは行 ID（PS-* / SL-* / RS-*）をテスト名に含める。
