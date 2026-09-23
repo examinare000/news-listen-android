@@ -25,7 +25,7 @@ production interface の throwing default（9 箇所）を削除し、test 側�
 ## 契約（CI → T の対応）
 | CI | 内容 | T-T |
 |---|---|---|
-| CI-T16 | production interface に throwing default が無い（`OkHttpApiClient` が全メソッドを override、`error("` の grep 0）。`PodcastApi` の 5 メソッドを `OkHttpApiClientTest`（MockWebServer）で経路確認 | T-T16: 構造検査（grep）＋ MockWebServer 経路 5 件 |
+| CI-T16 | production interface に throwing default が無い（`OkHttpApiClient` が全メソッドを override、main ソースセット全体で `error(` の grep が 0 件）。`PodcastApi` の 5 メソッドを `OkHttpApiClientTest`（MockWebServer）で経路確認 | T-T16: 構造検査（grep）＋ MockWebServer 経路 5 件 |
 
 ## 特性テスト（baseline。着手前に green を確認）
 全 ViewModel テスト（191 件。9 Fake を使う全テストクラス）。加えて `network/OkHttpApiClientTest.kt`（46 件）。
@@ -43,7 +43,7 @@ production interface の throwing default（9 箇所）を削除し、test 側�
 
 ## 完了条件
 - `JAVA_HOME=<JBR> ./gradlew clean testDebugUnitTest` 全 green（既存 191 件の ViewModel テストが変わらず通る）。
-- `error("` の grep が `ApiClient` 実装クラス（`OkHttpApiClient`）に 0 件。
+- **`grep -rn 'error(' app/src/main/java/com/rioikeda/newslisten` が 0 件。** 対象集合は main ソースセット全体であり、`OkHttpApiClient` だけではない。2026-09-23 実測の現状は **9 件で、すべて `network/ApiClient.kt`**（削除対象の throwing default と 1 対 1）。main 配下の他ファイルには 1 件も無いため、9 件を消せば 0 件になる。
 - T-T16 が `verifies: CI-T16` をテスト名またはコメントに持つ。
 - 9 Fake すべてが `BaseFakeApiClient` を継承し、override していないメソッドを呼ぶテストが存在しない（存在すれば基底の `error` で fail する）。
 - `PodcastViewModel` の再生 5 操作の型が `PodcastApi` 経由になっている（語彙・クイズ 3 操作は `ApiClient` のまま）。
