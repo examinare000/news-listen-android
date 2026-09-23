@@ -1,12 +1,12 @@
-## android リファクタ S3: CI の 3 ステップ分割と JDK toolchain 固定（RF11・SG-R11）
+## android リファクタ A-S3: CI の 3 ステップ分割と JDK toolchain 固定（RF11・SG-R11）
 
 ## 概要
 CI を `testDebugUnitTest` / `lintDebug` / `assembleDebug` の独立ステップに分け、JDK 要件を Gradle toolchain で固定する。正本は user 承認済みの Implementation Spec `docs/design/2026-09-16-implementation-spec-playback-auth.md`（§4 CI-T18・§6 S3 行）。SG-R11 は 2026-09-16 に user 承認済み（レビュー §8.2）。本タスクは**承認済み指示書に従う実装**であり、analyze_order は検証モード（新規設計をしない）。generate_spec の spec.md は CI-T18 の抜粋で足りる。
 
-着手順 4（S2 の PR が main に merge 済みであること。S2 の一括切替後に CI の粒度を上げる）。起点となった運用知見: ローカルの JDK 26 では Kotlin コンパイラが起動不能で、Android Studio 同梱 JBR を `JAVA_HOME` にしないと `testDebugUnitTest` が走らない（`docs/research-reports/2026-09-16-code-design-review/verification-run.md` §1〜§2）。toolchain 固定で環境差を吸収する。
+着手順（A-S2c の PR が main に merge 済みであること。A-S2a〜c の 3 段の後に CI の粒度を上げる）。起点となった運用知見: ローカルの JDK 26 では Kotlin コンパイラが起動不能で、Android Studio 同梱 JBR を `JAVA_HOME` にしないと `testDebugUnitTest` が走らない（`docs/research-reports/2026-09-16-code-design-review/verification-run.md` §1〜§2）。toolchain 固定で環境差を吸収する。
 
 ## 前提・着手条件
-- 依存 slice: S2 が main に merge 済み。
+- 依存 slice: A-S2c が main に merge 済み。
 - Selection Gate 依存なし。
 - 入れないもの（SG-R11 で決定・再提案しない）: detekt / ktlint / JaCoCo / Dependabot（学習サイクルで再判断）。
 - `docs/trial-log/` を最初に読み、棄却済み案を再試行しない。
@@ -22,7 +22,7 @@ CI を `testDebugUnitTest` / `lintDebug` / `assembleDebug` の独立ステップ
 | CI-T18 | `testDebugUnitTest` / `lintDebug` / `assembleDebug` が独立ステップで、JDK は toolchain 17 | T-T18: `ci.yml` / `build.gradle.kts` の差分レビュー（テスト不可）。ローカルで `./gradlew clean testDebugUnitTest` が `JAVA_HOME` 未指定で exit 0 |
 
 ## 特性テスト（baseline）
-`JAVA_HOME=<JBR> ./gradlew clean testDebugUnitTest --console=plain` が exit 0（S2 完了時点の全 unit テスト）。
+`JAVA_HOME=<JBR> ./gradlew clean testDebugUnitTest --console=plain` が exit 0（A-S2c 完了時点の全 unit テスト）。
 
 ## 手順
 1. baseline: 上記コマンドで green を記録。`./gradlew lintDebug` を初めて実行し結果を記録する。
@@ -45,6 +45,6 @@ CI を `testDebugUnitTest` / `lintDebug` / `assembleDebug` の独立ステップ
 - 仕様にない業務条件を足さない。
 
 ## 参照
-- Spec: `docs/design/2026-09-16-implementation-spec-playback-auth.md` §4 CI-T18・§6 S3
+- Spec: `docs/design/2026-09-16-implementation-spec-playback-auth.md` §4 CI-T18・§6 S3（親 plan の ID は A-S3）
 - レビュー: `docs/research-reports/2026-09-16-code-design-review.md` §8.2（SG-R11）・§8.3（RF11・着手順 4）
 - 検証: `docs/research-reports/2026-09-16-code-design-review/verification-run.md` §1〜§2（JDK 26 の起動不能・JBR 指定）・V4（lintDebug 未実行）
