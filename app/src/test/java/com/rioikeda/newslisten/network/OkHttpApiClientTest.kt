@@ -201,6 +201,22 @@ class OkHttpApiClientTest {
     }
 
     @Test
+    fun HTTP401はUnauthorizedを投げる() = runTest {
+        // verifies: CI-S0-1
+        // production 経路で 401 -> Unauthorized の写像を確かめる唯一のテスト（CI-T10/CI-T21 の
+        // Fake は Unauthorized を直接 throw するため、写像が抜けていても両テストは green になる）。
+        token = "t"
+        server.enqueue(MockResponse().setResponseCode(401))
+
+        try {
+            client.me()
+            fail("ApiException.Unauthorized が投げられるべき")
+        } catch (e: ApiException.Unauthorized) {
+            // 期待どおり（HttpError ではない）
+        }
+    }
+
+    @Test
     fun 不正JSONはDecodingErrorを投げる() = runTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("not-json"))
 

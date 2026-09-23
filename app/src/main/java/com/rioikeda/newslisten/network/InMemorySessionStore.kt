@@ -7,15 +7,24 @@ package com.rioikeda.newslisten.network
  * （InMemorySessionStore）のミラー。iOS 側は SessionStore.swift 本体（テストターゲット外）に
  * 置かれているため、Kotlin 版も main ソースセットに配置する。
  */
-class InMemorySessionStore(initialToken: String? = null) : SessionStore {
+class InMemorySessionStore(
+    initialToken: String? = null,
+    /** テスト用: 真なら [save] が保存を行わず `false` を返す（CI-T14 の失敗注入）。 */
+    private val saveFails: Boolean = false,
+) : SessionStore {
     private var token: String? = initialToken
 
-    override fun save(token: String) {
+    @Synchronized
+    override fun save(token: String): Boolean {
+        if (saveFails) return false
         this.token = token
+        return true
     }
 
+    @Synchronized
     override fun load(): String? = token
 
+    @Synchronized
     override fun clear() {
         token = null
     }

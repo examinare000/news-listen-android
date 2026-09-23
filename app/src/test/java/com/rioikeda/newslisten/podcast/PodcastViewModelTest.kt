@@ -999,7 +999,7 @@ class PodcastViewModelTest {
 
     // --- cancelDownloadsAndClearCache（logout×ダウンロード競合。共有端末対応 spec §6.3） ---
     //
-    // WHY このテストが必要か: AuthViewModel.onLogoutCleanup（Dispatchers.Default 上で動く）と
+    // WHY このテストが必要か: AuthViewModel.onSubjectLeave（Dispatchers.Default 上で動く）と
     // PodcastViewModel.download()（limitedParallelism(1)）は、download() が fetchPodcast という
     // suspend 境界を挟むために無同期になり得る。download が suspend 中に logout のキャッシュ全削除が
     // 素通りしてしまうと、削除後に download が再開してファイルを書き込み、downloadedIds にも

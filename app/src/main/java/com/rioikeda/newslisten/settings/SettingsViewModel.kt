@@ -39,7 +39,7 @@ class SettingsViewModel(
      * 依存すると層の依存方向が増える。呼び出し元（AppContainer）が
      * `{ authViewModel.authState.value を見て判定 }` を注入する形にし、settings 層は
      * 「admin かどうかを問い合わせられる」という事実のみを知る設計にした
-     * （AuthViewModel の onLogoutCleanup/onAuthenticated と同じパターン）。
+     * （AuthViewModel の onSubjectLeave/onAuthenticated と同じパターン）。
      * role は認証確立後に非同期で確定するため、コンストラクタ時点の固定値ではなく
      * 呼び出し時点で都度評価する関数にしている。
      */

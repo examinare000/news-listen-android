@@ -451,10 +451,14 @@ class OkHttpApiClient(
      * HTTP レスポンスのステータスを検証し、2xx 以外なら例外を投げる。
      *
      * 正本: APIClient.swift:433-443（validateResponse）。429 は Retry-After（秒）を添えて
-     * [ApiException.RateLimited] を、それ以外は [ApiException.HttpError] を投げる。
+     * [ApiException.RateLimited] を、401 は [ApiException.Unauthorized]（android S0・DV-S0-2 = 案B。
+     * `HTTP_UNAUTHORIZED` 定数は導入しない）を、それ以外は [ApiException.HttpError] を投げる。
      */
     private fun validateResponse(response: Response) {
         if (response.isSuccessful) return
+        if (response.code == 401) {
+            throw ApiException.Unauthorized()
+        }
         if (response.code == 429) {
             val retryAfter = response.header("Retry-After")?.toIntOrNull()
             throw ApiException.RateLimited(retryAfter)

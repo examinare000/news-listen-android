@@ -23,21 +23,33 @@ import javax.crypto.spec.GCMParameterSpec
  *
  * 失敗時契約: 復号失敗・鍵欠落・Keystore例外時は例外を投げず `null` を返し、壊れた暗号文は
  * 内部で削除する（re-login 導線。端末バックアップ復元等で鍵だけが失われるケースを許容する）。
- * save/clear も Keystore 例外を伝播させない。save 失敗時は暗黙に no-op とし、次回 [load] が
- * `null` を返すことで自然に re-login に誘導する。
+ * save も Keystore 例外を伝播させず `false` を返し、保存済みの値（キャッシュを含む）は変更しない。
+ * 呼出元（CI-T14）が失敗を扱う。
+ *
+ * スレッド安全性（CI-S0-11、#14）: save / clear / 初回 load の「復号 → 書戻し」と
+ * [clearBrokenState] は、すべて [storeLock] で直列化する（線形化可能）。`cachedToken` /
+ * `cacheLoaded` へのキャッシュ書込みはすべて `storeLock` の中で行い、[load] の 2 回目以降の
+ * fast path（lock を取らない volatile 読み）だけが lock の外に残る。これは
+ * [com.rioikeda.newslisten.network.AuthInterceptor] の `tokenProvider` から任意のスレッド
+ * （OkHttp のコールバックスレッドを含む）で [load] が呼ばれるため。
  */
 class KeystoreSessionStore(context: Context) : SessionStore {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    /** save/clear/初回loadの書戻しを直列化する（CI-S0-11）。中で suspend・外部への callback はしない。 */
+    private val storeLock = Any()
+
     // AuthInterceptor の tokenProvider はリクエスト毎に呼ばれるため、初回 load 後は
-    // メモリキャッシュを返して毎回の AES 復号を避ける。
+    // メモリキャッシュを返して毎回の AES 復号を避ける。書込みはすべて storeLock の中で行い、
+    // 2 回目以降の要求で lock を取らない fast path だけが volatile 読みで済ませる
+    // （読んだ時点の値が線形化点になる）。
     @Volatile
     private var cachedToken: String? = null
 
     @Volatile
     private var cacheLoaded = false
 
-    override fun save(token: String) {
+    override fun save(token: String): Boolean = synchronized(storeLock) {
         try {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
@@ -46,26 +58,32 @@ class KeystoreSessionStore(context: Context) : SessionStore {
             prefs.edit { putString(PREF_KEY_TOKEN, envelope) }
             cachedToken = token
             cacheLoaded = true
+            true
         } catch (e: Exception) {
-            // Keystore/Cipher例外は伝播させない。次回load()がnullを返し自然にre-loginへ誘導する。
+            // Keystore/Cipher例外は伝播させない。呼出元（CI-T14）へ false を返す。既存値は変更しない。
             Log.w(TAG, "セッショントークンの暗号化に失敗したため保存できません")
+            false
         }
     }
 
     override fun load(): String? {
         if (cacheLoaded) return cachedToken
-        val token = decryptStoredToken()
-        cachedToken = token
-        cacheLoaded = true
-        return token
+        return synchronized(storeLock) {
+            if (cacheLoaded) return@synchronized cachedToken
+            val token = decryptStoredToken()
+            cachedToken = token
+            cacheLoaded = true
+            token
+        }
     }
 
-    override fun clear() {
+    override fun clear(): Unit = synchronized(storeLock) {
         prefs.edit { remove(PREF_KEY_TOKEN) }
         cachedToken = null
         cacheLoaded = true
     }
 
+    /** 呼出元は [storeLock] を保持して呼ぶこと（[load] の lock の中だけから呼ぶ）。 */
     private fun decryptStoredToken(): String? {
         val raw = prefs.getString(PREF_KEY_TOKEN, null) ?: return null
         val envelope = EncryptedTokenEnvelope.deserialize(raw) ?: run {
@@ -85,7 +103,10 @@ class KeystoreSessionStore(context: Context) : SessionStore {
         }
     }
 
-    /** 復号不能な暗号文を保持し続けない。次回 save() までは load()=null が re-login を促す。 */
+    /**
+     * 復号不能な暗号文を保持し続けない。次回 save() までは load()=null が re-login を促す。
+     * 呼出元は [storeLock] を保持して呼ぶこと（[decryptStoredToken] の中だけから呼ぶ）。
+     */
     private fun clearBrokenState() {
         prefs.edit { remove(PREF_KEY_TOKEN) }
     }

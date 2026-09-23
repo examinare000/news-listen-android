@@ -18,7 +18,7 @@ import kotlinx.coroutines.withContext
  * androidx.lifecycle.ViewModel は継承しない（[AuthViewModel]/[SettingsViewModel] と同じ設計判断。
  * Dispatcher をコンストラクタ注入し Compose 側の viewModelScope.launch { } から suspend 関数を呼ぶ）。
  *
- * WHY authViewModel を直接注入する（onLogoutCleanup 等の関数注入パターンにしない）: 表示名更新の
+ * WHY authViewModel を直接注入する（onSubjectLeave 等の関数注入パターンにしない）: 表示名更新の
  * 成否は AuthState そのものを書き換える必要があり、「認証層の型を知らずに済ませる」抽象化よりも
  * 「表示名更新は認証状態の一部を変更する操作である」という事実を素直に表現する方が単純になる
  * （SettingsViewModel の isAdminProvider は読み取り専用の問い合わせだが、こちらは書き込みが本質）。

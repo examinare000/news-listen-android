@@ -22,7 +22,7 @@ import kotlinx.serialization.json.jsonObject
  * WHY [onLoginSuccess] を注入する（AuthViewModel を直接持たない）: セッション確立
  * （sessionStore.save・authState 遷移）は auth 層（[com.rioikeda.newslisten.auth.AuthViewModel]）が
  * 正本という既存の責務分担を保つため、verify 成功で得た [LoginResponse] を渡すだけの
- * フック注入パターン（[com.rioikeda.newslisten.auth.AuthViewModel] の onLogoutCleanup/
+ * フック注入パターン（[com.rioikeda.newslisten.auth.AuthViewModel] の onSubjectLeave/
  * onAuthenticated と同型）にした。AppContainer が
  * `{ response -> authViewModel.completePasskeyLogin(response) }` を注入する。
  */
