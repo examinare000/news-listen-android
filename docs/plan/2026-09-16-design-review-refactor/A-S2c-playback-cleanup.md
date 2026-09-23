@@ -1,0 +1,75 @@
+## android リファクタ A-S2c: 旧再生実装の削除（`_currentPodcast`・TP-A1・TP2・設定画面の速度 5 段・UI 3 ファイルの読み替え完了）
+
+## 概要
+A-S2b で入口を差し替えた後に残った旧実装と暫定互換を**削除だけ**する。挙動変更は無い（A-S2b の変更行以外は不変のまま）。正本は Implementation Spec `android/docs/design/2026-09-16-implementation-spec-playback-auth.md`（§3.1 INV-P1 の UI 読み替え・§4 CI-T17・§5 naming_decisions・leakage guard・§6 TP2）、親 docs `docs/design/android-design.md` §7.2（現在再生中の正本・速度）・§7.3（A-S2c 行）。旧 `S2-playback.md` を 3 段に分けた第 3 段（親 plan「3 段分割の型 ③」）。**検証モード（再設計しない）**。generate_spec の spec.md は CI-T17 の抜粋で足り、新しい契約 ID を作らない。
+
+着手順: A-S2b → **A-S2c** → A-S3。
+
+## 前提・着手条件
+- 依存 slice: A-S2b が main に merge 済み（`nowPlaying` / `session` が存在し、`PodcastViewModel` が `state.Ended` だけを購読している）。
+- baseline: A-S2b 完了時点の全 unit テストが green。
+- Selection Gate 依存なし。
+- 棄却済み案（再提案しない）: `currentPodcast` を公開名として残す案（正本一意・SG-R1）。
+- `docs/trial-log/`（android・親）を最初に読む。
+
+## 対象（android サブモジュールのみ。削除／読み替えの列挙。2026-09-23 の grep 実測を分母にする）
+**削除（main）**
+1. `podcast/PodcastViewModel.kt`: `_currentPodcast`（`:83`）・`currentPodcast`（`:86`。TP-A1 の派生値）・session 適用関数内の `_currentPodcast` 書込・`stopInternal(keepCurrentPodcast)` の引数と分岐（`:502-510` 相当。A-S2b で呼出 0）・コメント中の `currentPodcast` 言及（`:343-344, 349, 412, 484, 494`）。
+2. `podcast/PlayerController.kt:42` `onPlaybackCompleted`（TP2）・`podcast/ExoPlayerController.kt:67, 88-90` の override と `invoke`（`STATE_ENDED` は `state = Ended` の発行だけ残す）。
+3. `settings/SettingsScreen.kt:1361` `PLAYBACK_SPEEDS`（5 段）。参照 `:182-183, 654, 658-659, 1201` は `PlaybackConstants.speeds`（A-S2b で Double 8 段）へ置換。
+4. `di/AppContainer.kt:338, 342` のコメント中の `currentPodcast` 言及を `nowPlaying` へ。
+
+**読み替え（main。挙動不変）**
+5. `podcast/AudioPlayerSection.kt:65, 75, 101, 115, 125-126, 142`: `viewModel.currentPodcast` → `viewModel.nowPlaying`（`id` → `episodeId`、他 field は同名）。
+6. `podcast/PodcastScreen.kt:53（コメント）, 61, 160, 204`: `nowPlaying` へ。`:160` の `isPlaying = currentPodcast?.id == podcast.id` は `isNowPlaying = nowPlaying?.episodeId == podcast.id`（一時停止中もハイライト維持＝現状の観測挙動）。`:204` の表示条件は `nowPlaying != null`。
+7. `podcast/PodcastRowView.kt:41, 64-66`: 引数名 `isPlaying` → `isNowPlaying`（LF11。文言「再生中」は不変）。
+8. `podcast/QueueSheet.kt:58, 82-83`: `nowPlaying` へ。両者揃い条件 `currentPodcast != null && queue.current != null` は `nowPlaying != null` に縮む（INV-P1 により `queue.current` は非 null）。
+
+**削除／読み替え（test）**
+9. `podcast/PodcastViewModelTest.kt` の `viewModel.currentPodcast` 読み 28 箇所（`:124, 203, 224, 333, 443, 456, 487, 515, 537, 578, 610, 630, 650, 665, 682, 698, 715, 737, 763, 785, 807, 830, 1135` と `:768, 771, 816, 1101` のコメント・テスト名）を `nowPlaying?.episodeId` または `session` の観測へ置換。期待値は変えない。
+10. `podcast/FakePlayerController.kt:31, 131` `onPlaybackCompleted` と `completePlayback()`（A-S2a の `setState(Ended(duration))` が代替。呼出側テストを置換）。
+
+**旧 `invalidate` 経路について**: 親 plan の A-S2c 行にある「`invalidate` の旧経路」は 2026-09-23 の実測で**空集合**（`grep -rn 'invalidate' app/src` = 0、再生失敗時に `cacheManager.remove` を呼ぶ経路 0）。A-S2b で新設した `invalidate` の他に削除する旧経路は無い。
+
+## 契約（CI → T の対応）
+| CI | 内容 | T-T |
+|---|---|---|
+| CI-T17 | `currentPodcast` は存在せず、UI は `nowPlaying` だけを読む。`QueueSheet` の両者揃い条件が消える | T-T17: 構造検査（下記 grep）＋既存テストの置換後 green |
+
+## 特性テスト（baseline）
+A-S2b 完了時点の全 unit テスト（`PodcastViewModelTest` 52＋A-S2b 追加分を含む）。削除中は各段で green を維持する。
+
+## 手順
+1. baseline green を記録。
+2. UI 3 ファイル＋`PodcastRowView` を `nowPlaying` へ読み替え（5〜8）→ コンパイル・green。
+3. `PodcastViewModelTest` の 28 箇所を置換（9）→ green。
+4. `_currentPodcast` / `currentPodcast` / `keepCurrentPodcast`・コメントを削除（1・4）→ green。
+5. `onPlaybackCompleted` を interface・ExoPlayer・Fake から削除（2・10）→ green。
+6. `SettingsScreen.PLAYBACK_SPEEDS` を削除し `PlaybackConstants.speeds` へ（3）→ `SettingsViewModelTest` 24 件 green。
+7. T-T17（構造検査）を追加 → green。1 slice = 1 PR。temporary path なし（TP-A1・TP2 を本 slice で閉じる）。
+
+## 完了条件
+- `JAVA_HOME=<JBR> ./gradlew clean testDebugUnitTest` 全 green。既存テストの期待値を変えていない（置換のみ）。
+- **参照 0 件**（対象集合 = `app/src/main` と `app/src/test` の全 Kotlin。除外範囲 = `docs/`・`build/`）:
+  - `grep -rn 'currentPodcast\|_currentPodcast\|keepCurrentPodcast' app/src` = 0
+  - `grep -rn 'onPlaybackCompleted\|completePlayback' app/src` = 0
+  - `grep -rn 'PLAYBACK_SPEEDS' app/src` = 0
+  - `grep -rn 'isPlaying = ' app/src/main/java/com/rioikeda/newslisten/podcast/PodcastScreen.kt` = 0（`isNowPlaying` へ）
+- `grep -rn 'nowPlaying' app/src/main/java/com/rioikeda/newslisten/podcast/AudioPlayerSection.kt app/src/main/java/com/rioikeda/newslisten/podcast/PodcastScreen.kt app/src/main/java/com/rioikeda/newslisten/podcast/QueueSheet.kt` ≥ 1 ずつ。
+- T-T17 が `verifies: CI-T17` をテスト名またはコメントに持つ。
+- grep oracle 回帰なし: `error("` = 0、`code == 401` = 0。
+- `PlayerController` の公開面: `state` / `isPlaying` / `positionSeconds` / `durationSeconds` / `playbackSpeed` / `prepare` / `play` / `pause` / `seekTo` / `setSpeed` / `stop` / `release`（`onPlaybackCompleted` 無し）。
+
+## 禁止事項 / scope 外
+- 新しい状態・操作・field を足さない（`NowPlaying` の 7 field を増やさない。`durationSeconds` は player が正本）。
+- 挙動を変えない（行 UI のハイライト条件・`AudioPlayerSection` の表示条件は A-S2b の `nowPlaying` の非 null 条件どおり）。
+- `isPlaying`（派生値）は削除しない（Spec: 段階移行のため残す）。
+- CI の変更（A-S3）・主体別キャッシュ（A-S4）はしない。仕様にない業務条件を足さない。
+
+## 検証
+- `JAVA_HOME=<JBR> ./gradlew clean testDebugUnitTest --console=plain` → exit 0。
+- 上記 grep の結果を PR 本文に貼る。
+
+## 記録
+- TP-A1・TP2 を閉じた旨を PR 本文に書く。
+- 親 docs への返却事項: A-S2a〜c 完了で `design/android-design.md` §7.2「現在再生中の正本」「速度」「再生状態と失敗」「完聴の順序」「位置同期の送信条件」「Queue の不変条件」の行を現状記述へ書き換えられる旨。
