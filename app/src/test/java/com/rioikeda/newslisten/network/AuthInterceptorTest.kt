@@ -9,6 +9,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.TimeUnit
 
@@ -24,7 +25,11 @@ import java.util.concurrent.TimeUnit
 class AuthInterceptorTest {
 
     /** intercept() が呼ぶ request()/proceed() のみを実装するテスト用 Chain。 */
-    private class FakeChain(private val request: Request) : Interceptor.Chain {
+    private class FakeChain(
+        private val request: Request,
+        private val responseCode: Int = 200,
+        private val onProceed: () -> Unit = {},
+    ) : Interceptor.Chain {
         var capturedRequest: Request? = null
             private set
 
@@ -32,10 +37,11 @@ class AuthInterceptorTest {
 
         override fun proceed(request: Request): Response {
             capturedRequest = request
+            onProceed()
             return Response.Builder()
                 .request(request)
                 .protocol(Protocol.HTTP_1_1)
-                .code(200)
+                .code(responseCode)
                 .message("OK")
                 .body("".toResponseBody(null))
                 .build()
@@ -124,5 +130,82 @@ class AuthInterceptorTest {
 
         assertNull(chain.capturedRequest?.header("X-API-Key"))
         assertNull(chain.capturedRequest?.header("Authorization"))
+    }
+
+    // --- onUnauthorized（CI-T11, T-T11。#19: DV-S0-2 = 案B、401 判定は response.code == 401） ---
+
+    @Test
+    fun attached_401_一致するURLでトークン付与済み401ならonUnauthorizedに記録される() {
+        // verifies: CI-T11, CI-A13, CI-A14
+        var token: String? = "t1"
+        val recorded = mutableListOf<String>()
+        val interceptor = AuthInterceptor(baseUrl, "secret-key", onUnauthorized = { recorded.add(it) }) { token }
+        val chain = FakeChain(Request.Builder().url(baseUrl.resolve("feed")!!).get().build(), responseCode = 401)
+
+        val response = interceptor.intercept(chain)
+
+        assertEquals(listOf("t1"), recorded)
+        assertEquals("Bearer t1", chain.capturedRequest?.header("Authorization"))
+        assertEquals(401, response.code)
+    }
+
+    @Test
+    fun no_token_トークン無しの401ではonUnauthorizedを呼ばない() {
+        // verifies: CI-T11
+        var token: String? = null
+        val recorded = mutableListOf<String>()
+        val interceptor = AuthInterceptor(baseUrl, "secret-key", onUnauthorized = { recorded.add(it) }) { token }
+        val chain = FakeChain(Request.Builder().url(baseUrl.resolve("feed")!!).get().build(), responseCode = 401)
+
+        interceptor.intercept(chain)
+
+        assertTrue(recorded.isEmpty())
+    }
+
+    @Test
+    fun foreign_host_一致しないhostの401ではonUnauthorizedを呼ばずヘッダも付けない() {
+        // verifies: CI-T11
+        var token: String? = "t1"
+        val recorded = mutableListOf<String>()
+        val interceptor = AuthInterceptor(baseUrl, "secret-key", onUnauthorized = { recorded.add(it) }) { token }
+        val externalUrl = "https://storage.googleapis.com/bucket/file.mp3".toHttpUrl()
+        val chain = FakeChain(Request.Builder().url(externalUrl).get().build(), responseCode = 401)
+
+        interceptor.intercept(chain)
+
+        assertTrue(recorded.isEmpty())
+        assertNull(chain.capturedRequest?.header("Authorization"))
+    }
+
+    @Test
+    fun non_401_一致するURLで200または403または500ならonUnauthorizedを呼ばない() {
+        // verifies: CI-T11
+        val token: String? = "t1"
+        listOf(200, 403, 500).forEach { code ->
+            val recorded = mutableListOf<String>()
+            val interceptor = AuthInterceptor(baseUrl, "secret-key", onUnauthorized = { recorded.add(it) }) { token }
+            val chain = FakeChain(Request.Builder().url(baseUrl.resolve("feed")!!).get().build(), responseCode = code)
+
+            interceptor.intercept(chain)
+
+            assertTrue("code=$code で呼ばれるべきではない", recorded.isEmpty())
+        }
+    }
+
+    @Test
+    fun no_reevaluation_応答時にtokenProviderを再評価せず送信時のトークンで通知する() {
+        // verifies: CI-T11
+        var token: String? = "t1"
+        val recorded = mutableListOf<String>()
+        val interceptor = AuthInterceptor(baseUrl, "secret-key", onUnauthorized = { recorded.add(it) }) { token }
+        val chain = FakeChain(
+            Request.Builder().url(baseUrl.resolve("feed")!!).get().build(),
+            responseCode = 401,
+            onProceed = { token = "t2" },
+        )
+
+        interceptor.intercept(chain)
+
+        assertEquals(listOf("t1"), recorded)
     }
 }

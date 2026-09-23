@@ -1,7 +1,9 @@
 package com.rioikeda.newslisten.network
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -46,5 +48,29 @@ class InMemorySessionStoreTest {
         store.clear()
 
         assertNull(store.load())
+    }
+
+    // --- save の戻り値（CI-T14, T-T14. order 手順3: save の失敗を呼出元へ返す） ---
+
+    @Test
+    fun store_ok_saveが成功したらtrueを返しloadで取得できる() {
+        // verifies: CI-T14
+        val store = InMemorySessionStore()
+
+        val result = store.save("t")
+
+        assertTrue(result)
+        assertEquals("t", store.load())
+    }
+
+    @Test
+    fun store_fail_saveFailsが真ならfalseを返しloadは変わらない() {
+        // verifies: CI-T14
+        val store = InMemorySessionStore(initialToken = "old", saveFails = true)
+
+        val result = store.save("t")
+
+        assertFalse(result)
+        assertEquals("old", store.load())
     }
 }

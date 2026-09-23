@@ -84,6 +84,10 @@ class AppContainer(context: Context) {
             AuthInterceptor(
                 apiBaseUrl = baseUrl.toHttpUrl(),
                 apiKey = apiKey,
+                // OkHttp のコールバックスレッドから同期的に呼ぶ（android S0・CI-T11・F5）。
+                // `_authViewModel` は `by lazy`（synchronized）で、ラムダは呼ばれた時点で解決する
+                // ため、ここで参照しても循環初期化にはならない。
+                onUnauthorized = { attachedToken -> _authViewModel.onUnauthorized(attachedToken) },
                 tokenProvider = tokenProvider
             )
         )
@@ -242,10 +246,12 @@ class AppContainer(context: Context) {
      * by lazy でシングルトンキャッシュ化：画面回転時に AuthViewModel インスタンスが同じ
      * ままであることを保証し、authState が Unknown にリセットされるのを防ぐ。
      *
-     * onLogoutCleanup: フェーズ8-D・shared-playback-spec.md §6.3（共有端末対応）。logout 時に
-     * 音声キャッシュを全削除し、共有端末に他人の音声データが残らないようにする。auth 層に
-     * AudioCacheManager を直接依存させないため、削除処理だけを関数として注入する
-     * （詳細は AuthViewModel の onLogoutCleanup コメント参照）。
+     * onSubjectLeave（android S0・SG-R18 で onLogoutCleanup から改名）: フェーズ8-D・
+     * shared-playback-spec.md §6.3（共有端末対応）。logout 時に音声キャッシュを全削除し、
+     * 共有端末に他人の音声データが残らないようにする。auth 層に AudioCacheManager を
+     * 直接依存させないため、削除処理だけを関数として注入する
+     * （詳細は AuthViewModel の onSubjectLeave コメント参照）。呼出元は logout 経路のみ
+     * （失効経路からは呼ばない。order:12）。
      *
      * 2レビュー統合指摘（logout×ダウンロード競合）の修正: 直接 `audioCacheManager.removeAll()` を
      * 呼ぶのではなく `_podcastViewModel.cancelDownloadsAndClearCache()` を呼ぶ。PodcastViewModel の
@@ -261,9 +267,9 @@ class AppContainer(context: Context) {
             dispatcher = Dispatchers.Default,
             preferencesStore = preferencesStore,
             // フェーズ9: cancelDownloadsAndClearCache（既存・フェーズ8-D）と FCM トークン解除を
-            // 両方行う合成ラムダ。onLogoutCleanup は単一のフック点のため、複数の後始末はここで束ねる。
+            // 両方行う合成ラムダ。onSubjectLeave は単一のフック点のため、複数の後始末はここで束ねる。
             // 各操作を独立した try/catch で保護し、前段の失敗が後段をスキップさせないようにする。
-            onLogoutCleanup = {
+            onSubjectLeave = {
                 try {
                     _podcastViewModel.cancelDownloadsAndClearCache()
                 } catch (e: CancellationException) {
@@ -393,7 +399,7 @@ class AppContainer(context: Context) {
      *
      * isAdminProvider: RSS ソース編集（updateSource）は admin 限定（issue #66・ADR-047）。
      * settings 層が auth 層の型（AuthState）に直接依存しないよう、AuthViewModel の
-     * onLogoutCleanup/onAuthenticated と同じ「呼び出し元が判定関数を注入する」パターンを踏襲する。
+     * onSubjectLeave/onAuthenticated と同じ「呼び出し元が判定関数を注入する」パターンを踏襲する。
      * role は認証確立後に非同期で確定するため、コンストラクタ時点の固定値ではなく
      * 呼び出し時点で都度 _authViewModel.authState.value を評価する。
      *

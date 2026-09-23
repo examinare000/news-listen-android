@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -111,11 +112,14 @@ class MainActivity : ComponentActivity() {
 
                 // authState を購読
                 val authState = authViewModel.authState.collectAsStateWithLifecycle()
+                // 一時障害の再試行導線（android S0・CI-S0-6）: NetworkError/HttpError/DecodingError
+                // では authState が Unknown のまま lastFailure が立つ。
+                val lastFailure = authViewModel.lastFailure.collectAsStateWithLifecycle()
 
                 // AuthState に応じた UI 出し分け
                 when (val state = authState.value) {
                     is AuthState.Unknown -> {
-                        // トークン確認中のローディング画面
+                        // トークン確認中のローディング画面（lastFailure があれば固定文言+再試行導線）
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -126,13 +130,27 @@ class MainActivity : ComponentActivity() {
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
-                                CircularProgressIndicator()
-                                Text(
-                                    text = stringResource(R.string.loading_auth),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    modifier = Modifier.padding(top = DSSpacing.s)
-                                )
+                                if (lastFailure.value != null) {
+                                    Text(
+                                        text = stringResource(R.string.auth_check_failed_message),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                    )
+                                    Button(
+                                        onClick = { authViewModel.retryRefreshAuth() },
+                                        modifier = Modifier.padding(top = DSSpacing.s),
+                                    ) {
+                                        Text(stringResource(R.string.auth_check_retry_button_label))
+                                    }
+                                } else {
+                                    CircularProgressIndicator()
+                                    Text(
+                                        text = stringResource(R.string.loading_auth),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        modifier = Modifier.padding(top = DSSpacing.s)
+                                    )
+                                }
                             }
                         }
                     }
