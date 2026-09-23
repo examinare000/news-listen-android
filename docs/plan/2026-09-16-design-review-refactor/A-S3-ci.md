@@ -6,7 +6,8 @@ CI を `testDebugUnitTest` / `lintDebug` / `assembleDebug` の独立ステップ
 着手順（A-S2c の PR が main に merge 済みであること。A-S2a〜c の 3 段の後に CI の粒度を上げる）。起点となった運用知見: ローカルの JDK 26 では Kotlin コンパイラが起動不能で、Android Studio 同梱 JBR を `JAVA_HOME` にしないと `testDebugUnitTest` が走らない（`docs/research-reports/2026-09-16-code-design-review/verification-run.md` §1〜§2）。toolchain 固定で環境差を吸収する。
 
 ## 前提・着手条件
-- 依存 slice: A-S2c が main に merge 済み。
+- 依存 slice: A-S2c の android PR が main に merge 済み **かつ** 親リポ `news-listen` の submodule ポインタが進んでいる（親で `git submodule status` を実行し `android` 行に `+` が無い）。A-S4 とは対象ファイルが重ならないが、同一 submodule のため直列で投入する。
+- 2026-09-23 実測の現状: `.github/workflows/ci.yml` は `Build and test`（`./gradlew build --stacktrace`）の 1 ステップ＋ gitleaks。`app/build.gradle.kts:76` に `jvmTarget = "17"` はあるが `jvmToolchain` は無い（toolchain 追加後は `jvmTarget` と重複するため toolchain に寄せてよい）。
 - Selection Gate 依存なし。
 - 入れないもの（SG-R11 で決定・再提案しない）: detekt / ktlint / JaCoCo / Dependabot（学習サイクルで再判断）。
 - `docs/trial-log/` を最初に読み、棄却済み案を再試行しない。
