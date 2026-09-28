@@ -12,6 +12,7 @@ import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.AudioCacheException
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.NetworkMonitoring
+import com.rioikeda.newslisten.network.PodcastApi
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -39,6 +40,7 @@ import kotlinx.coroutines.withContext
  * 実際の音声再生は [PlayerController] に委譲する（フェーズ5 は Fake、フェーズ7 で Media3 実装に差し替え）。
  */
 class PodcastViewModel(
+    private val podcastApi: PodcastApi,
     private val apiClient: ApiClient,
     private val playerController: PlayerController,
     private val cacheManager: AudioCacheManager,
@@ -128,7 +130,7 @@ class PodcastViewModel(
         _isLoading.value = true
         _errorMessage.value = null
         try {
-            val response = apiClient.fetchPodcasts()
+            val response = podcastApi.fetchPodcasts()
             _podcasts.value = response.podcasts
             syncDownloadedState()
         } catch (e: ApiException) {
@@ -204,8 +206,8 @@ class PodcastViewModel(
     private suspend fun performDownload(podcast: PodcastResponse) {
         try {
             // 署名付き URL を新たに取得（ダウンロード時点での最新 URL を確保）。
-            val fresh = apiClient.fetchPodcast(podcast.id)
-            val audioData = apiClient.downloadAudio(fresh.audioUrl)
+            val fresh = podcastApi.fetchPodcast(podcast.id)
+            val audioData = podcastApi.downloadAudio(fresh.audioUrl)
             cacheManager.cache(podcast.id, audioData)
             _downloadedIds.value = _downloadedIds.value + podcast.id
         } catch (e: ApiException) {
@@ -303,7 +305,7 @@ class PodcastViewModel(
                 }
                 PlaybackSource.NETWORK -> {
                     try {
-                        val fresh = apiClient.fetchPodcast(podcast.id)
+                        val fresh = podcastApi.fetchPodcast(podcast.id)
                         beginPlayback(fresh, fresh.audioUrl)
                     } catch (e: ApiException) {
                         _errorMessage.value = e.message
@@ -351,7 +353,7 @@ class PodcastViewModel(
         val completedPodcastId = _currentPodcast.value?.id
         if (completedPodcastId != null) {
             try {
-                apiClient.markCompleted(completedPodcastId)
+                podcastApi.markCompleted(completedPodcastId)
             } catch (_: ApiException) {
                 // 完聴記録は best-effort。失敗しても次エピソードへの遷移を止めない。
             }
@@ -535,7 +537,7 @@ class PodcastViewModel(
     /** 現在の再生位置をサーバーへ同期する。失敗時はサイレント（iOS syncPlaybackPositionIfNeeded 同様）。 */
     private suspend fun syncPosition(podcastId: String) {
         try {
-            apiClient.updatePlaybackPosition(podcastId, playerController.positionSeconds.value)
+            podcastApi.updatePlaybackPosition(podcastId, playerController.positionSeconds.value)
         } catch (e: ApiException) {
             // ネットワーク一時的な失敗等をログしない（iOS 同様のベストエフォート）。
         }
