@@ -121,6 +121,14 @@ class FakePlayerController : PlayerController {
         _positionSeconds.value = seconds
     }
 
+    /**
+     * テストから再生中フラグを直接設定する（状態注入経路）。
+     * A-S2a で `PlaybackState` の注入に接続する足場で、現時点では未使用。
+     */
+    fun setPlaying(playing: Boolean) {
+        _isPlaying.value = playing
+    }
+
     /** テストから総再生時間を直接設定する（スキップ時の上限クランプ検証用）。 */
     fun setDuration(seconds: Double?) {
         _durationSeconds.value = seconds
