@@ -68,6 +68,7 @@ class PodcastViewModelTest {
     ): PodcastViewModel =
         PodcastViewModel(
             apiClient,
+            apiClient,
             playerController,
             cacheManager,
             networkMonitor,

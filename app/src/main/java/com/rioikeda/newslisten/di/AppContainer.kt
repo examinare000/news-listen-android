@@ -344,6 +344,7 @@ class AppContainer(context: Context) {
      */
     private val _podcastViewModel: PodcastViewModel by lazy {
         PodcastViewModel(
+            podcastApi = apiClient,
             apiClient = apiClient,
             playerController = _playerController,
             cacheManager = audioCacheManager,

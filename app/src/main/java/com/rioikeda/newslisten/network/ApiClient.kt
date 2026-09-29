@@ -34,7 +34,7 @@ import kotlinx.serialization.json.JsonObject
  *
  * 正本: ios/NewsListenApp/NewsListenApp/Networking/APIClient.swift のミラー。
  */
-interface ApiClient : LearningApi, VocabularyTestApi {
+interface ApiClient : LearningApi, VocabularyTestApi, PodcastApi {
     /** ログインしてセッショントークンとユーザー情報を取得する。 */
     suspend fun login(username: String, password: String): LoginResponse
 
@@ -54,23 +54,19 @@ interface ApiClient : LearningApi, VocabularyTestApi {
     suspend fun dismissArticle(id: String): ActionResponse
 
     /** Podcast 一覧を取得する。 */
-    suspend fun fetchPodcasts(): PodcastListResponse
+    override suspend fun fetchPodcasts(): PodcastListResponse
 
     /** 指定 ID の Podcast を取得する（署名付き audio_url の再取得にも使う）。 */
-    suspend fun fetchPodcast(id: String): PodcastResponse
+    override suspend fun fetchPodcast(id: String): PodcastResponse
 
     /** 指定 Podcast の再生位置を更新する。レスポンスは更新後の Podcast 全体。 */
-    suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse
+    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse
 
     /** 完聴を best-effort で記録する呼び出し元のための API。 */
-    suspend fun markCompleted(id: String) {
-        error("markCompleted is not stubbed for id=$id")
-    }
+    override suspend fun markCompleted(id: String)
 
     /** 公開設問への回答をサーバーで採点する。 */
-    suspend fun submitQuizAnswers(id: String, request: QuizAnswerRequest): QuizAnswerResponse {
-        error("submitQuizAnswers is not stubbed for id=$id")
-    }
+    suspend fun submitQuizAnswers(id: String, request: QuizAnswerRequest): QuizAnswerResponse
 
     /** ユーザー設定選択（難易度・再生速度）を取得する。 */
     suspend fun fetchPreferences(): PreferencesResponse
@@ -80,7 +76,7 @@ interface ApiClient : LearningApi, VocabularyTestApi {
      *
      * 実ファイル保存への接続はフェーズ8 で行うため、フェーズ2 はバイト列取得までの実装。
      */
-    suspend fun downloadAudio(url: String): ByteArray
+    override suspend fun downloadAudio(url: String): ByteArray
 
     /**
      * デバイストークン（FCM）を登録する（冪等: 同一 token は upsert。フェーズ9）。
@@ -126,35 +122,21 @@ interface ApiClient : LearningApi, VocabularyTestApi {
     /** 聴取ストリーク（連続聴取日数）を取得する（フェーズ10 P10、issue #165）。 */
     suspend fun fetchListeningStreak(): ListeningStreakResponse
 
-    override suspend fun fetchLearningDashboard(): LearningDashboardResponse {
-        error("fetchLearningDashboard is not stubbed")
-    }
+    override suspend fun fetchLearningDashboard(): LearningDashboardResponse
 
-    suspend fun updateWeeklyGoalEpisodes(weeklyGoalEpisodes: Int): PreferencesResponse {
-        error("updateWeeklyGoalEpisodes is not stubbed for goal=$weeklyGoalEpisodes")
-    }
+    suspend fun updateWeeklyGoalEpisodes(weeklyGoalEpisodes: Int): PreferencesResponse
 
-    suspend fun saveVocabulary(podcastId: String, term: String): VocabularyItemResponse {
-        error("saveVocabulary is not stubbed for podcastId=$podcastId term=$term")
-    }
+    suspend fun saveVocabulary(podcastId: String, term: String): VocabularyItemResponse
 
-    override suspend fun fetchVocabulary(): VocabularyListResponse {
-        error("fetchVocabulary is not stubbed")
-    }
+    override suspend fun fetchVocabulary(): VocabularyListResponse
 
-    suspend fun deleteVocabulary(vocabularyId: String): DeleteVocabularyResponse {
-        error("deleteVocabulary is not stubbed for vocabularyId=$vocabularyId")
-    }
+    suspend fun deleteVocabulary(vocabularyId: String): DeleteVocabularyResponse
 
-    override suspend fun fetchVocabularyTestSession(): VocabularyTestSessionResponse {
-        error("fetchVocabularyTestSession is not stubbed")
-    }
+    override suspend fun fetchVocabularyTestSession(): VocabularyTestSessionResponse
 
     override suspend fun submitVocabularyTestResults(
         results: List<VocabularyTestResultItemRequest>,
-    ): VocabularyTestResultResponse {
-        error("submitVocabularyTestResults is not stubbed")
-    }
+    ): VocabularyTestResultResponse
 
     /** プロフィール（表示名）を更新し、更新後のユーザー情報を返す（フェーズ11 P11）。 */
     suspend fun updateProfile(displayName: String): UserResponse

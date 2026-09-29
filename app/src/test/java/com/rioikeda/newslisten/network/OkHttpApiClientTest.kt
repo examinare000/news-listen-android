@@ -151,6 +151,61 @@ class OkHttpApiClientTest {
         assertEquals(3, response.remaining)
     }
 
+    // --- fetchPodcasts / fetchPodcast（PodcastApi port。CI-T16） ---
+
+    @Test
+    fun fetchPodcastsはPodcastApi型の参照からGETでPodcastListResponseを返す() = runTest {
+        // verifies: CI-T16
+        val podcastApi: PodcastApi = client
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """
+                {
+                  "podcasts": [
+                    {
+                      "id":"p1","type":"single","article_ids":["a1"],"difficulty":"toeic_600",
+                      "audio_url":"https://example.com/p1.mp3","japanese_intro_text":"intro",
+                      "duration_seconds":120,"status":"completed","created_at":"2026-07-01T09:00:00+00:00"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val response = podcastApi.fetchPodcasts()
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        assertEquals("/podcasts", recorded.path)
+        assertEquals(1, response.podcasts.size)
+        assertEquals("p1", response.podcasts[0].id)
+    }
+
+    @Test
+    fun fetchPodcastはPodcastApi型の参照からGETでPodcastResponseを返す() = runTest {
+        // verifies: CI-T16
+        val podcastApi: PodcastApi = client
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """
+                {
+                  "id":"p1","type":"single","article_ids":["a1"],"difficulty":"toeic_600",
+                  "audio_url":"https://example.com/p1.mp3","japanese_intro_text":"intro",
+                  "duration_seconds":120,"status":"completed","created_at":"2026-07-01T09:00:00+00:00"
+                }
+                """.trimIndent()
+            )
+        )
+
+        val response = podcastApi.fetchPodcast("p1")
+
+        val recorded = server.takeRequest()
+        assertEquals("GET", recorded.method)
+        assertEquals("/podcasts/p1", recorded.path)
+        assertEquals("p1", response.id)
+    }
+
     // --- updatePlaybackPosition ---
 
     @Test
