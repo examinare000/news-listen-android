@@ -15,6 +15,18 @@
 > **追記（2026-09-30・wave 1 完了後の前提点検による明記）**: 再生の停止の扱いを user 判断で確定した（親 docs 監査レポート §5 の SG-C24・SG-C25、共有仕様 §6.6）。
 > - 再生セッションの停止は §3.1 の遷移表の外の**リセット**で、分母 11 には数えない。Android の `PlaybackSession` は値（sealed union）なので、停止は **Coordinator が `NothingPlaying` を代入して表す。遷移関数は通らない**（表外遷移の `IllegalStateException` の対象にならない）。`stopForSubjectLeave()`（§3.1）の「→ `NothingPlaying`」はこの代入を指す。
 > - `PlaybackSession` に停止の操作は足さない。A-S2a の order は変えない。代入と `playerController.stop()` の呼出は A-S2b2 が実装し、`FakePlayerController` の状態で観測する。
+>
+> **追記（2026-09-30・wave 3 の前提点検による上書き）**: user 判断で確定した（親 docs 監査レポート §5 の SG-C49〜C52・C54・C61・C62、共有仕様 §2.4・§2.11・§6.4・§6.6）。本書の次の記述を上書きする（本書は改訂せず、この追記と各 slice の order を優先する）。
+> - **Queue**（SG-C50。§3.1 の `setQueue` の dedupe を具体化）: 開始位置は元の入力で clamp して id を決め、先勝ちで重複を除いた後のその id の位置を現在にする（共有仕様 Q-33）。
+> - **`stopPlayback()` の終状態**（SG-C51）: 「位置同期 1 回 → `playerController.stop()` → `NothingPlaying` を代入。キューは保持」。`Stopped` は `Completed` からキューが尽きた場合だけに使う（遷移表どおり）。
+> - **取得前・開始前の失敗**（SG-C52。§3.1 の `startEpisode` の `Errored(…)` を具体化）: Coordinator が `Errored(ref, reason)` の値を代入して表す。停止と同じく遷移関数を通らず、分母 11 には数えない。
+> - **手動で選んだエピソードが開始前に再生できないと分かる場合**（SG-C62。`playabilityError`・`UNAVAILABLE`）: キューもセッションも変えず、`errorMessage` に理由を出すだけにする（再生中のものは続く）。再生可能かは状態を変える前に判定する。`Errored` にするのは、キューが既にそのエピソードを現在にしている場合（完聴後の advance・`retry()`）だけ。§3.1 の `startEpisode` の「`playabilityError` → `Errored(NotPlayable)`」はこの場合分けで読む。
+> - **総時間の正本**（SG-C54）: player の `durationSeconds`（0 より大きい）→ DTO の `durationSeconds`（0 より大きい）→ 不明。完聴時（PS-06）は優先順で得た値を送り、不明なら完聴時点の現在位置、それも 0 なら位置は送らない。位置の丸めは不明な間は上限なし。
+> - **完聴時の順序**（SG-C61。§3.1 の `onEnded`）: 完聴の記録と位置の書込は、この順で送り始める。次のエピソードの開始は応答を待たない。
+> - **順序**（SG-C49）: A-S4 は A-S2b1 の PR が main に入った後に投入する。
+> - **次へ送り**（SG-C63）: Android は現時点で入口を持たない。足すときは共有仕様 §2.12 に従う。
+> - **導出**（親 docs 監査レポート §5.0 の A-1〜A-4。A-S2b2 の order が固定）: 手動の開始は「判定 → 取得 → その後でキューと Session を変える」の順で、取得の失敗でも状態を変えない（A-1）。「何も再生していない」は `NothingPlaying`（A-2）。`Active` の速度は開始時の値のまま（A-3）。完聴の送信は別の coroutine の直列で、次の開始は待たない（A-4）。
+> - 設計の正本は親 docs `adr/105-playback-session-out-of-table-operations-and-shared-rules.md` と `design/android-design.md` §7.4。
 
 ## 0. Decision frame と function_plan
 
