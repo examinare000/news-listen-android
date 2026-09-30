@@ -11,6 +11,10 @@
 > - SG-X1: 完聴時に `duration` を明示送信する（SG-R14 のとおり。3 platform 共通で確定）。
 > - SG-X3: 主体離脱は **cleanup 完了を待たず**、`sessionStore.clear()` → `Unauthenticated` → `onSubjectLeave()` の順にする（§3.2 の遷移表の事後条件は同じ。順序だけ改める。S0 で実施）。
 > - SG-X4: **一時停止中の 15 秒 PATCH はやめる**（SG-R9「現行維持」を置換。backend は位置 PATCH 到達ごとに `listeningDays` を書くため、U1 は「依存する」で解消。CI-T19 に一時停止中の非送信を追加）。
+>
+> **追記（2026-09-30・wave 1 完了後の前提点検による明記）**: 再生の停止の扱いを user 判断で確定した（親 docs 監査レポート §5 の SG-C24・SG-C25、共有仕様 §6.6）。
+> - 再生セッションの停止は §3.1 の遷移表の外の**リセット**で、分母 11 には数えない。Android の `PlaybackSession` は値（sealed union）なので、停止は **Coordinator が `NothingPlaying` を代入して表す。遷移関数は通らない**（表外遷移の `IllegalStateException` の対象にならない）。`stopForSubjectLeave()`（§3.1）の「→ `NothingPlaying`」はこの代入を指す。
+> - `PlaybackSession` に停止の操作は足さない。A-S2a の order は変えない。代入と `playerController.stop()` の呼出は A-S2b2 が実装し、`FakePlayerController` の状態で観測する。
 
 ## 0. Decision frame と function_plan
 
