@@ -25,6 +25,7 @@
 > - **完聴時の順序**（SG-C61。§3.1 の `onEnded`）: 完聴の記録と位置の書込は、この順で送り始める。次のエピソードの開始は応答を待たない。
 > - **順序**（SG-C49）: A-S4 は A-S2b1 の PR が main に入った後に投入する。
 > - **次へ送り**（SG-C63）: Android は現時点で入口を持たない。足すときは共有仕様 §2.12 に従う。
+> - **導出**（親 docs 監査レポート §5.0 の A-1〜A-4。A-S2b2 の order が固定）: 手動の開始は「判定 → 取得 → その後でキューと Session を変える」の順で、取得の失敗でも状態を変えない（A-1）。「何も再生していない」は `NothingPlaying`（A-2）。`Active` の速度は開始時の値のまま（A-3）。完聴の送信は別の coroutine の直列で、次の開始は待たない（A-4）。
 > - 設計の正本は親 docs `adr/105-playback-session-out-of-table-operations-and-shared-rules.md` と `design/android-design.md` §7.4。
 
 ## 0. Decision frame と function_plan
