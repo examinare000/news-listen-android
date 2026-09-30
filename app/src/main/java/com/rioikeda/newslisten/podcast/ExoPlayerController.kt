@@ -9,6 +9,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.rioikeda.newslisten.playbackservice.PlaybackService
@@ -64,6 +65,9 @@ class ExoPlayerController(private val context: Context) : PlayerController {
     private val _playbackSpeed = MutableStateFlow(1.0f)
     override val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
 
+    private val _state = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
+    override val state: StateFlow<PlaybackState> = _state.asStateFlow()
+
     override var onPlaybackCompleted: (() -> Unit)? = null
 
     private var positionPollingRunnable: Runnable? = null
@@ -82,11 +86,19 @@ class ExoPlayerController(private val context: Context) : PlayerController {
                             if (durationMs != C.TIME_UNSET && durationMs > 0) {
                                 _durationSeconds.value = durationMs / 1000.0
                             }
+                            // WHY: 一時停止中に READY へ達しても isPlaying は false のままで
+                            // onIsPlayingChanged が来ないため、ここで Paused にする。
+                            if (!exoPlayer.isPlaying) {
+                                _state.value = PlaybackState.Paused(currentPositionSeconds(), currentDurationSeconds())
+                            }
                         }
+
+                        Player.STATE_BUFFERING -> _state.value = PlaybackState.Loading
 
                         Player.STATE_ENDED -> {
                             // 再生終了: コールバック発火（onPlaybackCompleted が非 suspend コンテキストなのでここで OK）
                             _isPlaying.value = false
+                            _state.value = PlaybackState.Ended(currentDurationSeconds())
                             onPlaybackCompleted?.invoke()
                         }
 
@@ -95,14 +107,27 @@ class ExoPlayerController(private val context: Context) : PlayerController {
                             _isPlaying.value = false
                             _positionSeconds.value = 0.0
                             _durationSeconds.value = null
+                            // WHY: エラー後にも IDLE へ遷移するため、Failed を上書きしない。
+                            if (exoPlayer.playerError == null) {
+                                _state.value = PlaybackState.Idle
+                            }
                         }
 
                         else -> {}
                     }
                 }
 
+                override fun onPlayerError(error: PlaybackException) {
+                    _state.value = PlaybackState.Failed(classifyPlaybackError(error.errorCode))
+                }
+
                 override fun onIsPlayingChanged(isPlayingChanged: Boolean) {
                     _isPlaying.value = isPlayingChanged
+                    if (isPlayingChanged) {
+                        _state.value = PlaybackState.Playing(currentPositionSeconds(), currentDurationSeconds())
+                    } else if (exoPlayer.playbackState == Player.STATE_READY) {
+                        _state.value = PlaybackState.Paused(currentPositionSeconds(), currentDurationSeconds())
+                    }
                     // 再生開始時にポーリング開始、停止時はポーリング停止
                     if (isPlayingChanged) {
                         startPositionPolling()
@@ -129,6 +154,7 @@ class ExoPlayerController(private val context: Context) : PlayerController {
                 .build()
             exoPlayer.setMediaItem(mediaItem)
             exoPlayer.prepare()
+            _state.value = PlaybackState.Loading
             // prepare() 直後は durationSeconds は未確定（STATE_READY で確定）
             _durationSeconds.value = null
         }
@@ -181,6 +207,7 @@ class ExoPlayerController(private val context: Context) : PlayerController {
             stopPositionPolling()
             exoPlayer.stop()
             exoPlayer.clearMediaItems()
+            _state.value = PlaybackState.Idle
         }
     }
 
@@ -223,6 +250,13 @@ class ExoPlayerController(private val context: Context) : PlayerController {
             }
         }
         mainHandler.post(positionPollingRunnable!!)
+    }
+
+    private fun currentPositionSeconds(): Double = exoPlayer.currentPosition / 1000.0
+
+    private fun currentDurationSeconds(): Double? {
+        val durationMs = exoPlayer.duration
+        return if (durationMs != C.TIME_UNSET && durationMs > 0) durationMs / 1000.0 else null
     }
 
     /**
