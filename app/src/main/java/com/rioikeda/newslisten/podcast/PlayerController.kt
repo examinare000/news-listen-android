@@ -34,6 +34,9 @@ interface PlayerController {
     /** 現在の再生速度（倍率）。既定: 1.0f。 */
     val playbackSpeed: StateFlow<Float>
 
+    /** 再生状態（6 状態は排他）。再生失敗も [PlaybackState.Failed] として現れる。 */
+    val state: StateFlow<PlaybackState>
+
     /**
      * 再生が最後まで完了したときに呼ばれるコールバック。呼び出し元（[PodcastViewModel]）が
      * 次の再生開始時に上書きする。SharedFlow ではなくコールバックを選んだのは、

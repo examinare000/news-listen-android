@@ -28,6 +28,9 @@ class FakePlayerController : PlayerController {
     private val _playbackSpeed = MutableStateFlow(1.0f)
     override val playbackSpeed: StateFlow<Float> = _playbackSpeed
 
+    private val _state = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
+    override val state: StateFlow<PlaybackState> = _state
+
     override var onPlaybackCompleted: (() -> Unit)? = null
 
     /** prepare に渡された URL の呼び出し履歴。 */
@@ -121,10 +124,12 @@ class FakePlayerController : PlayerController {
         _positionSeconds.value = seconds
     }
 
-    /**
-     * テストから再生中フラグを直接設定する（状態注入経路）。
-     * A-S2a で `PlaybackState` の注入に接続する足場で、現時点では未使用。
-     */
+    /** テストから [PlaybackState] を直接注入する。他の状態フロー（isPlaying 等）へは派生させない。 */
+    fun setState(state: PlaybackState) {
+        _state.value = state
+    }
+
+    /** テストから再生中フラグ（isPlaying）だけを設定する。[PlaybackState] の注入は [setState]。 */
     fun setPlaying(playing: Boolean) {
         _isPlaying.value = playing
     }
