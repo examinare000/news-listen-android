@@ -16,7 +16,7 @@ Spec §3.2 の「目標の置き場」へファイルを移す（package の宣�
 - A-T8b と **A-T3b** の android PR が main に merge 済み、かつ親ポインタが進んでいる（Spec §8.1）。
 - 許可リスト（`test/…/architecture/Allowlist.kt`）に残る組が、本 slice が消すもの（ファイルの置き場に由来する組と、test double）だけであること。それ以外が残っていれば、その持ち主の slice が済んでいないので投入しない。
 - baseline: 全 unit テストと `ArchitectureStructureTest` が green。
-- 判断待ち: 無い。
+- 判断待ち: 無い（先行する A-T8a の文面は SG-D10、A-T3b の文面は SG-D6・SG-D11 で決定済み）。
 
 ## 3. 着手前の前提点検（投入の直前に数え直す）
 

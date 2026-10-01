@@ -10,11 +10,11 @@
 >
 > **実装は止めてある**（親 plan「実装の停止と再開ゲート」）。再開ゲートが満たされ user が再開を指示するまで、どの order も投入しない。
 
-共有仕様の先行 PR（`shared-playback-spec.md` §6.4・§6.5）は news-listen-docs #133 で **完了**。§6.7 の Selection Gate は 2026-09-16 に全て確定し、SG-X3 は 2026-09-23 に ADR-104 で「待たない＋主体識別」へ改訂済み。2026-10-01 時点で残る判断は 1 件: **A-T8a の記事の文面**（`feed/` の `= e.message` 3 箇所。決定 SG-D6 は再生の文面だけを決めた）。A-T8a は決まるまで投入しない。ほかの order は確定値を実装対象に含む（再生の文面は SG-D6 で確定し、A-T3b は ready）。
+共有仕様の先行 PR（`shared-playback-spec.md` §6.4・§6.5）は news-listen-docs #133 で **完了**。§6.7 の Selection Gate は 2026-09-16 に全て確定し、SG-X3 は 2026-09-23 に ADR-104 で「待たない＋主体識別」へ改訂済み。2026-10-01 時点で判断待ちは無い。order の起票で出た **A-T8a の記事の文面**（`feed/` の `= e.message` 3 箇所。D-A8a-1）は SG-D10 で決定し、A-T8a は ready。すべての order は確定値を実装対象に含む（再生の文面は SG-D6 と、通信の失敗を分ける補足 SG-D11 で確定し、A-T3b は ready）。
 
 ## slice と投入順
 
-目標 Spec §8.1 の表の順が投入の順（同じ submodule は 1 本ずつ）。状態: 完了 / ready（前の slice が main に入れば投入できる）/ B-S5b 待ち / 判断待ち。
+目標 Spec §8.1 の表の順が投入の順（同じ submodule は 1 本ずつ）。状態: 完了 / ready（前の slice が main に入れば投入できる）/ B-S5b 待ち（2026-10-01 に判断待ちの slice は無くなった）。
 
 | 順 | ID | order | 内容 | 依存 | 状態 | 種類 |
 |---|---|---|---|---|---|---|
@@ -33,7 +33,7 @@
 | 9 | A-S4b | [A-S4b-subject-departure.md](A-S4b-subject-departure.md) | 主体離脱の導出と順序・後始末・FCM の解除を連鎖削除に任せる・`PreferenceItem` | A-S4a・**B-S5b** | **B-S5b 待ち**（遅れるときは A-T3a1〜A-T4 を先に。A-T5a より前に入れる） | 適用 |
 | 10 | A-T3a1 | [A-T3a1-playback-coordinator.md](A-T3a1-playback-coordinator.md) | `PlaybackCoordinator` を取り出して委譲・`AudioStore`・Media3 の分類を adapter へ | A-S2c・A-S4a | ready | 適用 |
 | 10b | A-T3a2 | [A-T3a2-playback-read-models.md](A-T3a2-playback-read-models.md) | `QueueView`・`EpisodeRow`・id の command。画面がリードモデルだけを読む | A-T3a1 | ready | 適用 |
-| 11 | A-T3b | [A-T3b-playback-notice.md](A-T3b-playback-notice.md) | `PlaybackNotice` と固定文言（**SG-D6**）。生成の失敗の識別子を文言へ | A-T3a2 | ready（SG-D6 で判断済み） | 適用（変わる挙動 SG-D6） |
+| 11 | A-T3b | [A-T3b-playback-notice.md](A-T3b-playback-notice.md) | `PlaybackNotice` と固定文言（**SG-D6**）。生成の失敗の識別子を文言へ | A-T3a2 | ready（SG-D6・SG-D11 で判断済み） | 適用（変わる挙動 SG-D6・SG-D11） |
 | 12 | A-T4 | [A-T4-failure-meaning.md](A-T4-failure-meaning.md) | `ApiException` を `core/` へ、意味の variant。code の比較 6 → 0 | A-T3a2 | ready | 適用 |
 | 13 | A-T5a | [A-T5a-preferences-types-and-sync.md](A-T5a-preferences-types-and-sync.md) | `PlaybackSpeed`・`WeeklyGoal`・型つきの `PreferencesStore`・`PreferencesSync`・`PreferencesView`（型と port） | A-T4・**A-S4b** | ready（A-S4b の後） | 適用 |
 | 13b | A-T5b | [A-T5b-preferences-screens.md](A-T5b-preferences-screens.md) | 画面の切り替え（選択肢の表と port の直接の呼出を無くす） | A-T5a | ready | 適用 |
@@ -42,9 +42,9 @@
 | 15 | A-T7a | [A-T7a-learning-dashboard.md](A-T7a-learning-dashboard.md) | ダッシュボード・ストリーク・実績（§6 の 1・3） | A-T6b | ready | 適用 |
 | 16 | A-T7b1 | [A-T7b1-learning-quiz-vocabulary.md](A-T7b1-learning-quiz-vocabulary.md) | クイズ・語彙の登録。学習の中継 3 操作を `PodcastViewModel` から出す | A-T7a | ready | 適用 |
 | 16b | A-T7b2 | [A-T7b2-learning-vocabulary-test.md](A-T7b2-learning-vocabulary-test.md) | 単語テスト（`VocabularyTestSession`） | A-T7b1 | ready | 適用 |
-| 17 | A-T8a | [A-T8a-catalog-articles.md](A-T8a-catalog-articles.md) | `Article`・`PendingCuration`・`ArticleRow`・`FeedApi`（§6 の 2） | A-T7b2 | **判断待ち**（記事の文面 1 件。order 冒頭） | 適用 |
+| 17 | A-T8a | [A-T8a-catalog-articles.md](A-T8a-catalog-articles.md) | `Article`・`PendingCuration`・`ArticleRow`・`FeedApi`（§6 の 2） | A-T7b2 | ready（記事の文面は SG-D10） | 適用（変わる挙動 SG-D10） |
 | 18 | A-T8b | [A-T8b-sources-notifications.md](A-T8b-sources-notifications.md) | Sources・Onboarding・Notifications の port とモデル。TA-D2 の許可リストが空 | A-T8a | ready（投入は A-T8a の後） | 適用 |
-| 19 | A-T9 | [A-T9-package-layout.md](A-T9-package-layout.md) | 目標の package へ移し、許可リストを空にし、対応表を package の規則へ | A-T8b・A-T3b | A-T8b（D-A8a-1）の後（判断待ちの A-T8a に推移的に依存する） | 適用（機械的） |
+| 19 | A-T9 | [A-T9-package-layout.md](A-T9-package-layout.md) | 目標の package へ移し、許可リストを空にし、対応表を package の規則へ | A-T8b・A-T3b | ready（最後。投入は A-T8b の後） | 適用（機械的） |
 | 未起票 | 位置同期（クライアント） | — | ADR-109 の決定 7〜13 | A-S2c・backend B-S7（A-T3a2 の後に置くと入れやすい） | 未起票（SG-C79） | — |
 
 目標 Spec の「保留」だった RF6 全面・RF8・RF9・RF10・RF2・PS-07 は、A-T2a〜A-T8b に入った（目標 Spec §10.2）。baseline の報告の仮の名前との対応は目標 Spec §8.1 の末尾。

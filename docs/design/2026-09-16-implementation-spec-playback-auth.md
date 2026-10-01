@@ -286,7 +286,7 @@ code_design:
     - {id: CS2/CS3, name: add/change variant, status: not_applicable, rationale: "proven variant なし"}
 ```
 
-**interface が露出してはならないもの（leakage guard）**: `Player`（ExoPlayer）を `PlaybackService` 以外が読むこと、`Handler/Looper`、`HttpError.code` を再生・認証 ViewModel が比較すること（401 は `Unauthorized`）、例外 message を UI 文言にすること（再生系の 5 箇所は `Errored(reason)` → 固定文言へ。A-T3b で `PlaybackNotice` に替える。文面は判断待ち: 新しい Spec §10.3。それまでは現行の文言を保つ）、`PodcastResponse` を UI が「再生中」の意味で読むこと（`nowPlaying` を使う）、`keepCurrentPodcast` のような整合フラグ。
+**interface が露出してはならないもの（leakage guard）**: `Player`（ExoPlayer）を `PlaybackService` 以外が読むこと、`Handler/Looper`、`HttpError.code` を再生・認証 ViewModel が比較すること（401 は `Unauthorized`）、例外 message を UI 文言にすること（再生系の 5 箇所は `Errored(reason)` → 固定文言へ。A-T3b で `PlaybackNotice` に替える。文面は新しい Spec §10.3 で SG-D6・SG-D11 として決定（2026-10-01）。A-T3b までは現行の文言を保つ）、`PodcastResponse` を UI が「再生中」の意味で読むこと（`nowPlaying` を使う）、`keepCurrentPodcast` のような整合フラグ。
 
 ## 6. 移行（Change Safety）— §8.3 の着手順に沿った slice
 
@@ -412,5 +412,5 @@ decision:
 | §3.2 主体が離れる事後条件・「保留（`CleanupIncomplete` の置き場…）」・§4 CI-T12・CI-T13・§5 CP7 | 置き場は `AuthViewModel` の StateFlow。手順の名前と数・再実行の入口は保留（契約にしない） | 置き場は `auth/SubjectCleanup`。手順の名前 5 値と順序、再実行の入口 2 つを契約にする | 導出 A-7・A-8（新しい Spec §10.1。A-S4 の小決定 (i)〜(v) を登録） |
 | §3.3 保留の 4 行・§6 の「保留（学習・設定サイクル）」の行・§7 R1 / R4 | 学習機能・設定のサイクルまで保留 | 解く slice を新しい Spec の ID で書いた（A-T2a〜A-T9） | ADR-110 決定 8・9、新しい Spec §8 |
 | §5 `dependency_direction` | 4 項目 | 目標の依存の規則（新しい Spec §4）への参照を追加 | 新しい Spec §4 |
-| §5 leakage guard | 再生系の 5 箇所は固定文言へ | A-T3b で `PlaybackNotice` に替える。文面は判断待ち | 新しい Spec §10.3 の 1 |
+| §5 leakage guard | 再生系の 5 箇所は固定文言へ | A-T3b で `PlaybackNotice` に替える。文面は SG-D6・SG-D11 で決定（2026-10-01） | 新しい Spec §10.3 の 1 |
 | §6 A-S4 の行 | 着手条件を PR で分けていない。SL は 01・02・04・06・07 | A-S4a は B-S5a、A-S4b は B-S5b の後。SL-08〜SL-10 を追加 | 導出 A-19、新しい Spec §8.3 の A-S4 の補正 1・2 |

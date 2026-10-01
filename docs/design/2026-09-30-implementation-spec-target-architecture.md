@@ -175,7 +175,7 @@ Platform（`network/`・`observability/`・`designsystem/`）は目的を持た�
 | domain | `resolveResumePosition`・`resolvePlaybackSource` | `core/` | そのまま | — |
 | リードモデル | `NowPlaying`（共通 7 field。`segments`・`vocabulary`・`quiz` は `Episode` の内容の型） | `podcast/app/PlaybackReadModels.kt` | 無い。画面は `currentPodcast: StateFlow<PodcastResponse?>`（`PodcastViewModel.kt:88`）を読む | A-S2b2 で `podcast/PlaybackSession.kt` に定義（A-S2b2 の小決定）、A-T3a で移す |
 | リードモデル | `QueueView`（下の表） | 同上 | 無い。`QueueSheet` は `queue`（ドメインの値）を読む（`podcast/QueueSheet.kt:57`） | A-T3a |
-| リードモデル | `PlaybackNotice`（利用者への知らせの種類） | 同上 | `errorMessage: StateFlow<String?>`（`PodcastViewModel.kt:83`）。例外の `message` が入る | A-T3b（文面は SG-D6） |
+| リードモデル | `PlaybackNotice`（利用者への知らせの種類） | 同上 | `errorMessage: StateFlow<String?>`（`PodcastViewModel.kt:83`）。例外の `message` が入る | A-T3b（文面は SG-D6・SG-D11） |
 | リードモデル | `PlaybackMetadata`（通知とロック画面の題名・副題） | 同上 | `podcast/PlaybackMetadata.kt`。DTO の拡張関数から作る（`:35-36`） | A-T2b |
 | データモデル（永続化） | 音声ファイル `{cacheDir}/audio/{id}.mp3` | `network/AudioCacheManager.kt` | 平置き。A-S4a で `{cacheDir}/audio/{user_id}/{id}.mp3` | A-S4a |
 | データモデル（通信） | `PodcastResponse`・`PlaybackPositionRequest` | `model/` | — | — |
@@ -557,7 +557,7 @@ flowchart LR
 | 9 | A-S4b | 既存・補正の後、B-S5b 待ち | 主体離脱の導出と順序、後始末、FCM の解除を連鎖削除に任せる | A-S4a・**B-S5b**。B-S5b が遅れるときは A-T3a1〜A-T4 を先に進めてよい。A-T5a より前に入れる（`AuthViewModel`・`PreferencesStore` が重なり、A-T5a 以降の後では order の型が変わる） | 適用 |
 | 10 | A-T3a1 | 新規・ready | `PlaybackCoordinator` を取り出して `PodcastViewModel` が委譲する。`AudioStore` を入れ、Media3 の分類を adapter へ移す | A-S2c・A-S4a | 適用 |
 | 10b | A-T3a2 | 新規・ready | `QueueView`・`EpisodeRow`・id を受ける command に切り替える | A-T3a1 | 適用 |
-| 11 | A-T3b | 新規 | 再生の知らせを `PlaybackNotice` にし、例外の message を画面に出すのをやめる（文面は SG-D6） | A-T3a2 | 適用 |
+| 11 | A-T3b | 新規・ready | 再生の知らせを `PlaybackNotice` にし、例外の message を画面に出すのをやめる（文面は SG-D6。通信の失敗を分けるのは SG-D11） | A-T3a2 | 適用 |
 | 12 | A-T4 | 新規・ready | 失敗の意味の型を `core/` へ移し、code の比較を adapter へ寄せる | A-T3a2 | 適用 |
 | 13 | A-T5a | 新規・ready（A-S4b の後） | Preferences の型・port・同期・`PreferencesView` | A-T4・A-S4b | 適用 |
 | 13b | A-T5b | 新規・ready | Preferences の画面の切り替え（画面からの直接の書込と選択肢の表の廃止） | A-T5a | 適用 |
@@ -566,9 +566,9 @@ flowchart LR
 | 15 | A-T7a | 新規・ready | Learning のダッシュボード・ストリーク・実績 | A-T6b | 適用 |
 | 16 | A-T7b1 | 新規・ready | Learning のクイズ・語彙の登録。学習の中継 3 操作を `PodcastViewModel` から出す | A-T7a | 適用 |
 | 16b | A-T7b2 | 新規・ready | Learning の単語テスト | A-T7b1 | 適用 |
-| 17 | A-T8a | 新規・ready | Catalog の記事（`Article`・`PendingCuration`・`ArticleRow`・`FeedApi`） | A-T7b2 | 適用 |
+| 17 | A-T8a | 新規・ready（文言は SG-D10） | Catalog の記事（`Article`・`PendingCuration`・`ArticleRow`・`FeedApi`）。記事まわりの失敗を 3 文にする（SG-D10） | A-T7b2 | 適用 |
 | 18 | A-T8b | 新規・ready | Sources・Onboarding・Notifications の port とモデル。`AppContainer` を配線だけにする | A-T8a | 適用 |
-| 19 | A-T9 | 新規・A-T8b（D-A8a-1）の後（判断待ちの A-T8a に推移的に依存する） | ファイルを目標の package へ移し、許可リストを空にし、対応表を package の規則に置き換える | A-T8b・A-T3b | 適用（機械的） |
+| 19 | A-T9 | 新規・ready（最後。A-T8b の後） | ファイルを目標の package へ移し、許可リストを空にし、対応表を package の規則に置き換える | A-T8b・A-T3b | 適用（機械的） |
 | 未起票 | 位置同期（クライアント） | 未起票（SG-C79） | ADR-109 の決定 7〜13 | A-S2c・backend B-S7。A-T3a2 の後に置くと、端末の記録を adapter、`ResumeRule` の入力を domain に分けて入れられる | — |
 
 baseline の報告の仮の名前との対応: A-T0 → A-T1。A-T1（`PlaybackState` の純化）→ A-T3a に入れた。A-T2（学習の Spec の起票）→ 作らない（§5.5 に書いた）。A-T3 → A-T2a・A-T2b（A-S2b2 の前へ移した。§8.2）。A-T4 → A-T3a・A-T3b。A-T5 → A-T5。A-T6 → A-T4・A-T6。A-T7 → A-T7a・A-T7b。A-T8 → A-T8a・A-T8b。A-T9 → A-T9。
@@ -724,7 +724,7 @@ player の事象の受け方（補正 3）
 | green にする | TA-R-PB7・PB8・PB9 の「今どこに居るか」が 0 件。TA-D1 の `PlaybackState.kt`。TA-V6（`QueueView`・`EpisodeRow`）。TA-V7 の静的な検査の対象に入る。既存の PS・CI-T のテストは期待値を変えない |
 | 規模 | ≈ 1,000 行（2 PR = A-T3a1・A-T3a2 の 2 order） |
 
-**A-T3b 再生の知らせ**: `errorMessage` を `PlaybackNotice` に替え、`= e.message` を `podcast/` から無くす（既存の Spec の leakage guard）。文面と、失敗の識別子を文言へ写すことは SG-D6（2026-10-01）。生成失敗の識別子の文言の表は A-T3b の order にある。規模 ≈ 200 行。
+**A-T3b 再生の知らせ**: `errorMessage` を `PlaybackNotice` に替え、`= e.message` を `podcast/` から無くす（既存の Spec の leakage guard）。文面と、失敗の識別子を文言へ写すことは SG-D6（2026-10-01）。取得の失敗のうち通信の失敗（`ApiException.NetworkError`）は「オフラインです。接続を確認してから、もう一度お試しください」に分け、SG-D6 の取得の失敗の文言はそれ以外に使う（SG-D11。A-T8a の記事の失敗と同じ規則）。生成失敗の識別子の文言の表は A-T3b の order にある。規模 ≈ 200 行。
 
 **A-T4 失敗の意味**: `network/ApiException.kt` を `core/` へ移し、意味の variant を足す。`OkHttpApiClient` と各呼出元の 6 箇所の code の比較を、意味の variant の捕捉に替える（文言と挙動は変えない）。green: TA-D9 の code の比較 6 → 0、TA-D3 の `network.ApiException` の import が消える。規模 ≈ 400 行。
 
@@ -736,7 +736,7 @@ player の事象の受け方（補正 3）
 
 **A-T7b Learning（クイズ・語彙の登録・単語テスト）**: `VocabularyTestSession`（純粋な状態機械。`delay` は application に残す）・`VocabularyKey`・`QuizGrade`、`VocabularyTestApi` と adapter、`QuizSheet` から送信と失敗の分類を出す、学習の中継 3 操作を `PodcastViewModel` から `learning/app/` へ移す（`NoThrowingDefaultStructureTest` の 2 件目を更新）。green: TA-R-LN1・LN3・LN7・LN8、TA-D2 の 3 ファイル（`VocabularyTestViewModel`・`QuizSheet`・`PodcastViewModel`）、TA-D4 の `QuizSheet` の `network` の import。規模 ≈ 900 行（2 PR = A-T7b1 クイズと語彙の登録 ／ A-T7b2 単語テスト）。
 
-**A-T8a Catalog の記事**: `Article`・`PendingCuration`・`ArticleRow`・`FeedApi` と adapter。§6 の 2。公開の `var` `onStarConfirmed` を事象の読み取りに替える。`= e.message` の 3 箇所を無くす（文面は現行の固定文言があるものだけを使う。例外の message しか無い 3 箇所 `feed/FeedViewModel.kt:89,106,204` の文面は D-A8a-1（§10.3）。決まるまで A-T8a は投入しない）。green: TA-R-CT4、TA-D2 の 3 ファイル（`FeedViewModel`・`FeedScreen`・`PendingArticleAction`）。規模 ≈ 700 行。
+**A-T8a Catalog の記事**: `Article`・`PendingCuration`・`ArticleRow`・`FeedApi` と adapter。§6 の 2。公開の `var` `onStarConfirmed` を事象の読み取りに替える。`= e.message` の 3 箇所（`feed/FeedViewModel.kt:89,106,204`）を無くし、記事まわりの失敗を 3 文にする（SG-D10。§10.3 の D-A8a-1）: 通信の失敗（`ApiException.NetworkError`）は「オフラインです。接続を確認してから、もう一度お試しください」、フィードの取得（`loadFeed`・`refresh`）のそれ以外の失敗は「記事を取得できませんでした。通信状況を確かめて、もう一度お試しください」、Star / Dismiss のそれ以外の失敗は「操作できませんでした。もう一度お試しください」。生成の上限（`ApiException.RateLimited`）の専用文言と、一括 Star の件数の集計（`bulkActionResult`）は変えない。green: TA-R-CT4、TA-D2 の 3 ファイル（`FeedViewModel`・`FeedScreen`・`PendingArticleAction`）。規模 ≈ 700 行。
 
 **A-T8b Sources・Onboarding・Notifications**: `SourcesApi`・`DeviceTokenApi`・`PushTokenSource`・`NotificationPermission` と adapter、`FeaturedCategory` を `model/` から出す、`GenerationQuota`、`AppContainer` から FCM の断片を出す。green: TA-D2 の 4 ファイル（`SettingsViewModel`・`SettingsScreen`・`OnboardingViewModel`・`OnboardingScreen`）と `model/FeaturedCategory.kt`、TA-D2 の許可リストが空。規模 ≈ 700 行。
 
@@ -839,7 +839,7 @@ coverage: 依存の規則 9 本のうち、検査を持つもの 9。context 7 �
 
 > **2026-10-01: user が採用した。** 1 と 2 は (a)（台帳 SG-D6。A-T3b は ready）。3 は A-T2b で適用（確認済み）。以下は判断の材料として残す。
 
-> **2026-10-01 に新しく出た判断（order の起票で発見）**: **D-A8a-1** 記事まわりの失敗の文面（フィードの取得、Star / Dismiss の失敗。`feed/FeedViewModel.kt:89,106,204` は例外の message をそのまま出している）。SG-D6 は再生の失敗の文面だけを決めた。推奨は SG-D6 と同じ型: 取得の失敗「記事を取得できませんでした。通信状況を確かめて、もう一度お試しください」、操作の失敗「操作できませんでした。もう一度お試しください」。A-T8a を止める（順序で A-T8b・A-T9 も後になる）。
+> **2026-10-01 に新しく出た判断（order の起票で発見）は SG-D10 で決定**: **D-A8a-1** 記事まわりの失敗の文面（フィードの取得、Star / Dismiss の失敗。`feed/FeedViewModel.kt:89,106,204` は例外の message をそのまま出している）。SG-D6 は再生の失敗の文面だけを決めた。推奨は SG-D6 と同じ型: 取得の失敗「記事を取得できませんでした。通信状況を確かめて、もう一度お試しください」、操作の失敗「操作できませんでした。もう一度お試しください」。user の回答（台帳 SG-D10）: 推奨の 2 文に、通信の失敗（`ApiException.NetworkError`）の「オフラインです。接続を確認してから、もう一度お試しください」（iOS の `FeedViewModel.offlineMessage` と同じ）を加えた 3 文。生成の上限（`RateLimited`）の専用文言は変えず、一括 Star の件数の集計は対象外。あわせて SG-D6 の補足として、再生の取得の失敗でも通信の失敗を同じ文に分ける（SG-D11。A-T3b）。A-T8a・A-T8b・A-T9 は ready。
 
 | # | 論点 | 根拠 | 選択肢 | 推奨 | 影響する slice |
 |---|---|---|---|---|---|
@@ -847,7 +847,7 @@ coverage: 依存の規則 9 本のうち、検査を持つもの 9。context 7 �
 | 2 | 生成の失敗の識別子（`generation_failed`・`quota_exhausted`）を文言へ写すか | android-design §3 は「文言写像は次サイクル」。今は識別子がそのまま出る（`podcast/PodcastViewModel.kt:555`）。ADR-102 は識別子を契約にした | (a) 写す（web の W-S4a と同じ文） (b) 現行のまま | (a)。1 と同じ slice で入れられる | A-T3b |
 | 3 | PS-07・PS-07b の Android への適用の時期（確認だけ。投入は止めない） | 規則は共有仕様 §6.6 と ADR-103 で決まっていて、Android の保留の解除条件は「`Episode` 型を導入する slice の起票」。A-T2b で、`completed` なのに失敗の識別子がある・音声 URL が空・未知の `status` のエピソードに▶が出なくなる | (a) A-T2b で適用する (b) 型だけ入れ、判別は現行（`status` だけ）のままにする | (a)。決定済みの規則の適用で、新しい決定ではない。(b) は domain に規則と違う判別を置くことになる | A-T2b |
 
-module をまたぐ判断待ち（前回の監査 §6 の 1・2: 「習得」の語と「今日の復習」）は、Android では `VocabularyTestSession` の語（今は `known`・`retest`）に効くだけで、A-T7b は現行の語で進められる。
+module をまたぐ論点（前回の監査 §6 の 1・2: 「習得」の語と「今日の復習」。2026-10-01 に SG-D3・SG-D7 で決定）は、Android では `VocabularyTestSession` の語（今は `known`・`retest`）に効くだけで、A-T7b は現行の語で進められる。
 
 ## 11. 検証していないこと・残る危険
 
@@ -873,7 +873,7 @@ decision:
   release_status: not_applicable
   decision_maturity: {status: proposed, owner: user, scope: [android/], approval: "この Spec を含む PR の承認"}
   next_phase: {name: "order の書き直しは 2026-10-01 に済み", status: "実装の再開は user の指示待ち（親 plan の再開ゲート）"}
-  blocked_slices: [{id: A-T8a, waiting_for: "D-A8a-1（記事の失敗の文面）"}, {id: A-S4b, waiting_for: "backend B-S5b"}]   # A-T3b は SG-D6 で ready
+  blocked_slices: [{id: A-S4b, waiting_for: "backend B-S5b"}]   # A-T3b は SG-D6・SG-D11、A-T8a は SG-D10（D-A8a-1）で ready
   unexecuted_verification: ["Gradle の全テスト", "TA-V1〜V10（未実装）", "A-S2b2 の UV3（実機の観測）", "§8.4 の規模の実測"]
   residual_risks: ["§11 のとおり"]
 ```
@@ -882,4 +882,5 @@ decision:
 
 | 日付 | 内容 |
 |---|---|
-| 2026-10-01 | SG-D6 の採用を本文（§5.1・§8.1・§8.2・§12）へ反映し、A-T3b を ready にした。order の起票で出た判断 D-A8a-1（記事の失敗の文面）を §10.3 に追加し、A-T8a を止めた |
+| 2026-10-01 | SG-D6 の採用を本文（§5.1・§8.1・§8.2・§12）へ反映し、A-T3b を ready にした。order の起票で出た判断 D-A8a-1（記事の失敗の文面。同日に SG-D10 で決定）を §10.3 に追加し、A-T8a を止めた |
+| 2026-10-01 | D-A8a-1 を SG-D10 で決定（記事まわりの失敗の 3 文）し、SG-D6 の補足 SG-D11（再生の取得の失敗でも通信の失敗を分ける）を足した。§5.1・§8.1（A-T3b・A-T8a・A-T9 を ready）・§8.4・§10.3・§12 へ反映 |

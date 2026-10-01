@@ -1,8 +1,8 @@
 ## android リファクタ A-T8a: Catalog の記事（`Article`・`PendingCuration`・`ArticleRow`・`FeedApi`）
 
-> **着手前に決める項目（1 件。決まるまで投入しない）**: `feed/FeedViewModel.kt` の `= e.message` 3 箇所（`:89` フィードの読み込み・`:106` 読み直し・`:204` Star / Dismiss の確定の失敗）の文面。Spec §8.4「A-T8a」は「例外の message しか無い箇所は A-T3b と同じ判断に従う」とし、§10.3 の 1 は影響先に「A-T8a の `feed/` の 3 箇所も同じ扱い」と書く。決定 SG-D6（2026-10-01）は**再生**の文面（「エピソードを取得できませんでした。…」「再生できませんでした。…」）だけを決めており、記事の取得と Star / Dismiss の文面は決まっていない。
-> - 推奨（SG-D6 と同じ形）: 読み込みと読み直しの失敗「記事を取得できませんでした。通信状況を確かめて、もう一度お試しください」、Star / Dismiss の確定の失敗「操作できませんでした。もう一度お試しください」。生成上限（`RateLimited`）は現行の `generationLimitMessage` のまま。
-> - 決まったら、この節を決定 ID つきの「変わる挙動」へ移し、本 order を ready にする。文面以外の本文は決定に依らず、このまま使える。
+> **決定 SG-D10**（2026-10-01 user 判断。Spec §10.3 の D-A8a-1。台帳 = 親 docs `research-reports/2026-09-23-design-docs-mino-audit.md` §5）: `feed/FeedViewModel.kt` の `= e.message` 3 箇所（`:89` フィードの読み込み・`:106` 読み直し・`:204` Star / Dismiss の確定の失敗）を 3 文にする。通信の失敗（`ApiException.NetworkError`）は「オフラインです。接続を確認してから、もう一度お試しください」（iOS の `FeedViewModel.offlineMessage` と同じ）。取得の失敗（それ以外）は「記事を取得できませんでした。通信状況を確かめて、もう一度お試しください」。操作の失敗（それ以外）は「操作できませんでした。もう一度お試しください」。生成の上限（`ApiException.RateLimited`）の専用文言（`generationLimitMessage`）は変えない。一括 Star の件数の集計（`bulkActionResult`）は対象外。
+>
+> **補正（2026-10-01）**: SG-D10 の確定に合わせ、「着手前に決める項目」を消し、文面の写像を §5・§7・§8 に書いた。本 order は ready。
 
 ## 1. 目的と、応える要求・設計・契約の ID
 
@@ -12,13 +12,12 @@
 |---|---|---|
 | 品質要求 | NFR-09 (1)(3)・NFR-10、F-FEED-04・06・07 | `docs/prd/2026-05-31-news-listen.md` |
 | 品質 scenario | AQ-1・AQ-3・AQ-4・AQ-6 | `docs/design/architecture.md` §2・§5 |
-| 決定 | ADR-110 決定 4〜6、ADR-044（カードのジェスチャ）、SG-D6（再生の文面。本 slice の文面は上の「決める項目」） | `docs/adr/` |
+| 決定 | ADR-110 決定 4〜6、ADR-044（カードのジェスチャ）、SG-D6・SG-D11（再生の文面。通信の失敗の分け方を本 slice とそろえる）、SG-D10（本 slice の記事の文面） | `docs/adr/` |
 | Spec | TA-M-CT（`Article`・`PendingCuration`・`ArticleRow`）、TA-C-CT1・CT2・TA-Q-CT2、TA-R-CT3・CT4、§6 の 2、TA-D2（3 ファイル）・TA-D7（`onStarConfirmed`）・TA-D9（`= e.message` の `feed/` の 3 箇所）、TA-V7（実行時）、§5.2「port」（`FeedApi`）、§8.4「A-T8a」 | `android/docs/design/2026-09-30-implementation-spec-target-architecture.md`（以下「Spec」） |
 
 ## 2. 前提（着手条件）
 
 - A-T7b2（A-T7b の後半。前半 A-T7b1 はその前に入っている）の android PR が main に merge 済み、かつ親ポインタが進んでいる。
-- **上の「着手前に決める項目」が決まっている**。
 - baseline: 全 unit テストと `ArchitectureStructureTest` が green。
 
 ## 3. 着手前の前提点検（投入の直前に数え直す）
@@ -49,7 +48,7 @@
 | application（command） | TA-C-CT1 `star(articleId, difficulty?)`・`dismiss(articleId)`・`undoLast()`・`commitPending()`（結果は無し。失敗は通知の種類）、TA-C-CT2 `bulkStar(ids)`（receipt: 成功と失敗の件数、上限のときの待ち秒数） |
 | application（query） | TA-Q-CT2 `articles: StateFlow<List<ArticleRow>>`・`pendingAction`・`isLoading`・`isRefreshing`・`loadFeed()`・`refresh()`。`loadFeed()`・`refresh()` は保留を確定しない（§6 の 2: 画面の入口が `commitPending()` を先に呼ぶ。順序は変えない） |
 | application（事象） | `onStarConfirmed` を `feedbackEvents`（スワイプの確定。TA-Q-LN5）の読み取りに替える |
-| presentation | 失敗の種類から文面を選ぶ（上の「決める項目」の文面と、既存の `generationLimitMessage`） |
+| presentation | 失敗の種類から文面を選ぶ（下の表の 3 文と、既存の `generationLimitMessage`。SG-D10） |
 
 ## 6. 移行の中間状態
 
@@ -61,14 +60,39 @@
 
 ## 7. 変わる挙動
 
-上の「着手前に決める項目」で決まる文面だけ（決定 ID は決定のときに付く）。フィードの読み込み・読み直し・Star / Dismiss の確定に失敗したとき、例外の message の代わりに決まった文面を出す。ほかは変えない（保留の確定の順序・429 の戻し方・生成上限の文言）。
+SG-D10 の文面だけ。フィードの読み込み・読み直し・Star / Dismiss の確定に失敗したとき、例外の message の代わりに次の文面を出す（例外の型ごとの写像。`errorMessage` に入る値）。ほかは変えない（保留の確定の順序・429 の戻し方・生成上限の文言・一括 Star の件数の集計）。
+
+| 決定 ID | 場面（現行の箇所） | 例外の型 | 文面（変更後） | 現行 |
+|---|---|---|---|---|
+| SG-D10 | フィードの取得（`loadFeed` `:89`・`refresh` `:106`） | `ApiException.NetworkError` | 「オフラインです。接続を確認してから、もう一度お試しください」 | 例外の message（`Network error: …`） |
+| SG-D10 | 同上 | `ApiException.RateLimited` | 変えない（現行の固定の文面「リクエストが多すぎます。しばらくしてからお試しください。」。`network/ApiException.kt:19` の message。技術的な文言ではなく、SG-D10 の対象外）。order の実装では、この文面を例外の message に頼らず定数として持つ | 同左 |
+| SG-D10 | 同上 | それ以外の `ApiException` | 「記事を取得できませんでした。通信状況を確かめて、もう一度お試しください」 | 例外の message |
+| SG-D10 | Star / Dismiss の確定（`commitPendingInternal` から呼ぶ送信 `:204`） | `ApiException.NetworkError` | 「オフラインです。接続を確認してから、もう一度お試しください」 | 例外の message |
+| SG-D10 | 同上 | `ApiException.RateLimited` | 変えない（`generationLimitMessage(retryAfterSeconds)`。`:198-201`） | 同左 |
+| SG-D10 | 同上 | それ以外の `ApiException` | 「操作できませんでした。もう一度お試しください」 | 例外の message |
+
+対象外: 一括 Star（`bulkStar`）の件数の集計（`bulkActionResult`）と、その上限の文言（`:278`）。
 
 ## 8. 契約と検査
 
 - TA-R-CT4 が `PendingCuration` と `FeedViewModel` に（§9 の grep）。
 - TA-V7（実行時。`feed/FeedViewModelTest.kt`）: `loadFeed()`・`refresh()` を呼んでも Fake の `star`・`dismiss` が 0 回。入口が `commitPending()` → `loadFeed()` の順に呼ぶ。テスト名に `TA-V7`。
 - TA-V5: 公開の `var` が 0（許可リストの TA-D7 が空）。TA-V6: `ArticleRow` のカプセル化。
-- 文面のテストは決定 ID をテスト名に含める。既存のテストのうち `errorMessage` の文字列を見ていたものは決定 ID を理由に反転する。
+- 文面のテストは決定 ID（`SG-D10`）をテスト名に含める。既存のテストのうち `errorMessage` の文字列を見ていたものは SG-D10 を理由に反転する。
+- テストの期待値（`feed/FeedViewModelTest.kt`。Fake の `FeedApi` が投げる例外 → `errorMessage`）:
+
+| 操作 | Fake が投げる | 期待する `errorMessage` |
+|---|---|---|
+| `loadFeed()` | `ApiException.NetworkError(IOException())` | 「オフラインです。接続を確認してから、もう一度お試しください」 |
+| `loadFeed()` | `ApiException.HttpError(500)` | 「記事を取得できませんでした。通信状況を確かめて、もう一度お試しください」 |
+| `refresh()` | `ApiException.NetworkError(IOException())` | 「オフラインです。接続を確認してから、もう一度お試しください」 |
+| `refresh()` | `ApiException.DecodingError(RuntimeException())` | 「記事を取得できませんでした。通信状況を確かめて、もう一度お試しください」 |
+| `star(…)` → `commitPending()` | `ApiException.NetworkError(IOException())` | 「オフラインです。接続を確認してから、もう一度お試しください」（記事は元の位置へ戻る） |
+| `dismiss(…)` → `commitPending()` | `ApiException.HttpError(500)` | 「操作できませんでした。もう一度お試しください」（記事は元の位置へ戻る） |
+| `star(…)` → `commitPending()` | `ApiException.RateLimited(120)` | `generationLimitMessage(120)` の現行の文面（変えない） |
+| `loadFeed()` | `ApiException.RateLimited(null)` | 「リクエストが多すぎます。しばらくしてからお試しください。」（現行の文面。変えない） |
+
+  `ApiException.Unauthorized` も「それ以外」に入る（失効の扱いは現行のまま。文面だけが変わる）。フィードの取得の `RateLimited` は「それ以外」に入れず、現行の固定の文面を保つ（main セッションの補正 2026-10-01。SG-D10 は技術的な文言を置き換える決定で、既に利用者向けの文面はその対象ではないため）。
 
 ## 9. 受入とテストのコマンド
 
@@ -87,9 +111,9 @@
 
 ## 11. 決定 slice か適用 slice か
 
-適用 slice。ただし文面 1 件が判断待ちで、**決まるまで投入しない**。
+適用 slice（文面は SG-D10 で確定。判断待ちは無い）。
 
 ## 12. 規模の目安と返却事項
 
 - 規模 ≈ 700 行（Spec §8.4）。1 PR。
-- 返却事項: 記事の文面の決定を台帳に登録する旨（親 docs）。Spec §8.4「A-T8a」の「A-T3b と同じ判断に従う」を、決まった文面へ直す旨。
+- 返却事項: 無し（SG-D10 は台帳と Spec §8.4「A-T8a」・§10.3 に 2026-10-01 に反映済み）。

@@ -15,7 +15,7 @@ RSS ソースの管理・おすすめサイト・オンボーディング・生�
 
 - A-T8a の android PR が main に merge 済み、かつ親ポインタが進んでいる。
 - baseline: 全 unit テストと `ArchitectureStructureTest` が green。
-- 判断待ち: 無い（A-T8a の文面の決定に依らない。ただし投入の順は A-T8a の後）。
+- 判断待ち: 無い（A-T8a の文面は SG-D10 で決定済みで、本 slice はその内容に依らない。投入の順は A-T8a の後）。
 
 ## 3. 着手前の前提点検（投入の直前に数え直す）
 
