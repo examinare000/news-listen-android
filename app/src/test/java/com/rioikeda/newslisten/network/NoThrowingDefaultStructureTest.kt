@@ -7,7 +7,7 @@ import org.junit.Test
 /**
  * production interface（`ApiClient`）から throwing default を排除したことの構造検査（CI-T16）。
  *
- * 正本: android/docs/design/2026-09-16-implementation-spec-playback-auth.md §4 CI-T16。
+ * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §4 CI-T16。
  */
 class NoThrowingDefaultStructureTest {
 

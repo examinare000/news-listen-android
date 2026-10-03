@@ -7,7 +7,7 @@ import com.rioikeda.newslisten.model.PodcastResponse
  * 再生 use case が使う狭い port（CI-T16）。`ApiClient` の全 44 操作のうち、再生に必要な
  * 5 操作だけを切り出す。`LearningApi`/`VocabularyTestApi` と同方式。
  *
- * 正本: android/docs/design/2026-09-16-implementation-spec-playback-auth.md §2・§4 CI-T16。
+ * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §2・§4 CI-T16。
  */
 interface PodcastApi {
     /** Podcast 一覧を取得する。 */
