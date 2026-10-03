@@ -15,7 +15,7 @@ import org.junit.Test
 /**
  * [PodcastViewModel] の再生5操作が `PodcastApi` 経由で呼ばれることの振る舞い検証（CI-T16）。
  *
- * 正本: android/docs/design/2026-09-16-implementation-spec-playback-auth.md §4 CI-T16。
+ * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §4 CI-T16。
  */
 class PodcastViewModelPortTest {
 

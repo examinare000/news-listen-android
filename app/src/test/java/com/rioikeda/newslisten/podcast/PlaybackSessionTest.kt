@@ -18,7 +18,7 @@ import org.junit.Test
  * 再生セッション状態機械の遷移表と INV-P1 述語の検証。
  *
  * verifies: CI-T1
- * 正本: android/docs/design/2026-09-16-implementation-spec-playback-auth.md §3.1・§4 CI-T1。
+ * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §3.1・§4 CI-T1。
  * 状態型は PlaybackSession の入れ子（PlaybackState と同じ形）。11 遷移だけが起き、表外は IllegalStateException。停止操作は持たない（停止は呼び出し側が NothingPlaying を代入する）。
  */
 class PlaybackSessionTest {
