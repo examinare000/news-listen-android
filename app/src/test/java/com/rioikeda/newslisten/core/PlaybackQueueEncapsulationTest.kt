@@ -3,14 +3,13 @@ package com.rioikeda.newslisten.core
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 
 /**
  * `PlaybackQueue` の実行時のカプセル化（Spec §7 TA-V6・AQ-6。契約 CI-17）。
  *
  * 渡した list・返した list を書き換えても、次に読む値と不変条件が変わらないことを検査する。
- * main の `PlaybackQueue` は A-T1 では変えない。現行で落ちるテストは A-S2b1 が green にする。
+ * main の `PlaybackQueue` は A-T1 では変えない。
  *
  * 比較元は必ずリテラルで書く。`q.items` を変数に取って比較元にすると、書き換えと同じ
  * インスタンスを見比べて空振りの green になるため（SR-06）。
@@ -45,7 +44,28 @@ class PlaybackQueueEncapsulationTest {
         }
     }
 
-    @Ignore("A-S2b1 で green にする: setQueue / add が list を写さない（PlaybackQueue.kt:33,43,48）")
+    @Test
+    fun TA_V6_AQ6_構築子に渡したlistの要素を置き換えてもキューは変わらない() {
+        // verifies: CI-17 ①
+        val input = arrayListOf(a, b, c)
+        val q = PlaybackQueue(items = input, currentIndex = 1)
+
+        input[0] = x
+
+        assertQueueOfAbcAtB(q)
+    }
+
+    @Test
+    fun TA_V6_AQ6_copyに渡したlistの要素を置き換えてもキューは変わらない() {
+        // verifies: CI-17 ①
+        val input = arrayListOf(a, b, c)
+        val q = PlaybackQueue<Item>().copy(items = input, currentIndex = 1)
+
+        input[0] = x
+
+        assertQueueOfAbcAtB(q)
+    }
+
     @Test
     fun TA_V6_AQ6_setQueueに渡したlistの要素を置き換えてもキューは変わらない() {
         // verifies: CI-17 ① / T-18
@@ -58,7 +78,6 @@ class PlaybackQueueEncapsulationTest {
         assertQueueOfAbcAtB(q)
     }
 
-    @Ignore("A-S2b1 で green にする: setQueue / add が list を写さない（PlaybackQueue.kt:33,43,48）")
     @Test
     fun TA_V6_AQ6_setQueueに渡したlistへ要素を足してもキューは変わらない() {
         // verifies: CI-17 ① / T-19
@@ -71,7 +90,6 @@ class PlaybackQueueEncapsulationTest {
         assertQueueOfAbcAtB(q)
     }
 
-    @Ignore("A-S2b1 で green にする: setQueue / add が list を写さない（PlaybackQueue.kt:33,43,48）")
     @Test
     fun TA_V6_AQ6_setQueueに渡したlistを空にしてもキューは変わらない() {
         // verifies: CI-17 ① / T-20
@@ -84,7 +102,6 @@ class PlaybackQueueEncapsulationTest {
         assertQueueOfAbcAtB(q)
     }
 
-    @Ignore("A-S2b1 で green にする: setQueue / add が list を写さない（PlaybackQueue.kt:33,43,48）")
     @Test
     fun TA_V6_AQ6_返したitemsをMutableListとして書き換えてもキューは変わらない_setQueue() {
         // verifies: CI-17 ② / T-21
@@ -97,7 +114,6 @@ class PlaybackQueueEncapsulationTest {
         assertQueueOfAbcAtB(q)
     }
 
-    @Ignore("A-S2b1 で green にする: setQueue / add が list を写さない（PlaybackQueue.kt:33,43,48）")
     @Test
     fun TA_V6_AQ6_返したitemsをMutableListとして書き換えてもキューは変わらない_add() {
         // verifies: CI-17 ② / T-22
@@ -110,7 +126,6 @@ class PlaybackQueueEncapsulationTest {
         assertEquals(listOf(a, b), q.items)
     }
 
-    @Ignore("A-S2b1 で green にする: setQueue / add が list を写さない（PlaybackQueue.kt:33,43,48）")
     @Test
     fun TA_V6_AQ6_currentIndexが無いときに返したupNextを空にしてもキューは変わらない() {
         // verifies: CI-17 ② / T-23
