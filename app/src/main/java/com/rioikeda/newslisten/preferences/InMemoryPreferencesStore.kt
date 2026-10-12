@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.preferences
 
 import com.rioikeda.newslisten.core.Difficulty
+import com.rioikeda.newslisten.podcast.PlaybackConstants
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,6 +51,7 @@ class InMemoryPreferencesStore(
     }
 
     override suspend fun setDefaultPlaybackSpeed(speed: Double) {
+        if (!PlaybackConstants.isSelectableSpeed(speed)) return
         _defaultPlaybackSpeed.value = speed
     }
 

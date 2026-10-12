@@ -464,8 +464,8 @@ class PodcastViewModel(
     }
 
     /** 再生速度（倍率）を設定する。 */
-    fun setSpeed(speed: Float) {
-        playerController.setSpeed(speed)
+    fun setSpeed(speed: Double) {
+        playerController.setSpeed(speed.toFloat())
     }
 
     /**

@@ -401,7 +401,7 @@ class PodcastViewModelTest {
 
         PlaybackConstants.speeds.forEach { viewModel.setSpeed(it) }
 
-        assertEquals(PlaybackConstants.speeds, player.speedCalls)
+        assertEquals(PlaybackConstants.speeds.map { it.toFloat() }, player.speedCalls)
 
         viewModel.stopPlayback()
     }

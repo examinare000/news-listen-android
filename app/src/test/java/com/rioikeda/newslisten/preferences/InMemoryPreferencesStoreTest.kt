@@ -54,6 +54,20 @@ class InMemoryPreferencesStoreTest {
     }
 
     @Test
+    fun setDefaultPlaybackSpeedは8段外の値を拒否し直前の値を維持する() = runTest {
+        // verifies: CI-T15
+        val store = InMemoryPreferencesStore()
+        store.setDefaultPlaybackSpeed(1.5)
+        assertEquals(1.5, store.defaultPlaybackSpeed.value, 0.0)
+
+        listOf(0.0, 3.0, 1.0001, -1.0, Double.NaN).forEach { rejected ->
+            store.setDefaultPlaybackSpeed(rejected)
+
+            assertEquals(1.5, store.defaultPlaybackSpeed.value, 0.0)
+        }
+    }
+
+    @Test
     fun setArticleOpenModeで値を更新するとStateFlowに反映される() = runTest {
         val store = InMemoryPreferencesStore()
 
