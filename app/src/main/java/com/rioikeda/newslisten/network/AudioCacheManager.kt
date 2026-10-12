@@ -77,6 +77,12 @@ class AudioCacheManager(
         fileSystem.delete(filePath(id))
     }
 
+    /**
+     * 再生に失敗したキャッシュを無効化する。削除そのものは [remove] と同じで、意味だけを分ける。
+     * @throws AudioCacheException.InvalidId id が不正な場合（ファイルには触れない）。
+     */
+    fun invalidate(id: String) = remove(id)
+
     /** キャッシュディレクトリ内の全ファイルを削除する。 */
     fun removeAll() {
         fileSystem.listFiles(cacheDir).forEach { fileSystem.delete(it) }
