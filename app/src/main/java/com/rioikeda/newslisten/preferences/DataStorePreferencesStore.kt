@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.rioikeda.newslisten.core.Difficulty
+import com.rioikeda.newslisten.podcast.PlaybackConstants
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -83,6 +84,7 @@ class DataStorePreferencesStore(
     }
 
     override suspend fun setDefaultPlaybackSpeed(speed: Double) {
+        if (!PlaybackConstants.isSelectableSpeed(speed)) return
         dataStore.edit { it[KEY_DEFAULT_PLAYBACK_SPEED] = speed }
     }
 

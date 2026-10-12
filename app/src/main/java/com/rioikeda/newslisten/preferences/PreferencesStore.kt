@@ -42,7 +42,7 @@ interface PreferencesStore {
     /** 既定の英語難易度を更新し永続化する。 */
     suspend fun setDefaultDifficulty(code: String)
 
-    /** 既定の再生速度を更新し永続化する。 */
+    /** 既定の再生速度を更新し永続化する。`PlaybackConstants.speeds` に無い値は無視する（保存も通知もしない）。 */
     suspend fun setDefaultPlaybackSpeed(speed: Double)
 
     /** 記事タップ時の遷移先を更新し永続化する。 */

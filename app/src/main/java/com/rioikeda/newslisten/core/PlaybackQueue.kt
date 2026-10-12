@@ -1,5 +1,7 @@
 package com.rioikeda.newslisten.core
 
+import java.util.Collections
+
 /**
  * 再生キューが扱う要素が満たすべき最小契約。
  *
@@ -18,13 +20,40 @@ interface QueueItem {
  * 不変（イミュータブル）な値オブジェクト。各操作は新しいインスタンスを返す純関数であり、
  * プレイヤー・DOM・AVPlayer 等の外部 I/O に依存しない。
  *
+ * 不変条件: items の id は一意、currentIndex は null か items の範囲内、items が空なら currentIndex は null。
+ * 違反する構築は [IllegalArgumentException]。
+ *
+ * WHY data class にしない: data class の主構築子は引数の list をそのまま保持するため、
+ * 呼び出し側が後から書き換えるとキューが変わる。写しを主構築子の 1 か所で取るため通常の class にし、
+ * 等価性と [copy] は手で定義する（copy も主構築子を通るので写しと検査が掛かる）。
+ *
  * @see docs/design/shared-playback-spec.md §2 再生キュー仕様
  */
-data class PlaybackQueue<T : QueueItem>(
-    val items: List<T> = emptyList(),
+class PlaybackQueue<T : QueueItem>(
+    items: List<T> = emptyList(),
     val currentIndex: Int? = null,
 ) {
-    /** 現在再生中の要素。`currentIndex` が null または範囲外なら null。 */
+    /** 引数の写しを読み取り専用で公開する。`toList()` は要素 2 個以上で書き換え可能な list を返すので使わない。 */
+    val items: List<T> = Collections.unmodifiableList(ArrayList(items))
+
+    init {
+        require(this.items.map { it.id }.toSet().size == this.items.size) { "items の id は一意でなければならない" }
+        require(currentIndex == null || currentIndex in this.items.indices) {
+            "currentIndex は null か items の範囲内でなければならない: $currentIndex (size=${this.items.size})"
+        }
+    }
+
+    fun copy(items: List<T> = this.items, currentIndex: Int? = this.currentIndex): PlaybackQueue<T> =
+        PlaybackQueue(items, currentIndex)
+
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is PlaybackQueue<*> && items == other.items && currentIndex == other.currentIndex)
+
+    override fun hashCode(): Int = 31 * items.hashCode() + (currentIndex?.hashCode() ?: 0)
+
+    override fun toString(): String = "PlaybackQueue(items=$items, currentIndex=$currentIndex)"
+
+    /** 現在再生中の要素。`currentIndex` が null なら null。 */
     val current: T?
         get() = currentIndex?.let { items.getOrNull(it) }
 
@@ -35,13 +64,16 @@ data class PlaybackQueue<T : QueueItem>(
     /** 既存キューを破棄し、単一エピソードで開始する。 */
     fun start(item: T): PlaybackQueue<T> = PlaybackQueue(items = listOf(item), currentIndex = 0)
 
-    /** 一覧を指定位置から再生する。範囲外の [startAt] は `[0, items.size - 1]` にクランプする。 */
-    fun setQueue(items: List<T>, startAt: Int): PlaybackQueue<T> =
-        if (items.isEmpty()) {
-            PlaybackQueue()
-        } else {
-            PlaybackQueue(items = items, currentIndex = startAt.coerceIn(0, items.size - 1))
-        }
+    /**
+     * 一覧を指定位置から再生する。範囲外の [startAt] は `[0, items.size - 1]` にクランプする。
+     * id が重複する要素は先勝ちで除く。開始位置は重複を除く前の入力で決め、その要素の id の位置から始める。
+     */
+    fun setQueue(items: List<T>, startAt: Int): PlaybackQueue<T> {
+        if (items.isEmpty()) return PlaybackQueue()
+        val startId = items[startAt.coerceIn(0, items.size - 1)].id
+        val deduped = items.distinctBy { it.id }
+        return PlaybackQueue(items = deduped, currentIndex = deduped.indexOfFirst { it.id == startId })
+    }
 
     /** 末尾に追加する。既に同一 id が含まれていれば no-op（重複防止）。 */
     fun add(item: T): PlaybackQueue<T> =

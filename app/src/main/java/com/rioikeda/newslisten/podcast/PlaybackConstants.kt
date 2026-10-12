@@ -9,7 +9,13 @@ package com.rioikeda.newslisten.podcast
  */
 object PlaybackConstants {
     /** 速度選択肢（倍率）。8段階。 */
-    val speeds: List<Float> = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.5f)
+    val speeds: List<Double> = listOf(0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5)
+
+    /**
+     * [speeds] に含まれる値だけを選択可能とする。許容誤差は持たず、NaN は常に false。
+     * 値域の判定はここに集約し、呼び出し側で [speeds] を直接検索しない。
+     */
+    fun isSelectableSpeed(value: Double): Boolean = value in speeds
 
     /** 戻るスキップ秒。 */
     const val SKIP_BACKWARD_SECONDS: Double = 15.0

@@ -3,6 +3,7 @@ package com.rioikeda.newslisten.core
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -340,6 +341,62 @@ class PlaybackQueueConformanceTest {
         assertEquals(listOf(ep("b"), ep("a"), ep("c")), result.upNext)
         assertEquals(listOf(ep("b"), ep("a"), ep("c")), result.items)
         assertNull(result.currentIndex)
+    }
+
+    // --- 不変条件 1〜3（構築時の検査）と setQueue の dedupe ---
+
+    @Test
+    fun `CI-T7 index が範囲外の構築は IllegalArgumentException`() {
+        // verifies: CI-T7
+        assertThrows(IllegalArgumentException::class.java) {
+            PlaybackQueue(items = listOf(ep("a"), ep("b")), currentIndex = 2)
+        }
+    }
+
+    @Test
+    fun `CI-T7 空のキューで index 0 の構築は IllegalArgumentException`() {
+        // verifies: CI-T7
+        assertThrows(IllegalArgumentException::class.java) {
+            PlaybackQueue<TestEpisode>(items = emptyList(), currentIndex = 0)
+        }
+    }
+
+    @Test
+    fun `CI-T7 id が重複する構築は IllegalArgumentException`() {
+        // verifies: CI-T7
+        assertThrows(IllegalArgumentException::class.java) {
+            PlaybackQueue(items = listOf(ep("a"), ep("a")), currentIndex = null)
+        }
+    }
+
+    @Test
+    fun `CI-T7 copy も不変条件を検査する`() {
+        // verifies: CI-T7
+        val queue = PlaybackQueue(items = listOf(ep("a"), ep("b")), currentIndex = 0)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            queue.copy(currentIndex = 5)
+        }
+    }
+
+    @Test
+    fun `CI-T7 setQueue は重複 id を先勝ちで除く`() {
+        // verifies: CI-T7
+        val result = PlaybackQueue<TestEpisode>().setQueue(listOf(ep("a"), ep("a"), ep("b")), startAt = 0)
+
+        assertEquals(listOf(ep("a"), ep("b")), result.items)
+        assertEquals(ep("a"), result.current)
+    }
+
+    @Test
+    fun `Q-33 setQueue は元の入力で clamp した id の位置から開始する`() {
+        // verifies: CI-T7
+        val result = PlaybackQueue<TestEpisode>()
+            .setQueue(listOf(ep("a"), ep("b"), ep("a"), ep("c")), startAt = 2)
+
+        assertEquals(listOf(ep("a"), ep("b"), ep("c")), result.items)
+        assertEquals(0, result.currentIndex)
+        assertEquals(ep("a"), result.current)
     }
 }
 

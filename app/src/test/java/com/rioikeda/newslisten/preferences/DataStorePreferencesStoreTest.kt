@@ -103,6 +103,25 @@ class DataStorePreferencesStoreTest {
     }
 
     @Test
+    fun setDefaultPlaybackSpeedは8段外の値を拒否し直前の値を維持する() = runTest {
+        // verifies: CI-T15
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val file = File.createTempFile("prefs_speed_reject", ".preferences_pb").apply { deleteOnExit() }
+        val store = dispatcher.newStore(file)
+        advanceUntilIdle()
+        store.setDefaultPlaybackSpeed(1.5)
+        advanceUntilIdle()
+        assertEquals(1.5, store.defaultPlaybackSpeed.value, 0.0)
+
+        listOf(0.0, 3.0, 1.0001, -1.0, Double.NaN).forEach { rejected ->
+            store.setDefaultPlaybackSpeed(rejected)
+            advanceUntilIdle()
+
+            assertEquals(1.5, store.defaultPlaybackSpeed.value, 0.0)
+        }
+    }
+
+    @Test
     fun 起動時に永続化済みの値を新しいインスタンスへ復元する() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val file = File.createTempFile("prefs_restart", ".preferences_pb").apply { deleteOnExit() }

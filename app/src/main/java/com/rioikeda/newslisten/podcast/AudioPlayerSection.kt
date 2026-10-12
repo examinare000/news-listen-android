@@ -280,9 +280,9 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
 
             // 再生速度セグメント
             SpeedSegmentedControl(
-                speeds = PlaybackConstants.speeds,
+                speeds = PlaybackConstants.speeds.map { it.toFloat() },
                 currentSpeed = playbackSpeed,
-                onSpeedChange = { viewModel.setSpeed(it) },
+                onSpeedChange = { viewModel.setSpeed(it.toDouble()) },
                 modifier = Modifier.fillMaxWidth()
             )
         }
