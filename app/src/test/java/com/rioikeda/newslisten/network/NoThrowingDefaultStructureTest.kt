@@ -5,9 +5,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * production interface（`ApiClient`）から throwing default を排除したことの構造検査（CI-T16）。
+ * production interface（`ApiClient`）から throwing default を排除したことの構造検査（android-contract-18）。
  *
- * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §4 CI-T16。
+ * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §4 android-contract-18。
  */
 class NoThrowingDefaultStructureTest {
 
@@ -39,7 +39,7 @@ class NoThrowingDefaultStructureTest {
 
     @Test
     fun mainソースセット全体でthrowing_defaultのerror呼出が0件() {
-        // verifies: CI-T16
+        // verifies: android-contract-18
         val root = resolveMainSourceRoot()
         val hits = mutableListOf<String>()
         root.walkTopDown()
@@ -59,7 +59,7 @@ class NoThrowingDefaultStructureTest {
 
     @Test
     fun PodcastViewModelの再生5操作はpodcastApi経由で語彙_クイズ3操作はapiClient経由で呼ぶ() {
-        // verifies: CI-T16
+        // verifies: android-contract-18
         val root = resolveMainSourceRoot()
         val file = root.walkTopDown().firstOrNull { it.name == "PodcastViewModel.kt" }
             ?: error("走査ルート $root に PodcastViewModel.kt が見つからない")

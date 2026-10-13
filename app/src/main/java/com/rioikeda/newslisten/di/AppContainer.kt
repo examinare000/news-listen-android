@@ -84,7 +84,7 @@ class AppContainer(context: Context) {
             AuthInterceptor(
                 apiBaseUrl = baseUrl.toHttpUrl(),
                 apiKey = apiKey,
-                // OkHttp のコールバックスレッドから同期的に呼ぶ（android S0・CI-T11・F5）。
+                // OkHttp のコールバックスレッドから同期的に呼ぶ（android-slice-auth-01・android-contract-13・F5）。
                 // `_authViewModel` は `by lazy`（synchronized）で、ラムダは呼ばれた時点で解決する
                 // ため、ここで参照しても循環初期化にはならない。
                 onUnauthorized = { attachedToken -> _authViewModel.onUnauthorized(attachedToken) },
@@ -246,7 +246,7 @@ class AppContainer(context: Context) {
      * by lazy でシングルトンキャッシュ化：画面回転時に AuthViewModel インスタンスが同じ
      * ままであることを保証し、authState が Unknown にリセットされるのを防ぐ。
      *
-     * onSubjectLeave（android S0・SG-R18 で onLogoutCleanup から改名）: フェーズ8-D・
+     * onSubjectLeave（android-slice-auth-01・SG-R18 で onLogoutCleanup から改名）: フェーズ8-D・
      * shared-playback-spec.md §6.3（共有端末対応）。logout 時に音声キャッシュを全削除し、
      * 共有端末に他人の音声データが残らないようにする。auth 層に AudioCacheManager を
      * 直接依存させないため、削除処理だけを関数として注入する

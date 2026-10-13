@@ -13,9 +13,9 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * [PodcastViewModel] の再生5操作が `PodcastApi` 経由で呼ばれることの振る舞い検証（CI-T16）。
+ * [PodcastViewModel] の再生5操作が `PodcastApi` 経由で呼ばれることの振る舞い検証（android-contract-18）。
  *
- * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §4 CI-T16。
+ * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §4 android-contract-18。
  */
 class PodcastViewModelPortTest {
 
@@ -33,7 +33,7 @@ class PodcastViewModelPortTest {
 
     @Test
     fun fetchPodcastsはpodcastApi経由で呼ばれapiClient経由では呼ばれない() = runTest {
-        // verifies: CI-T16
+        // verifies: android-contract-18
         val podcastApi = FakePodcastApi(onFetchPodcasts = { PodcastListResponse(listOf(podcast("p1"))) })
         // 何も stub しない基底を渡す。fetchPodcasts が誤って apiClient 経由で呼ばれたら error で fail する。
         val apiClient = object : BaseFakeApiClient() {}

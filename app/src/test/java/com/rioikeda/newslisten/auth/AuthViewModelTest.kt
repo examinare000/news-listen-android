@@ -31,8 +31,8 @@ import org.junit.Test
  * フェーズ10 P10 Task3: defaultDifficulty/defaultPlaybackSpeed の値の正本は [PreferencesStore] に
  * 一本化した（AuthViewModel は StateFlow を委譲するのみで独自コピーを持たない）。
  *
- * android S0（認証失効の型分離と検知）: `onLogoutCleanup` を `onSubjectLeave` へ改名（SG-R18）。
- * 401 は [ApiException.Unauthorized] 型で受け、一時障害とは区別する（CI-T10）。
+ * android-slice-auth-01（認証失効の型分離と検知）: `onLogoutCleanup` を `onSubjectLeave` へ改名（SG-R18）。
+ * 401 は [ApiException.Unauthorized] 型で受け、一時障害とは区別する（android-contract-12）。
  */
 class AuthViewModelTest {
 
@@ -44,7 +44,7 @@ class AuthViewModelTest {
         digestArticleCount = 5,
     )
 
-    /** 保存失敗時のエラー文言（CI-T14, CI-S0-3。spec §3 wording）。 */
+    /** 保存失敗時のエラー文言（android-contract-16, CI-S0-3。spec §3 wording）。 */
     private val sessionSaveErrorMessage = "ログイン状態を端末に保存できませんでした。もう一度お試しください"
 
     /** テスト対象の生成を共通化する。dispatcher は runTest の testScheduler に紐付ける。 */
@@ -64,7 +64,7 @@ class AuthViewModelTest {
             onAuthenticated = onAuthenticated,
         )
 
-    // --- refreshAuth（CI-T10, T-T10） ---
+    // --- refreshAuth（android-contract-12, android-test-12） ---
 
     @Test
     fun トークン未保存ならUnauthenticatedになる() = runTest {
@@ -89,7 +89,7 @@ class AuthViewModelTest {
 
     @Test
     fun unauthorized_トークンありでmeがUnauthorizedならトークン破棄してUnauthenticatedになる() = runTest {
-        // verifies: CI-T10
+        // verifies: android-contract-12
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
         var subjectLeaveCalled = false
         val viewModel = newViewModel(
@@ -108,7 +108,7 @@ class AuthViewModelTest {
 
     @Test
     fun network_トークンありでmeがNetworkErrorならUnknownのままトークンを保持しlastFailureを立てる() = runTest {
-        // verifies: CI-T10（既存 :95 の反転。一時障害でトークンを破棄しない仕様変更）
+        // verifies: android-contract-12（既存 :95 の反転。一時障害でトークンを破棄しない仕様変更）
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
         val viewModel = newViewModel(
             apiClient = FakeApiClient(onMe = { throw ApiException.NetworkError(RuntimeException("offline")) }),
@@ -124,7 +124,7 @@ class AuthViewModelTest {
 
     @Test
     fun http500_トークンありでmeがHttpError500ならUnknownのままトークンを保持しlastFailureを立てる() = runTest {
-        // verifies: CI-T10
+        // verifies: android-contract-12
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
         val viewModel = newViewModel(
             apiClient = FakeApiClient(onMe = { throw ApiException.HttpError(500) }),
@@ -142,7 +142,7 @@ class AuthViewModelTest {
 
     @Test
     fun decoding_トークンありでmeがDecodingErrorならUnknownのままトークンを保持しlastFailureを立てる() = runTest {
-        // verifies: CI-T10
+        // verifies: android-contract-12
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
         val viewModel = newViewModel(
             apiClient = FakeApiClient(onMe = { throw ApiException.DecodingError(RuntimeException("bad json")) }),
@@ -158,7 +158,7 @@ class AuthViewModelTest {
 
     @Test
     fun rerun_1回目はNetworkErrorで2回目は成功しAuthenticatedになりlastFailureが消える() = runTest {
-        // verifies: CI-T10
+        // verifies: android-contract-12
         var callCount = 0
         val viewModel = newViewModel(
             apiClient = FakeApiClient(
@@ -182,7 +182,7 @@ class AuthViewModelTest {
 
     @Test
     fun rotation_Authenticated中に再実行したrefreshが一時障害でも状態を変えない() = runTest {
-        // verifies: CI-T10（F-2: 画面回転での LaunchedEffect 再実行）
+        // verifies: android-contract-12（F-2: 画面回転での LaunchedEffect 再実行）
         var callCount = 0
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
         val viewModel = newViewModel(
@@ -256,7 +256,7 @@ class AuthViewModelTest {
         assertTrue(viewModel.preferencesSyncFailed.value)
     }
 
-    // --- login（CI-T21, T-T21） ---
+    // --- login（android-contract-23, android-test-25） ---
 
     @Test
     fun login成功でトークン保存しAuthenticatedになる() = runTest {
@@ -276,7 +276,7 @@ class AuthViewModelTest {
 
     @Test
     fun unauthorized_loginがUnauthorizedを受けたらユーザーIDまたはパスワードが正しくありませんと表示する() = runTest {
-        // verifies: CI-T21（既存 :179 の置換。leakage guard: AuthViewModel は HttpError.code を比較しない）
+        // verifies: android-contract-23（既存 :179 の置換。leakage guard: AuthViewModel は HttpError.code を比較しない）
         val sessionStore = InMemorySessionStore(initialToken = null)
         var subjectLeaveCalled = false
         var authenticatedCalled = false
@@ -298,7 +298,7 @@ class AuthViewModelTest {
 
     @Test
     fun http403_loginがHttpError403を受けたら汎用文言を表示する() = runTest {
-        // verifies: CI-T21（401 以外の HttpError は専用文言にならない）
+        // verifies: android-contract-23（401 以外の HttpError は専用文言にならない）
         val viewModel = newViewModel(
             apiClient = FakeApiClient(onLogin = { _, _ -> throw ApiException.HttpError(403) }),
         )
@@ -330,11 +330,11 @@ class AuthViewModelTest {
         assertEquals(0, apiClient.loginCallCount)
     }
 
-    // --- login / completePasskeyLogin の保存失敗（CI-T14, CI-S0-3） ---
+    // --- login / completePasskeyLogin の保存失敗（android-contract-16, CI-S0-3） ---
 
     @Test
     fun login_save_fail_saveが失敗したらAuthenticatedにならずエラー文言を表示する() = runTest {
-        // verifies: CI-T14
+        // verifies: android-contract-16
         val loginResponse = LoginResponse(token = "new-token", user = user)
         var authenticatedCalled = false
         val viewModel = newViewModel(
@@ -832,7 +832,7 @@ class AuthViewModelTest {
 
     @Test
     fun rerun_after_failure_失敗後に再試行すると成功する() = runTest {
-        // verifies: CI-S0-8, CI-T10, CI-S0-6
+        // verifies: CI-S0-8, android-contract-12, CI-S0-6
         var callCount = 0
         val viewModel = newViewModel(
             apiClient = FakeApiClient(
@@ -859,7 +859,7 @@ class AuthViewModelTest {
 
     @Test
     fun concurrent_success_then_transient_failure_並行refreshで成功後に一時障害が完了してもAuthenticatedにlastFailureを立てない() = runTest {
-        // verifies: CI-T10（third_vote_completion GPT-6 反証1: 並行 refreshAuth の
+        // verifies: android-contract-12（third_vote_completion GPT-6 反証1: 並行 refreshAuth の
         // 成功→一時障害という順序で、開始時スナップショットの wasAuthenticated を使うと
         // Authenticated かつ lastFailure != null になる。判定を書込みと同じ sessionLock 区間内の
         // 現在値に差し替えて閉じたことを確認する）。

@@ -108,7 +108,7 @@ class AudioCacheManagerTest {
 
     @Test
     fun invalidateするとisCachedがfalseになりcachedFileUriがnullになる() {
-        // verifies: CI-T9
+        // verifies: android-contract-11
         manager.cache("p1", byteArrayOf(1))
 
         manager.invalidate("p1")
@@ -119,7 +119,7 @@ class AudioCacheManagerTest {
 
     @Test
     fun invalidateはほかのidのキャッシュを残す() {
-        // verifies: CI-T9
+        // verifies: android-contract-11
         manager.cache("p1", byteArrayOf(1))
         manager.cache("p2", byteArrayOf(2))
 
@@ -131,7 +131,7 @@ class AudioCacheManagerTest {
 
     @Test
     fun invalidateは不正なidに対してInvalidIdをthrowする() {
-        // verifies: CI-T9
+        // verifies: android-contract-11
         assertThrows(AudioCacheException.InvalidId::class.java) {
             manager.invalidate("bad id")
         }
@@ -139,7 +139,7 @@ class AudioCacheManagerTest {
 
     @Test
     fun invalidateは不正なidに対してInvalidIdをthrowしファイルに触れない() {
-        // verifies: CI-T9
+        // verifies: android-contract-11
         // "/p1" は File(cacheDir, "/p1.mp3") で p1 と同じパスに解決されるため、
         // 検証より先に削除する実装は p1 のキャッシュを消してこのテストで落ちる。
         manager.cache("p1", byteArrayOf(1))
@@ -153,7 +153,7 @@ class AudioCacheManagerTest {
 
     @Test
     fun invalidateは存在しないidや2回目の呼出に対して例外を投げない冪等操作() {
-        // verifies: CI-T9
+        // verifies: android-contract-11
         manager.invalidate("never-cached")
         manager.invalidate("never-cached")
     }

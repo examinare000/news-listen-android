@@ -50,11 +50,11 @@ class InMemorySessionStoreTest {
         assertNull(store.load())
     }
 
-    // --- save の戻り値（CI-T14, T-T14. order 手順3: save の失敗を呼出元へ返す） ---
+    // --- save の戻り値（android-contract-16, android-test-16. order 手順3: save の失敗を呼出元へ返す） ---
 
     @Test
     fun store_ok_saveが成功したらtrueを返しloadで取得できる() {
-        // verifies: CI-T14
+        // verifies: android-contract-16
         val store = InMemorySessionStore()
 
         val result = store.save("t")
@@ -65,7 +65,7 @@ class InMemorySessionStoreTest {
 
     @Test
     fun store_fail_saveFailsが真ならfalseを返しloadは変わらない() {
-        // verifies: CI-T14
+        // verifies: android-contract-16
         val store = InMemorySessionStore(initialToken = "old", saveFails = true)
 
         val result = store.save("t")

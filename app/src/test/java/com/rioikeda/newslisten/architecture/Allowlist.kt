@@ -9,11 +9,11 @@ data class AllowEntry(val rule: String, val file: String, val target: String, va
 }
 
 /**
- * 今の違反の固定（Spec §8.4 A-T1。order §3.1 の 115 組）。以後の slice は、違反を消したら組を消す。
+ * 今の違反の固定（Spec §8.4 android-slice-skeleton-01。order §3.1 の 115 組）。以後の slice は、違反を消したら組を消す。
  * 走査の出力から生成しない。差が出たら、走査と仕様のどちらが誤りかを先に決める。
  *
  * 持ち主の導出規則: その組を成す行をすべて消す slice のうち、§8.1 の順で最も後のもの。
- * TA-V8 のファイルは test の根からの相対 path。
+ * android-check-08 のファイルは test の根からの相対 path。
  */
 object Allowlist {
 
@@ -21,14 +21,14 @@ object Allowlist {
         files.map { AllowEntry(ruleId, it, target, owner) }
 
     val entries: List<AllowEntry> =
-        // TA-D1 (3)
-        rule("TA-D1", "model", "A-T2b", "podcast/PlaybackSession.kt") +
-            rule("TA-D1", "model", "A-T6a", "auth/AuthState.kt") +
-            rule("TA-D1", "androidx", "A-T3a1", "podcast/PlaybackState.kt") +
+        // android-dep-01 (3)
+        rule("android-dep-01", "model", "android-slice-episode-02", "podcast/PlaybackSession.kt") +
+            rule("android-dep-01", "model", "android-slice-account-01", "auth/AuthState.kt") +
+            rule("android-dep-01", "androidx", "android-slice-playapp-01", "podcast/PlaybackState.kt") +
 
-            // TA-D2 (30)
+            // android-dep-02 (30)
             rule(
-                "TA-D2", "model", "A-T2b",
+                "android-dep-02", "model", "android-slice-episode-02",
                 "podcast/PlaybackSession.kt",
                 "podcast/PodcastStatusBadge.kt",
                 "podcast/PlaybackMetadata.kt",
@@ -37,116 +37,116 @@ object Allowlist {
                 "podcast/QueueSheet.kt",
                 "podcast/AudioPlayerSection.kt",
             ) +
-            rule("TA-D2", "model", "A-T6a", "auth/AuthState.kt", "auth/AuthViewModel.kt") +
+            rule("android-dep-02", "model", "android-slice-account-01", "auth/AuthState.kt", "auth/AuthViewModel.kt") +
             rule(
-                "TA-D2", "model", "A-T6b",
+                "android-dep-02", "model", "android-slice-account-02",
                 "account/SessionsViewModel.kt",
                 "passkey/PasskeyCredentialsViewModel.kt",
                 "passkey/PasskeyLoginViewModel.kt",
                 "passkey/PasskeyRegistrationViewModel.kt",
             ) +
             rule(
-                "TA-D2", "model", "A-T7a",
+                "android-dep-02", "model", "android-slice-learning-01",
                 "learning/LearningViewModel.kt",
                 "learning/LearningScreen.kt",
                 "engagement/ListeningStreakStore.kt",
                 "AppScaffold.kt",
             ) +
-            rule("TA-D2", "model", "A-T7b1", "podcast/QuizSheet.kt", "podcast/PodcastViewModel.kt") +
-            rule("TA-D2", "model", "A-T7b2", "vocabulary/VocabularyTestViewModel.kt") +
+            rule("android-dep-02", "model", "android-slice-learning-02", "podcast/QuizSheet.kt", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-02", "model", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
             rule(
-                "TA-D2", "model", "A-T8a",
+                "android-dep-02", "model", "android-slice-periphery-01",
                 "feed/FeedViewModel.kt",
                 "feed/FeedScreen.kt",
                 "feed/PendingArticleAction.kt",
             ) +
             rule(
-                "TA-D2", "model", "A-T8b",
+                "android-dep-02", "model", "android-slice-periphery-02",
                 "settings/SettingsViewModel.kt",
                 "settings/SettingsScreen.kt",
                 "onboarding/OnboardingViewModel.kt",
                 "onboarding/OnboardingScreen.kt",
             ) +
-            rule("TA-D2", "core.QueueItem", "A-T2b", "model/PodcastResponse.kt") +
-            rule("TA-D2", "androidx", "A-T8b", "model/FeaturedCategory.kt") +
-            rule("TA-D2", "R", "A-T8b", "model/FeaturedCategory.kt") +
+            rule("android-dep-02", "core.QueueItem", "android-slice-episode-02", "model/PodcastResponse.kt") +
+            rule("android-dep-02", "androidx", "android-slice-periphery-02", "model/FeaturedCategory.kt") +
+            rule("android-dep-02", "R", "android-slice-periphery-02", "model/FeaturedCategory.kt") +
 
-            // TA-D3 (31): network 14 + model 17
+            // android-dep-03 (31): network 14 + model 17
             rule(
-                "TA-D3", "network", "A-T6b",
+                "android-dep-03", "network", "android-slice-account-02",
                 "account/AccountViewModel.kt",
                 "account/SessionsViewModel.kt",
                 "passkey/PasskeyCredentialsViewModel.kt",
                 "passkey/PasskeyLoginViewModel.kt",
                 "passkey/PasskeyRegistrationViewModel.kt",
             ) +
-            rule("TA-D3", "network", "A-T7a", "engagement/ListeningStreakStore.kt") +
-            rule("TA-D3", "network", "A-T8a", "feed/FeedViewModel.kt") +
+            rule("android-dep-03", "network", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
+            rule("android-dep-03", "network", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
             rule(
-                "TA-D3", "network", "A-T8b",
+                "android-dep-03", "network", "android-slice-periphery-02",
                 "notification/FcmTokenRegistrar.kt",
                 "onboarding/OnboardingViewModel.kt",
                 "settings/SettingsViewModel.kt",
             ) +
-            // port の置き場を移すのが A-T9（Spec §3.2）
+            // port の置き場を移すのが android-slice-closure-01（Spec §3.2）
             rule(
-                "TA-D3", "network", "A-T9",
+                "android-dep-03", "network", "android-slice-closure-01",
                 "auth/AuthViewModel.kt",
                 "learning/LearningViewModel.kt",
                 "podcast/PodcastViewModel.kt",
                 "vocabulary/VocabularyTestViewModel.kt",
             ) +
             rule(
-                "TA-D3", "model", "A-T6b",
+                "android-dep-03", "model", "android-slice-account-02",
                 "account/SessionsViewModel.kt",
                 "passkey/PasskeyCredentialsViewModel.kt",
                 "passkey/PasskeyLoginViewModel.kt",
                 "passkey/PasskeyRegistrationViewModel.kt",
             ) +
-            rule("TA-D3", "model", "A-T6a", "auth/AuthViewModel.kt") +
-            rule("TA-D3", "model", "A-T7a", "engagement/ListeningStreakStore.kt", "learning/LearningViewModel.kt") +
-            rule("TA-D3", "model", "A-T7b1", "podcast/PodcastViewModel.kt") +
-            rule("TA-D3", "model", "A-T7b2", "vocabulary/VocabularyTestViewModel.kt") +
-            rule("TA-D3", "model", "A-T8a", "feed/FeedViewModel.kt", "feed/PendingArticleAction.kt") +
-            rule("TA-D3", "model", "A-T8b", "onboarding/OnboardingViewModel.kt", "settings/SettingsViewModel.kt") +
-            rule("TA-D3", "model", "A-T2b", "podcast/PlaybackMetadata.kt", "network/PodcastApi.kt") +
-            rule("TA-D3", "model", "A-T7b2", "network/LearningApi.kt", "network/VocabularyTestApi.kt") +
+            rule("android-dep-03", "model", "android-slice-account-01", "auth/AuthViewModel.kt") +
+            rule("android-dep-03", "model", "android-slice-learning-01", "engagement/ListeningStreakStore.kt", "learning/LearningViewModel.kt") +
+            rule("android-dep-03", "model", "android-slice-learning-02", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-03", "model", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
+            rule("android-dep-03", "model", "android-slice-periphery-01", "feed/FeedViewModel.kt", "feed/PendingArticleAction.kt") +
+            rule("android-dep-03", "model", "android-slice-periphery-02", "onboarding/OnboardingViewModel.kt", "settings/SettingsViewModel.kt") +
+            rule("android-dep-03", "model", "android-slice-episode-02", "podcast/PlaybackMetadata.kt", "network/PodcastApi.kt") +
+            rule("android-dep-03", "model", "android-slice-learning-03", "network/LearningApi.kt", "network/VocabularyTestApi.kt") +
 
-            // TA-D4 (17)
+            // android-dep-04 (17)
             rule(
-                "TA-D4", "model", "A-T2b",
+                "android-dep-04", "model", "android-slice-episode-02",
                 "podcast/AudioPlayerSection.kt",
                 "podcast/PodcastRowView.kt",
                 "podcast/PodcastScreen.kt",
                 "podcast/PodcastStatusBadge.kt",
                 "podcast/QueueSheet.kt",
             ) +
-            rule("TA-D4", "model", "A-T7a", "AppScaffold.kt", "learning/LearningScreen.kt") +
-            rule("TA-D4", "model", "A-T7b1", "podcast/QuizSheet.kt") +
-            rule("TA-D4", "model", "A-T8a", "feed/FeedScreen.kt") +
-            rule("TA-D4", "model", "A-T8b", "onboarding/OnboardingScreen.kt", "settings/SettingsScreen.kt") +
-            // QuizSheet の network import は ApiException だけ。A-T4 が ApiException を core へ移すと変わる。
-            rule("TA-D4", "network", "A-T4", "podcast/QuizSheet.kt") +
+            rule("android-dep-04", "model", "android-slice-learning-01", "AppScaffold.kt", "learning/LearningScreen.kt") +
+            rule("android-dep-04", "model", "android-slice-learning-02", "podcast/QuizSheet.kt") +
+            rule("android-dep-04", "model", "android-slice-periphery-01", "feed/FeedScreen.kt") +
+            rule("android-dep-04", "model", "android-slice-periphery-02", "onboarding/OnboardingScreen.kt", "settings/SettingsScreen.kt") +
+            // QuizSheet の network import は ApiException だけ。android-slice-failure-01 が ApiException を core へ移すと変わる。
+            rule("android-dep-04", "network", "android-slice-failure-01", "podcast/QuizSheet.kt") +
             rule(
-                "TA-D4", "PreferencesStore", "A-T5b",
+                "android-dep-04", "PreferencesStore", "android-slice-prefs-02",
                 "MainActivity.kt",
                 "AppScaffold.kt",
                 "designsystem/DSFeedback.kt",
                 "settings/SettingsScreen.kt",
             ) +
-            rule("TA-D4", "preferencesStore.set", "A-T5b", "settings/SettingsScreen.kt") +
+            rule("android-dep-04", "preferencesStore.set", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
 
-            // TA-D6 (1)
-            rule("TA-D6", "== \"", "A-T6a", "di/AppContainer.kt") +
+            // android-dep-06 (1)
+            rule("android-dep-06", "== \"", "android-slice-account-01", "di/AppContainer.kt") +
 
-            // TA-D7 (3)
-            rule("TA-D7", "公開の var", "A-S2c", "podcast/PlayerController.kt") +
-            rule("TA-D7", "公開の var", "A-T7a", "engagement/ListeningStreakStore.kt") +
-            rule("TA-D7", "公開の var", "A-T8a", "feed/FeedViewModel.kt") +
+            // android-dep-07 (3)
+            rule("android-dep-07", "公開の var", "android-slice-playback-05", "podcast/PlayerController.kt") +
+            rule("android-dep-07", "公開の var", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
+            rule("android-dep-07", "公開の var", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
 
-            // TA-D9 (8)
+            // android-dep-09 (8)
             rule(
-                "TA-D9", "e.code", "A-T4",
+                "android-dep-09", "e.code", "android-slice-failure-01",
                 "account/AccountViewModel.kt",
                 "settings/SettingsViewModel.kt",
                 "engagement/ListeningStreakStore.kt",
@@ -154,33 +154,33 @@ object Allowlist {
                 "passkey/PasskeyRegistrationViewModel.kt",
                 "podcast/QuizSheet.kt",
             ) +
-            rule("TA-D9", "= e.message", "A-T8a", "feed/FeedViewModel.kt") +
-            rule("TA-D9", "= e.message", "A-T3b", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-09", "= e.message", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
+            rule("android-dep-09", "= e.message", "android-slice-playapp-03", "podcast/PodcastViewModel.kt") +
 
-            // TA-V2 (8)
-            rule("TA-V2", "fetchPodcasts", "A-T2b", "network/PodcastApi.kt") +
-            rule("TA-V2", "fetchPodcast", "A-T2b", "network/PodcastApi.kt") +
-            rule("TA-V2", "updatePlaybackPosition", "A-T2b", "network/PodcastApi.kt") +
-            rule("TA-V2", "fetchLearningDashboard", "A-T7a", "network/LearningApi.kt") +
-            rule("TA-V2", "fetchVocabulary", "A-T7b1", "network/LearningApi.kt") +
-            rule("TA-V2", "fetchVocabularyTestSession", "A-T7b2", "network/LearningApi.kt") +
-            rule("TA-V2", "fetchVocabularyTestSession", "A-T7b2", "network/VocabularyTestApi.kt") +
-            rule("TA-V2", "submitVocabularyTestResults", "A-T7b2", "network/VocabularyTestApi.kt") +
+            // android-check-02 (8)
+            rule("android-check-02", "fetchPodcasts", "android-slice-episode-02", "network/PodcastApi.kt") +
+            rule("android-check-02", "fetchPodcast", "android-slice-episode-02", "network/PodcastApi.kt") +
+            rule("android-check-02", "updatePlaybackPosition", "android-slice-episode-02", "network/PodcastApi.kt") +
+            rule("android-check-02", "fetchLearningDashboard", "android-slice-learning-01", "network/LearningApi.kt") +
+            rule("android-check-02", "fetchVocabulary", "android-slice-learning-02", "network/LearningApi.kt") +
+            rule("android-check-02", "fetchVocabularyTestSession", "android-slice-learning-03", "network/LearningApi.kt") +
+            rule("android-check-02", "fetchVocabularyTestSession", "android-slice-learning-03", "network/VocabularyTestApi.kt") +
+            rule("android-check-02", "submitVocabularyTestResults", "android-slice-learning-03", "network/VocabularyTestApi.kt") +
 
-            // TA-V4 (13)
-            rule("TA-V4", "\"processing\"", "A-T2b", "podcast/PodcastStatusBadge.kt") +
-            rule("TA-V4", "\"failed\"", "A-T2b", "podcast/PodcastStatusBadge.kt") +
-            rule("TA-V4", "\"partial_failed\"", "A-T2b", "podcast/PodcastStatusBadge.kt") +
-            rule("TA-V4", "PLAYBACK_SPEEDS", "A-T5b", "settings/SettingsScreen.kt") +
-            rule("TA-V4", "listOf(3, 5, 7, 10)", "A-T5b", "settings/SettingsScreen.kt") +
-            rule("TA-V4", "/ 7.0", "A-T5b", "settings/SettingsScreen.kt") +
-            rule("TA-V4", "setOf(3, 5, 7, 10)", "A-T5a", "settings/SettingsViewModel.kt") +
-            rule("TA-V4", "/ 31.0", "A-T7a", "learning/LearningScreen.kt") +
-            rule("TA-V4", "correctRate >=", "A-T7b1", "podcast/QuizSheet.kt") +
-            rule("TA-V4", "limit == 0", "A-T8b", "settings/SettingsScreen.kt") +
-            rule("TA-V4", "moveUpNext(index", "A-T3a2", "podcast/QueueSheet.kt") +
-            rule("TA-V4", "role ==", "A-T6a", "AppScaffold.kt", "di/AppContainer.kt") +
+            // android-check-04 (13)
+            rule("android-check-04", "\"processing\"", "android-slice-episode-02", "podcast/PodcastStatusBadge.kt") +
+            rule("android-check-04", "\"failed\"", "android-slice-episode-02", "podcast/PodcastStatusBadge.kt") +
+            rule("android-check-04", "\"partial_failed\"", "android-slice-episode-02", "podcast/PodcastStatusBadge.kt") +
+            rule("android-check-04", "PLAYBACK_SPEEDS", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
+            rule("android-check-04", "listOf(3, 5, 7, 10)", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
+            rule("android-check-04", "/ 7.0", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
+            rule("android-check-04", "setOf(3, 5, 7, 10)", "android-slice-prefs-01", "settings/SettingsViewModel.kt") +
+            rule("android-check-04", "/ 31.0", "android-slice-learning-01", "learning/LearningScreen.kt") +
+            rule("android-check-04", "correctRate >=", "android-slice-learning-02", "podcast/QuizSheet.kt") +
+            rule("android-check-04", "limit == 0", "android-slice-periphery-02", "settings/SettingsScreen.kt") +
+            rule("android-check-04", "moveUpNext(index", "android-slice-playapp-02", "podcast/QueueSheet.kt") +
+            rule("android-check-04", "role ==", "android-slice-account-01", "AppScaffold.kt", "di/AppContainer.kt") +
 
-            // TA-V8 (1)
-            rule("TA-V8", "androidx", "A-T3a1", "podcast/PlaybackStateTest.kt")
+            // android-check-08 (1)
+            rule("android-check-08", "androidx", "android-slice-playapp-01", "podcast/PlaybackStateTest.kt")
 }

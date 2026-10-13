@@ -9,11 +9,11 @@ import org.junit.Test
 /**
  * 再生失敗の分類と、`PlayerController.state` の Fake 注入の準拠テスト。
  *
- * verifies: CI-T2a
- * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §3.1・§4 CI-T2a。
+ * verifies: android-contract-03
+ * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §3.1・§4 android-contract-03。
  * 分類の期待値は order の接頭辞規則（IO_FILE_NOT_FOUND / IO_BAD_HTTP_STATUS → Source、他の IO_* → Network、
  * DECODING_* / PARSING_* → Decode、他 → Unknown）から決める。DECODER_* は接頭辞が異なるため Unknown。
- * ExoPlayerController の Media3 イベント写像（CI-T2b）は JVM で検証できないためここでは扱わない。
+ * ExoPlayerController の Media3 イベント写像（android-contract-04）は JVM で検証できないためここでは扱わない。
  */
 @Suppress("UnsafeOptInUsageError")
 class PlaybackStateTest {

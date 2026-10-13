@@ -8,10 +8,10 @@ package com.rioikeda.newslisten.network
  * 型シグネチャで明示するため save/load/clear の3メソッドに分解する
  * （iOS の get 相当 = [load]、`token = value` 相当 = [save]、`token = nil` 相当 = [clear]）。
  *
- * android S0（CI-T14）: [save] は失敗を例外ではなく戻り値で呼出元へ返す。呼出元
+ * android-slice-auth-01（android-contract-16）: [save] は失敗を例外ではなく戻り値で呼出元へ返す。呼出元
  * （[com.rioikeda.newslisten.auth.AuthViewModel]）は保存失敗時に `Authenticated` へ遷移させない。
  *
- * android S0（CI-S0-11、#14）: 3 操作はスレッド安全で線形化可能であること。
+ * android-slice-auth-01（CI-S0-11、#14）: 3 操作はスレッド安全で線形化可能であること。
  * [com.rioikeda.newslisten.network.AuthInterceptor] の `tokenProvider` から任意のスレッド
  * （OkHttp のコールバックスレッドを含む）で [load] が呼ばれる。
  */

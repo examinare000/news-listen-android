@@ -24,7 +24,7 @@ import javax.crypto.spec.GCMParameterSpec
  * 失敗時契約: 復号失敗・鍵欠落・Keystore例外時は例外を投げず `null` を返し、壊れた暗号文は
  * 内部で削除する（re-login 導線。端末バックアップ復元等で鍵だけが失われるケースを許容する）。
  * save も Keystore 例外を伝播させず `false` を返し、保存済みの値（キャッシュを含む）は変更しない。
- * 呼出元（CI-T14）が失敗を扱う。
+ * 呼出元（android-contract-16）が失敗を扱う。
  *
  * スレッド安全性（CI-S0-11、#14）: save / clear / 初回 load の「復号 → 書戻し」と
  * [clearBrokenState] は、すべて [storeLock] で直列化する（線形化可能）。`cachedToken` /
@@ -60,7 +60,7 @@ class KeystoreSessionStore(context: Context) : SessionStore {
             cacheLoaded = true
             true
         } catch (e: Exception) {
-            // Keystore/Cipher例外は伝播させない。呼出元（CI-T14）へ false を返す。既存値は変更しない。
+            // Keystore/Cipher例外は伝播させない。呼出元（android-contract-16）へ false を返す。既存値は変更しない。
             Log.w(TAG, "セッショントークンの暗号化に失敗したため保存できません")
             false
         }

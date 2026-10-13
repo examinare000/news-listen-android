@@ -6,10 +6,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * `PlaybackQueue` の実行時のカプセル化（Spec §7 TA-V6・AQ-6。契約 CI-17）。
+ * `PlaybackQueue` の実行時のカプセル化（Spec §7 android-check-06・product-quality-06。契約 CI-17）。
  *
  * 渡した list・返した list を書き換えても、次に読む値と不変条件が変わらないことを検査する。
- * main の `PlaybackQueue` は A-T1 では変えない。
+ * main の `PlaybackQueue` は android-slice-skeleton-01 では変えない。
  *
  * 比較元は必ずリテラルで書く。`q.items` を変数に取って比較元にすると、書き換えと同じ
  * インスタンスを見比べて空振りの green になるため（SR-06）。
@@ -45,7 +45,7 @@ class PlaybackQueueEncapsulationTest {
     }
 
     @Test
-    fun TA_V6_AQ6_構築子に渡したlistの要素を置き換えてもキューは変わらない() {
+    fun android_check_06_product_quality_06_構築子に渡したlistの要素を置き換えてもキューは変わらない() {
         // verifies: CI-17 ①
         val input = arrayListOf(a, b, c)
         val q = PlaybackQueue(items = input, currentIndex = 1)
@@ -56,7 +56,7 @@ class PlaybackQueueEncapsulationTest {
     }
 
     @Test
-    fun TA_V6_AQ6_copyに渡したlistの要素を置き換えてもキューは変わらない() {
+    fun android_check_06_product_quality_06_copyに渡したlistの要素を置き換えてもキューは変わらない() {
         // verifies: CI-17 ①
         val input = arrayListOf(a, b, c)
         val q = PlaybackQueue<Item>().copy(items = input, currentIndex = 1)
@@ -67,7 +67,7 @@ class PlaybackQueueEncapsulationTest {
     }
 
     @Test
-    fun TA_V6_AQ6_setQueueに渡したlistの要素を置き換えてもキューは変わらない() {
+    fun android_check_06_product_quality_06_setQueueに渡したlistの要素を置き換えてもキューは変わらない() {
         // verifies: CI-17 ① / T-18
         val input = arrayListOf(a, b, c)
         val q = PlaybackQueue<Item>().setQueue(input, 1)
@@ -79,7 +79,7 @@ class PlaybackQueueEncapsulationTest {
     }
 
     @Test
-    fun TA_V6_AQ6_setQueueに渡したlistへ要素を足してもキューは変わらない() {
+    fun android_check_06_product_quality_06_setQueueに渡したlistへ要素を足してもキューは変わらない() {
         // verifies: CI-17 ① / T-19
         val input = arrayListOf(a, b, c)
         val q = PlaybackQueue<Item>().setQueue(input, 1)
@@ -91,7 +91,7 @@ class PlaybackQueueEncapsulationTest {
     }
 
     @Test
-    fun TA_V6_AQ6_setQueueに渡したlistを空にしてもキューは変わらない() {
+    fun android_check_06_product_quality_06_setQueueに渡したlistを空にしてもキューは変わらない() {
         // verifies: CI-17 ① / T-20
         val input = arrayListOf(a, b, c)
         val q = PlaybackQueue<Item>().setQueue(input, 1)
@@ -103,7 +103,7 @@ class PlaybackQueueEncapsulationTest {
     }
 
     @Test
-    fun TA_V6_AQ6_返したitemsをMutableListとして書き換えてもキューは変わらない_setQueue() {
+    fun android_check_06_product_quality_06_返したitemsをMutableListとして書き換えてもキューは変わらない_setQueue() {
         // verifies: CI-17 ② / T-21
         val q = PlaybackQueue<Item>().setQueue(arrayListOf(a, b, c), 1)
         val returned = q.items
@@ -115,7 +115,7 @@ class PlaybackQueueEncapsulationTest {
     }
 
     @Test
-    fun TA_V6_AQ6_返したitemsをMutableListとして書き換えてもキューは変わらない_add() {
+    fun android_check_06_product_quality_06_返したitemsをMutableListとして書き換えてもキューは変わらない_add() {
         // verifies: CI-17 ② / T-22
         val q = PlaybackQueue<Item>().add(a).add(b)
         val returned = q.items
@@ -127,7 +127,7 @@ class PlaybackQueueEncapsulationTest {
     }
 
     @Test
-    fun TA_V6_AQ6_currentIndexが無いときに返したupNextを空にしてもキューは変わらない() {
+    fun android_check_06_product_quality_06_currentIndexが無いときに返したupNextを空にしてもキューは変わらない() {
         // verifies: CI-17 ② / T-23
         val q = PlaybackQueue<Item>().add(a).add(b)
         assertEquals(null, q.currentIndex)
@@ -141,7 +141,7 @@ class PlaybackQueueEncapsulationTest {
     }
 
     @Test
-    fun TA_V6_AQ6_currentIndexがあるときに返したupNextを空にしてもキューは変わらない() {
+    fun android_check_06_product_quality_06_currentIndexがあるときに返したupNextを空にしてもキューは変わらない() {
         // verifies: CI-17 ② / T-24（現行で green。drop が新しい list を作るため）
         val q = PlaybackQueue<Item>().setQueue(arrayListOf(a, b, c), 0)
         val returned = q.upNext
