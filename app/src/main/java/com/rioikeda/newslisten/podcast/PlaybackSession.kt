@@ -63,7 +63,7 @@ sealed class PlaybackSession {
         else -> rejected("queueExhausted")
     }
 
-    /** 再生中エピソードが queue の現在位置と一致するか（INV-P1 の session 側）。 */
+    /** 再生中エピソードが queue の現在位置と一致するか（shared-inv-01 の session 側）。 */
     fun satisfiesInvariantP1(queueCurrentId: String?): Boolean = when (this) {
         is NothingPlaying -> true
         is Starting -> episode.id == queueCurrentId

@@ -12,7 +12,7 @@
     <!-- ローディング表示 -->
     <string name="loading_auth">認証を確認中…</string>
 
-    <!-- 認証確認の一時障害・再試行導線（android S0・CI-S0-6） -->
+    <!-- 認証確認の一時障害・再試行導線（android-slice-auth-01・CI-S0-6） -->
     <string name="auth_check_failed_message">認証の確認に失敗しました。接続をご確認のうえもう一度お試しください</string>
     <string name="auth_check_retry_button_label">再試行</string>
 

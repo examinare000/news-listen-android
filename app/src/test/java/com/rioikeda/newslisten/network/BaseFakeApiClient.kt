@@ -30,7 +30,7 @@ import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
 import kotlinx.serialization.json.JsonObject
 
 /**
- * test 側 Fake の基底クラス（CI-T16）。[ApiClient] の全 44 メソッドを `error(...)` で実装し、
+ * test 側 Fake の基底クラス（android-contract-18）。[ApiClient] の全 44 メソッドを `error(...)` で実装し、
  * 派生 Fake が override していないメソッドが呼ばれたら即座に失敗させて検出できるようにする。
  *
  * 戻り値型はすべて明示する。式本体の戻り値型を省くと `Nothing` と推論され、

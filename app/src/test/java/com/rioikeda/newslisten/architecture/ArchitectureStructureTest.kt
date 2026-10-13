@@ -8,7 +8,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 /**
- * Target Architecture の構造検査（Spec §7 TA-V1〜TA-V9・§8.4 A-T1）。
+ * Target Architecture の構造検査（Spec §7 android-check-01〜android-check-09・§8.4 android-slice-skeleton-01）。
  *
  * main を字句で走査し、違反の組 `(規則 ID, ファイル, 対象)` の集合が [Allowlist] の集合と**等しい**ことを検査する。
  * 違反が増えても（許可リストに無い違反）、減らしたのに許可リストを縮め忘れても（違反が無い組）落ちる。
@@ -21,10 +21,10 @@ import org.junit.Test
  * - 型の情報を持たないので、port の受け取りは名前の形、setter の呼出は受け手の変数名 `preferencesStore`、
  *   遷移関数の呼出は受け手の名前の形でしか判定しない。
  * - 同じ組に当たる行が増えても検出しない（組の単位で見る）。
- * - 規則の置き場（TA-V4）は、列挙した式しか数えない。
+ * - 規則の置き場（android-check-04）は、列挙した式しか数えない。
  * - 見出しの途中、丸括弧の深さ 0 の行が打ち切りの語・`@`・`}` で始まる class、見出しの中の丸括弧の外の `}`、
  *   見出しの語を拾えない形（直前が `:`・`.`・英数字・`_`）の class では、本体を宣言の位置と読めず、
- *   TA-D7 が黙って 0 件になる（spec §3.3 (3)「誤りの向き」(i)〜(iii)）。
+ *   android-dep-07 が黙って 0 件になる（spec §3.3 (3)「誤りの向き」(i)〜(iii)）。
  */
 class ArchitectureStructureTest {
 
@@ -38,13 +38,13 @@ class ArchitectureStructureTest {
         val layerOf: Map<String, Layer> get() = LayerMap.byFile
 
         val sliceIds = setOf(
-            "A-S2b1", "A-T2a", "A-T2b", "A-S2b2a", "A-S2b2b", "A-S2c", "A-S3", "A-S4a", "A-S4b",
-            "A-T3a1", "A-T3a2", "A-T3b", "A-T4", "A-T5a", "A-T5b", "A-T6a", "A-T6b",
-            "A-T7a", "A-T7b1", "A-T7b2", "A-T8a", "A-T8b", "A-T9",
+            "android-slice-playback-02", "android-slice-episode-01", "android-slice-episode-02", "android-slice-playback-03", "android-slice-playback-04", "android-slice-playback-05", "android-slice-ci-01", "android-slice-departure-01", "android-slice-departure-02",
+            "android-slice-playapp-01", "android-slice-playapp-02", "android-slice-playapp-03", "android-slice-failure-01", "android-slice-prefs-01", "android-slice-prefs-02", "android-slice-account-01", "android-slice-account-02",
+            "android-slice-learning-01", "android-slice-learning-02", "android-slice-learning-03", "android-slice-periphery-01", "android-slice-periphery-02", "android-slice-closure-01",
         )
         val allowlistRuleIds = setOf(
-            "TA-D1", "TA-D2", "TA-D3", "TA-D4", "TA-D6", "TA-D7", "TA-D9",
-            "TA-V2", "TA-V4", "TA-V8",
+            "android-dep-01", "android-dep-02", "android-dep-03", "android-dep-04", "android-dep-06", "android-dep-07", "android-dep-09",
+            "android-check-02", "android-check-04", "android-check-08",
         )
     }
 
@@ -85,10 +85,10 @@ class ArchitectureStructureTest {
         }
     }
 
-    // ---- TA-V1 対応表 ----
+    // ---- android-check-01 対応表 ----
 
     @Test
-    fun TA_V1_対応表がmainの全ファイルと1対1で対応する() {
+    fun android_check_01_対応表がmainの全ファイルと1対1で対応する() {
         // verifies: CI-01, CI-02 / T-01
         val actual = mainSources.map { it.path }
         val mapped = LayerMap.rows.map { it.first }
@@ -108,61 +108,61 @@ class ArchitectureStructureTest {
     }
 
     @Test
-    fun TA_V1_依存の向きの違反が許可リストと一致する() {
-        // verifies: CI-03, CI-05 / T-02（TA-D1・TA-D3・TA-D4・TA-D5）
-        val rules = setOf("TA-D1", "TA-D3", "TA-D4", "TA-D5")
+    fun android_check_01_依存の向きの違反が許可リストと一致する() {
+        // verifies: CI-03, CI-05 / T-02（android-dep-01・android-dep-03・android-dep-04・android-dep-05）
+        val rules = setOf("android-dep-01", "android-dep-03", "android-dep-04", "android-dep-05")
         val hits = ArchitectureScanner.dependencyHits(mainSources, layerOf)
 
-        assertMatchesAllowlist(rules, withoutPermanentExceptions(setOf("TA-D4", "TA-D5"), hits))
+        assertMatchesAllowlist(rules, withoutPermanentExceptions(setOf("android-dep-04", "android-dep-05"), hits))
     }
 
     @Test
-    fun TA_V2_データモデルの漏れが許可リストと一致する() {
-        // verifies: CI-03, CI-06 / T-03（TA-D2・TA-V2）
+    fun android_check_02_データモデルの漏れが許可リストと一致する() {
+        // verifies: CI-03, CI-06 / T-03（android-dep-02・android-check-02）
         val hits = ArchitectureScanner.dataModelHits(mainSources, layerOf)
 
-        assertMatchesAllowlist(setOf("TA-D2", "TA-V2"), hits)
+        assertMatchesAllowlist(setOf("android-dep-02", "android-check-02"), hits)
     }
 
     @Test
-    fun TA_V3_adapterの生成と入口とcomposition_rootの比較式が許可リストと一致する() {
-        // verifies: CI-03, CI-07 / T-04（TA-D6）
+    fun android_check_03_adapterの生成と入口とcomposition_rootの比較式が許可リストと一致する() {
+        // verifies: CI-03, CI-07 / T-04（android-dep-06）
         val hits = ArchitectureScanner.compositionHits(mainSources)
 
-        assertMatchesAllowlist(setOf("TA-D6"), withoutPermanentExceptions(setOf("TA-D6"), hits))
+        assertMatchesAllowlist(setOf("android-dep-06"), withoutPermanentExceptions(setOf("android-dep-06"), hits))
     }
 
     @Test
-    fun TA_V4_規則の式の出現が許可リストと一致する() {
-        // verifies: CI-03, CI-10 / T-05（TA-V4・TA-D9）
+    fun android_check_04_規則の式の出現が許可リストと一致する() {
+        // verifies: CI-03, CI-10 / T-05（android-check-04・android-dep-09）
         val hits = ArchitectureScanner.ruleLocationHits(mainSources)
 
-        assertMatchesAllowlist(setOf("TA-V4", "TA-D9"), hits)
+        assertMatchesAllowlist(setOf("android-check-04", "android-dep-09"), hits)
     }
 
     @Test
-    fun TA_V5_公開のvarとMutableStateFlowとdata_classの可変が許可リストと一致する() {
-        // verifies: CI-03, CI-11, CI-13 / T-06（TA-D7。TA-V5 の data class は許可リストに行が無く 0 件）
+    fun android_check_05_公開のvarとMutableStateFlowとdata_classの可変が許可リストと一致する() {
+        // verifies: CI-03, CI-11, CI-13 / T-06（android-dep-07。android-check-05 の data class は許可リストに行が無く 0 件）
         val hits = ArchitectureScanner.publicSurfaceHits(mainSources, layerOf)
 
-        assertMatchesAllowlist(setOf("TA-D7"), hits)
-        val dataClassHits = hits.filter { it.rule == "TA-V5" }
+        assertMatchesAllowlist(setOf("android-dep-07"), hits)
+        val dataClassHits = hits.filter { it.rule == "android-check-05" }
         assertTrue("data class の可変の違反は 0 件であるべき: $dataClassHits", dataClassHits.isEmpty())
     }
 
     @Test
-    fun TA_V5_検査つき生成の型の構築子が公開でない() {
+    fun android_check_05_検査つき生成の型の構築子が公開でない() {
         // verifies: CI-12 / T-07（対象の型が main に現れるまで skip）
         val types = listOf("Episode", "SubjectId", "PlaybackSpeed", "WeeklyGoal")
         val declared = types.filter { ArchitectureScanner.topLevelDeclarationFile(mainSources, it) != null }
-        assumeTrue("対象の型が main に無い（A-T2a・A-T5a・A-T6a が足す）", declared.isNotEmpty())
+        assumeTrue("対象の型が main に無い（android-slice-episode-01・android-slice-prefs-01・android-slice-account-01 が足す）", declared.isNotEmpty())
 
         val violations = ArchitectureScanner.nonPublicConstructorViolations(mainSources, declared)
         assertTrue("構築子が公開の型: $violations", violations.isEmpty())
     }
 
     @Test
-    fun TA_V1_型単位の行NowPlayingが宣言のファイルと一致する() {
+    fun android_check_01_型単位の行NowPlayingが宣言のファイルと一致する() {
         // verifies: CI-13 / T-08（NowPlaying が main に現れるまで skip）
         val row = LayerMap.typeRows.single { it.type == "NowPlaying" }
         val declaredIn = ArchitectureScanner.topLevelDeclarationFile(mainSources, "NowPlaying")
@@ -176,17 +176,17 @@ class ArchitectureStructureTest {
     }
 
     @Test
-    fun TA_V7_QueriesとCommandsの静的な枠() {
+    fun android_check_07_QueriesとCommandsの静的な枠() {
         // verifies: CI-14 / T-09（*Queries・*Commands の interface が main に現れるまで skip）
         val targets = ArchitectureScanner.queriesCommandsInterfaces(mainSources)
-        assumeTrue("*Queries・*Commands の interface が main に無い（A-T3a1 が足す）", targets.isNotEmpty())
+        assumeTrue("*Queries・*Commands の interface が main に無い（android-slice-playapp-01 が足す）", targets.isNotEmpty())
 
         val violations = ArchitectureScanner.queriesCommandsViolations(mainSources)
         assertTrue("枠に反する関数: $violations", violations.isEmpty())
     }
 
     @Test
-    fun TA_V8_domainとapplicationのテストが通信とOSをimportしない() {
+    fun android_check_08_domainとapplicationのテストが通信とOSをimportしない() {
         // verifies: CI-03, CI-15, §3.4 / T-10
         val layers = ArchitectureScanner.testLayers(testSources, layerOf)
         val layered = layers.filterValues { it is TestLayer.Resolved }
@@ -197,11 +197,11 @@ class ArchitectureStructureTest {
             "層の分かれる同点がある。LayerMap に test の明示の行を足す: $ties",
             ties.isEmpty(),
         )
-        assertMatchesAllowlist(setOf("TA-V8"), ArchitectureScanner.testDependencyHits(testSources, layerOf))
+        assertMatchesAllowlist(setOf("android-check-08"), ArchitectureScanner.testDependencyHits(testSources, layerOf))
     }
 
     @Test
-    fun TA_V9_error呼出が0件でcode401の比較が2件() {
+    fun android_check_09_error呼出が0件でcode401の比較が2件() {
         // verifies: CI-16 / T-11
         val errors = ArchitectureScanner.errorCallLines(mainSources)
         val code401 = ArchitectureScanner.code401Lines(mainSources)
@@ -211,7 +211,7 @@ class ArchitectureStructureTest {
     }
 
     @Test
-    fun TA_V1_許可リストの組が一意で持ち主と規則IDが正しい() {
+    fun android_check_01_許可リストの組が一意で持ち主と規則IDが正しい() {
         // verifies: CI-04 / T-12（件数は書かない。以後の slice が減らす）
         val keys = Allowlist.entries.map { it.key }
         val duplicates = keys.groupBy { it }.filter { it.value.size > 1 }.keys
@@ -222,7 +222,7 @@ class ArchitectureStructureTest {
 
         val testPaths = testSources.map { it.path }.toSet()
         val badFiles = Allowlist.entries.filter {
-            if (it.rule == "TA-V8") it.file !in testPaths else it.file !in LayerMap.byFile.keys
+            if (it.rule == "android-check-08") it.file !in testPaths else it.file !in LayerMap.byFile.keys
         }
         assertTrue("実在しないファイル: $badFiles", badFiles.isEmpty())
 
@@ -313,7 +313,7 @@ class ArchitectureStructureTest {
         assertTrue("import 先の対象が違う:\n${mismatches.joinToString("\n")}", mismatches.isEmpty())
 
         assertEquals(
-            "okhttp3.mockwebserver は TA-V8 のときだけ別の対象になる",
+            "okhttp3.mockwebserver は android-check-08 のときだけ別の対象になる",
             "okhttp3.mockwebserver",
             ArchitectureScanner.importTarget("okhttp3.mockwebserver.MockWebServer", index, forTestV8 = true),
         )
@@ -839,12 +839,12 @@ object ArchitectureScanner {
         for (source in sources) {
             val layer = layerOf[source.path]
             if (layer in listOf(Layer.DOMAIN, Layer.APPLICATION, Layer.PORT, Layer.READ_MODEL)) {
-                publicVarLines(source.path, source.text).forEach { hits.add("TA-D7", source.path, "公開の var", it) }
+                publicVarLines(source.path, source.text).forEach { hits.add("android-dep-07", source.path, "公開の var", it) }
                 publicMutableStateFlowLines(source.path, source.text)
-                    .forEach { hits.add("TA-D7", source.path, "公開の MutableStateFlow", it) }
+                    .forEach { hits.add("android-dep-07", source.path, "公開の MutableStateFlow", it) }
             }
             if (layer == Layer.DOMAIN || layer == Layer.READ_MODEL) {
-                mutableDataClassParameters(source.text).forEach { (target, line) -> hits.add("TA-V5", source.path, target, line) }
+                mutableDataClassParameters(source.text).forEach { (target, line) -> hits.add("android-check-05", source.path, target, line) }
             }
         }
         return hits.build()
@@ -913,7 +913,7 @@ object ArchitectureScanner {
         return "layer:${layers.single()!!.name}"
     }
 
-    // ---- 依存の向き（CI-05。TA-D1・TA-D3・TA-D4・TA-D5） ----
+    // ---- 依存の向き（CI-05。android-dep-01・android-dep-03・android-dep-04・android-dep-05） ----
 
     private val domainForbidden = setOf(
         "android", "androidx", "kotlinx.coroutines", "kotlinx.serialization", "okhttp3", "model", "network", "di", "R",
@@ -932,21 +932,21 @@ object ArchitectureScanner {
         for (source in sources) {
             val layer = layerOf[source.path] ?: continue
             val (rule, forbidden) = when {
-                layer == Layer.DOMAIN -> "TA-D1" to domainForbidden
-                layer in listOf(Layer.APPLICATION, Layer.PORT, Layer.READ_MODEL) -> "TA-D3" to applicationForbidden
-                layer == Layer.PRESENTATION || source.path == MAIN_ACTIVITY -> "TA-D4" to presentationForbidden
-                layer == Layer.ADAPTER -> "TA-D5" to adapterForbidden
+                layer == Layer.DOMAIN -> "android-dep-01" to domainForbidden
+                layer in listOf(Layer.APPLICATION, Layer.PORT, Layer.READ_MODEL) -> "android-dep-03" to applicationForbidden
+                layer == Layer.PRESENTATION || source.path == MAIN_ACTIVITY -> "android-dep-04" to presentationForbidden
+                layer == Layer.ADAPTER -> "android-dep-05" to adapterForbidden
                 else -> continue
             }
             for ((line, name) in importLines(source.text)) {
-                val target = importTarget(name, index, forApplication = rule == "TA-D3")
+                val target = importTarget(name, index, forApplication = rule == "android-dep-03")
                 when {
                     target == UNRESOLVED -> unresolved += "${source.path}:$line $name"
                     target in forbidden -> hits.add(rule, source.path, target!!, line)
                 }
             }
-            if (rule == "TA-D4") {
-                presentationLineHits(source.text).forEach { (target, line) -> hits.add("TA-D4", source.path, target, line) }
+            if (rule == "android-dep-04") {
+                presentationLineHits(source.text).forEach { (target, line) -> hits.add("android-dep-04", source.path, target, line) }
             }
         }
         check(unresolved.isEmpty()) { "解決できない import（宣言するファイルを決められない）:\n${unresolved.joinToString("\n")}" }
@@ -979,7 +979,7 @@ object ArchitectureScanner {
 
     fun presentationHits(path: String, text: String): Set<String> = presentationLineHits(text).map { it.first }.toSet()
 
-    // ---- データモデルの漏れ（CI-06。TA-D2・TA-V2） ----
+    // ---- データモデルの漏れ（CI-06。android-dep-02・android-check-02） ----
 
     private val topLevelTypeName = Regex("""(?<![\w.])(?:class|interface|object|typealias)\s+(\w+)""")
     private val functionDeclaration = Regex("""\bfun\s+(?:<[^>]*>\s*)?(?:[\w.]+\.)?(\w+)\s*\(""")
@@ -1040,16 +1040,16 @@ object ArchitectureScanner {
             val path = source.path
             if (path.startsWith("model/")) {
                 for ((line, name) in importLines(source.text)) {
-                    modelImportTarget(name)?.let { hits.add("TA-D2", path, it, line) }
+                    modelImportTarget(name)?.let { hits.add("android-dep-02", path, it, line) }
                 }
             } else if (!path.startsWith("network/") && !path.startsWith("observability/")) {
                 importLines(source.text).filter { it.second.startsWith("${PROJECT}model.") }
-                    .forEach { hits.add("TA-D2", path, "model", it.first) }
+                    .forEach { hits.add("android-dep-02", path, "model", it.first) }
                 lex(source.text).filter { !it.isComment && !it.code.startsWith("import ") && it.code.contains("${PROJECT}model.") }
-                    .forEach { hits.add("TA-D2", path, "model", it.number) }
+                    .forEach { hits.add("android-dep-02", path, "model", it.number) }
             }
             if (layerOf[path] == Layer.PORT) {
-                portModelDeclarations(source.text, modelTypes).forEach { (name, line) -> hits.add("TA-V2", path, name, line) }
+                portModelDeclarations(source.text, modelTypes).forEach { (name, line) -> hits.add("android-check-02", path, name, line) }
             }
         }
         return hits.build()
@@ -1062,7 +1062,7 @@ object ArchitectureScanner {
         else -> null
     }
 
-    // ---- composition root（CI-07。TA-D6） ----
+    // ---- composition root（CI-07。android-dep-06） ----
 
     private val adapterConstructors = listOf(
         "OkHttpApiClient", "KeystoreSessionStore", "DataStorePreferencesStore", "ExoPlayerController",
@@ -1080,18 +1080,18 @@ object ArchitectureScanner {
                 val code = line.code
                 if (!path.startsWith("di/") && listOf("class ", "fun ", "import ").none { code.contains(it) }) {
                     constructorCalls.filterValues { it.containsMatchIn(code) }.keys
-                        .forEach { hits.add("TA-D6", path, it, line.number) }
+                        .forEach { hits.add("android-dep-06", path, it, line.number) }
                 }
                 if (LayerMap.byFile[path] != Layer.ENTRY && !code.contains("fun ") && code.contains("getAppContainer()")) {
-                    hits.add("TA-D6", path, "getAppContainer()", line.number)
+                    hits.add("android-dep-06", path, "getAppContainer()", line.number)
                 }
-                if (path == APP_CONTAINER && line.raw.contains("== \"")) hits.add("TA-D6", path, "== \"", line.number)
+                if (path == APP_CONTAINER && line.raw.contains("== \"")) hits.add("android-dep-06", path, "== \"", line.number)
             }
         }
         return hits.build()
     }
 
-    // ---- 規則の置き場（CI-10。TA-V4・TA-D9） ----
+    // ---- 規則の置き場（CI-10。android-check-04・android-dep-09） ----
 
     private val statusExpressions = listOf("\"processing\"", "\"failed\"", "\"partial_failed\"", "\"completed\"")
     private val otherExpressions = listOf(
@@ -1109,19 +1109,19 @@ object ArchitectureScanner {
             source.text.lines().forEachIndexed { index, raw ->
                 val number = index + 1
                 if (checkV4) {
-                    otherExpressions.filter { raw.contains(it) }.forEach { hits.add("TA-V4", path, it, number) }
-                    if (!inNetwork) statusExpressions.filter { raw.contains(it) }.forEach { hits.add("TA-V4", path, it, number) }
+                    otherExpressions.filter { raw.contains(it) }.forEach { hits.add("android-check-04", path, it, number) }
+                    if (!inNetwork) statusExpressions.filter { raw.contains(it) }.forEach { hits.add("android-check-04", path, it, number) }
                 }
                 if (!inNetwork) {
-                    if (errorCode.containsMatchIn(raw)) hits.add("TA-D9", path, "e.code", number)
-                    if (raw.contains("= e.message")) hits.add("TA-D9", path, "= e.message", number)
+                    if (errorCode.containsMatchIn(raw)) hits.add("android-dep-09", path, "e.code", number)
+                    if (raw.contains("= e.message")) hits.add("android-dep-09", path, "= e.message", number)
                 }
             }
         }
         return hits.build()
     }
 
-    // ---- 既存契約の回帰（CI-16。TA-V9） ----
+    // ---- 既存契約の回帰（CI-16。android-check-09） ----
 
     private fun linesContaining(sources: List<SourceFile>, needle: String): List<String> = sources.flatMap { source ->
         source.text.lines().mapIndexedNotNull { index, raw -> if (raw.contains(needle)) "${source.path}:${index + 1}" else null }
@@ -1167,7 +1167,7 @@ object ArchitectureScanner {
         return Regex("""^\s*:\s*([^={]+)""").find(declarationText.substring(close + 1))?.groupValues?.get(1)?.trim() ?: "Unit"
     }
 
-    /** `*Queries` の関数は `Unit` を返さない。`*Commands` の関数は `Unit` を返す（receipt の型の集合は A-T3a1 が足す）。 */
+    /** `*Queries` の関数は `Unit` を返さない。`*Commands` の関数は `Unit` を返す（receipt の型の集合は android-slice-playapp-01 が足す）。 */
     fun queriesCommandsViolations(sources: List<SourceFile>): List<String> = sources.flatMap { source ->
         val lines = lex(source.text)
         val ownerAt = mutableMapOf<Int, String?>()
@@ -1184,7 +1184,7 @@ object ArchitectureScanner {
         }
     }
 
-    // ---- test の層と依存（CI-15。§3.4・TA-V8） ----
+    // ---- test の層と依存（CI-15。§3.4・android-check-08） ----
 
     private val wordSplit = Regex("""[A-Z]+(?![a-z])|[A-Z][a-z0-9]*|[a-z0-9]+""")
     private val testNameExcluded = listOf("Fake", "Stub", "Base")
@@ -1225,7 +1225,7 @@ object ArchitectureScanner {
             if (layer !is TestLayer.Resolved || layer.layer !in domainSide) continue
             val source = testSources.first { it.path == path }
             for ((line, name) in importLines(source.text)) {
-                externalGroup(name, forTestV8 = true)?.takeIf { it in forbidden }?.let { hits.add("TA-V8", path, it, line) }
+                externalGroup(name, forTestV8 = true)?.takeIf { it in forbidden }?.let { hits.add("android-check-08", path, it, line) }
             }
         }
         return hits.build()

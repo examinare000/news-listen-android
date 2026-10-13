@@ -9,7 +9,7 @@ package com.rioikeda.newslisten.network
  */
 class InMemorySessionStore(
     initialToken: String? = null,
-    /** テスト用: 真なら [save] が保存を行わず `false` を返す（CI-T14 の失敗注入）。 */
+    /** テスト用: 真なら [save] が保存を行わず `false` を返す（android-contract-16 の失敗注入）。 */
     private val saveFails: Boolean = false,
 ) : SessionStore {
     private var token: String? = initialToken

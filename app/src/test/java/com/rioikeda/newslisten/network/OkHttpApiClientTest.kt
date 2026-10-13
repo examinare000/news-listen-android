@@ -151,11 +151,11 @@ class OkHttpApiClientTest {
         assertEquals(3, response.remaining)
     }
 
-    // --- fetchPodcasts / fetchPodcast（PodcastApi port。CI-T16） ---
+    // --- fetchPodcasts / fetchPodcast（PodcastApi port。android-contract-18） ---
 
     @Test
     fun fetchPodcastsはPodcastApi型の参照からGETでPodcastListResponseを返す() = runTest {
-        // verifies: CI-T16
+        // verifies: android-contract-18
         val podcastApi: PodcastApi = client
         server.enqueue(
             MockResponse().setResponseCode(200).setBody(
@@ -184,7 +184,7 @@ class OkHttpApiClientTest {
 
     @Test
     fun fetchPodcastはPodcastApi型の参照からGETでPodcastResponseを返す() = runTest {
-        // verifies: CI-T16
+        // verifies: android-contract-18
         val podcastApi: PodcastApi = client
         server.enqueue(
             MockResponse().setResponseCode(200).setBody(
@@ -258,7 +258,7 @@ class OkHttpApiClientTest {
     @Test
     fun HTTP401はUnauthorizedを投げる() = runTest {
         // verifies: CI-S0-1
-        // production 経路で 401 -> Unauthorized の写像を確かめる唯一のテスト（CI-T10/CI-T21 の
+        // production 経路で 401 -> Unauthorized の写像を確かめる唯一のテスト（android-contract-12/android-contract-23 の
         // Fake は Unauthorized を直接 throw するため、写像が抜けていても両テストは green になる）。
         token = "t"
         server.enqueue(MockResponse().setResponseCode(401))

@@ -8,7 +8,7 @@ import com.rioikeda.newslisten.network.PodcastApi
  * [PodcastApi]（再生 use case が使う狭い port）専用の test double。
  *
  * 既定値・記録フィールドは [FakePodcastApiClient] の同名 5 引数と同じにする
- * （A-S2b で移し替えるときに意味が変わらないようにするため）。
+ * （android-slice-playback-02・android-slice-playback-03・android-slice-playback-04 で移し替えるときに意味が変わらないようにするため）。
  */
 class FakePodcastApi(
     private val onFetchPodcasts: suspend () -> PodcastListResponse =

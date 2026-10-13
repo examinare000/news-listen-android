@@ -15,10 +15,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 再生セッション状態機械の遷移表と INV-P1 述語の検証。
+ * 再生セッション状態機械の遷移表と shared-inv-01 述語の検証。
  *
- * verifies: CI-T1
- * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §3.1・§4 CI-T1。
+ * verifies: android-contract-01
+ * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §3.1・§4 android-contract-01。
  * 状態型は PlaybackSession の入れ子（PlaybackState と同じ形）。11 遷移だけが起き、表外は IllegalStateException。停止操作は持たない（停止は呼び出し側が NothingPlaying を代入する）。
  */
 class PlaybackSessionTest {
@@ -40,17 +40,17 @@ class PlaybackSessionTest {
     private val c = podcast("c")
 
     @Test
-    fun `T-T1 01 NothingPlaying から start で Starting`() {
+    fun `android-test-01 01 NothingPlaying から start で Starting`() {
         assertEquals(Starting(a, 120.0, 1.5), NothingPlaying.start(a, 120.0, 1.5))
     }
 
     @Test
-    fun `T-T1 02 Starting から playerStarted で Active に episode と speed を引き継ぐ`() {
+    fun `android-test-01 02 Starting から playerStarted で Active に episode と speed を引き継ぐ`() {
         assertEquals(Active(a, 1.25), Starting(a, 0.0, 1.25).playerStarted())
     }
 
     @Test
-    fun `T-T1 03 Starting から fail で Errored`() {
+    fun `android-test-01 03 Starting から fail で Errored`() {
         assertEquals(
             Errored(SessionEpisodeRef.Loaded(a), SessionErrorReason.Player(PlaybackFailureReason.Network)),
             Starting(a, 0.0, 1.0).fail(
@@ -61,12 +61,12 @@ class PlaybackSessionTest {
     }
 
     @Test
-    fun `T-T1 04 Active から playerEnded で Completed`() {
+    fun `android-test-01 04 Active から playerEnded で Completed`() {
         assertEquals(Completed(a), Active(a, 1.0).playerEnded())
     }
 
     @Test
-    fun `T-T1 05 Active から fail で Errored`() {
+    fun `android-test-01 05 Active から fail で Errored`() {
         assertEquals(
             Errored(SessionEpisodeRef.Loaded(a), SessionErrorReason.Player(PlaybackFailureReason.Decode)),
             Active(a, 1.0).fail(
@@ -77,50 +77,50 @@ class PlaybackSessionTest {
     }
 
     @Test
-    fun `T-T1 06 Active から playNow で Starting`() {
+    fun `android-test-01 06 Active から playNow で Starting`() {
         assertEquals(Starting(b, 0.0, 1.0), Active(a, 1.0).playNow(b, 0.0, 1.0))
     }
 
     @Test
-    fun `T-T1 07 Completed から advance で次のエピソードの Starting`() {
+    fun `android-test-01 07 Completed から advance で次のエピソードの Starting`() {
         assertEquals(Starting(b, 30.0, 1.0), Completed(a).advance(b, 30.0, 1.0))
     }
 
     @Test
-    fun `T-T1 08 Completed から queueExhausted で Stopped が Completed の episode を持つ`() {
+    fun `android-test-01 08 Completed から queueExhausted で Stopped が Completed の episode を持つ`() {
         assertEquals(Stopped(a), Completed(a).queueExhausted())
     }
 
     @Test
-    fun `T-T1 09 Stopped から start で Starting`() {
+    fun `android-test-01 09 Stopped から start で Starting`() {
         assertEquals(Starting(b, 0.0, 1.0), Stopped(a).start(b, 0.0, 1.0))
     }
 
     @Test
-    fun `T-T1 10 Errored から retry で Starting`() {
+    fun `android-test-01 10 Errored から retry で Starting`() {
         val errored = Errored(SessionEpisodeRef.IdOnly("b"), SessionErrorReason.FetchFailed)
         assertEquals(Starting(b, 0.0, 1.0), errored.retry(b, 0.0, 1.0))
     }
 
     @Test
-    fun `T-T1 11 Errored から start で Starting`() {
+    fun `android-test-01 11 Errored から start で Starting`() {
         val errored = Errored(SessionEpisodeRef.IdOnly("b"), SessionErrorReason.SourceUnavailable)
         assertEquals(Starting(c, 0.0, 1.0), errored.start(c, 0.0, 1.0))
     }
 
     @Test
-    fun `T-T1 X1 Errored から Active への遷移は IllegalStateException`() {
+    fun `android-test-01 X1 Errored から Active への遷移は IllegalStateException`() {
         val errored = Errored(SessionEpisodeRef.Loaded(a), SessionErrorReason.NotPlayable)
         assertThrows(IllegalStateException::class.java) { errored.playerStarted() }
     }
 
     @Test
-    fun `T-T1 X2 Stopped から Completed への遷移は IllegalStateException`() {
+    fun `android-test-01 X2 Stopped から Completed への遷移は IllegalStateException`() {
         assertThrows(IllegalStateException::class.java) { Stopped(a).playerEnded() }
     }
 
     @Test
-    fun `T-T1 D Errored は Stopped と別の状態`() {
+    fun `android-test-01 D Errored は Stopped と別の状態`() {
         val errored: PlaybackSession = Errored(SessionEpisodeRef.Loaded(a), SessionErrorReason.NotPlayable)
         val stopped: PlaybackSession = Stopped(a)
 
@@ -130,7 +130,7 @@ class PlaybackSessionTest {
     }
 
     @Test
-    fun `T-T1 遷移は受信側インスタンスを変えない`() {
+    fun `android-test-01 遷移は受信側インスタンスを変えない`() {
         val starting = Starting(a, 10.0, 1.0)
 
         starting.playerStarted()
@@ -138,16 +138,16 @@ class PlaybackSessionTest {
         assertEquals(Starting(a, 10.0, 1.0), starting)
     }
 
-    // ---- INV-P1 述語（PS-04 の session 側。共有仕様 PS-04 の保留解除は A-S2b2） ----
+    // ---- shared-inv-01 述語（shared-session-04 の session 側。共有仕様 shared-session-04 の保留解除は android-slice-playback-03・android-slice-playback-04） ----
 
     @Test
-    fun `PS-04 NothingPlaying は queueCurrentId によらず true`() {
+    fun `shared-session-04 NothingPlaying は queueCurrentId によらず true`() {
         assertTrue(NothingPlaying.satisfiesInvariantP1(null))
         assertTrue(NothingPlaying.satisfiesInvariantP1("a"))
     }
 
     @Test
-    fun `PS-04 Starting Active Completed Stopped は episode の id が一致するときだけ true`() {
+    fun `shared-session-04 Starting Active Completed Stopped は episode の id が一致するときだけ true`() {
         val sessions: List<PlaybackSession> = listOf(
             Starting(a, 0.0, 1.0),
             Active(a, 1.0),
@@ -161,7 +161,7 @@ class PlaybackSessionTest {
     }
 
     @Test
-    fun `PS-04 Errored の Loaded は episode の id で判定する`() {
+    fun `shared-session-04 Errored の Loaded は episode の id で判定する`() {
         val errored = Errored(SessionEpisodeRef.Loaded(a), SessionErrorReason.NotPlayable)
 
         assertTrue(errored.satisfiesInvariantP1("a"))
@@ -169,7 +169,7 @@ class PlaybackSessionTest {
     }
 
     @Test
-    fun `PS-04 Errored の IdOnly は id で判定し null は不一致`() {
+    fun `shared-session-04 Errored の IdOnly は id で判定し null は不一致`() {
         val errored = Errored(SessionEpisodeRef.IdOnly("a"), SessionErrorReason.FetchFailed)
 
         assertTrue(errored.satisfiesInvariantP1("a"))

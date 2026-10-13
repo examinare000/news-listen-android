@@ -104,7 +104,7 @@ class DataStorePreferencesStoreTest {
 
     @Test
     fun setDefaultPlaybackSpeedは8段外の値を拒否し直前の値を維持する() = runTest {
-        // verifies: CI-T15
+        // verifies: android-contract-17
         val dispatcher = StandardTestDispatcher(testScheduler)
         val file = File.createTempFile("prefs_speed_reject", ".preferences_pb").apply { deleteOnExit() }
         val store = dispatcher.newStore(file)

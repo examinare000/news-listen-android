@@ -18,7 +18,7 @@ class PlaybackQueueConformanceTest {
     // --- 状態モデル + アクセサ ---
 
     @Test
-    fun `Q-01 current と upNext は currentIndex を基準に返る`() {
+    fun `shared-queue-01 current と upNext は currentIndex を基準に返る`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 1)
 
         assertEquals(ep("b"), queue.current)
@@ -26,7 +26,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-02 currentIndex が null なら current は null で upNext は items 全体`() {
+    fun `shared-queue-02 currentIndex が null なら current は null で upNext は items 全体`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b")), currentIndex = null)
 
         assertNull(queue.current)
@@ -36,7 +36,7 @@ class PlaybackQueueConformanceTest {
     // --- start / setQueue / add ---
 
     @Test
-    fun `Q-03 start は既存キューを破棄し単一エピソードで開始する`() {
+    fun `shared-queue-03 start は既存キューを破棄し単一エピソードで開始する`() {
         val queue = PlaybackQueue(items = listOf(ep("x"), ep("y")), currentIndex = 0)
 
         val result = queue.start(ep("z"))
@@ -46,7 +46,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-04 setQueue は指定位置から再生する`() {
+    fun `shared-queue-04 setQueue は指定位置から再生する`() {
         val queue = PlaybackQueue<TestEpisode>()
 
         val result = queue.setQueue(listOf(ep("a"), ep("b"), ep("c")), startAt = 1)
@@ -57,7 +57,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-05 setQueue の startAt が負値なら 0 にクランプする`() {
+    fun `shared-queue-05 setQueue の startAt が負値なら 0 にクランプする`() {
         val queue = PlaybackQueue<TestEpisode>()
 
         val result = queue.setQueue(listOf(ep("a"), ep("b"), ep("c")), startAt = -5)
@@ -67,7 +67,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-06 setQueue の startAt が上限超過なら末尾にクランプする`() {
+    fun `shared-queue-06 setQueue の startAt が上限超過なら末尾にクランプする`() {
         val queue = PlaybackQueue<TestEpisode>()
 
         val result = queue.setQueue(listOf(ep("a"), ep("b"), ep("c")), startAt = 10)
@@ -78,7 +78,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-07 setQueue に空リストを渡すと空キューになる`() {
+    fun `shared-queue-07 setQueue に空リストを渡すと空キューになる`() {
         val queue = PlaybackQueue<TestEpisode>()
 
         val result = queue.setQueue(emptyList(), startAt = 0)
@@ -88,7 +88,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-08 add は末尾に追加する`() {
+    fun `shared-queue-08 add は末尾に追加する`() {
         val queue = PlaybackQueue(items = listOf(ep("a")), currentIndex = 0)
 
         val result = queue.add(ep("b"))
@@ -98,7 +98,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-09 add は既に同一 id が含まれていれば無変更`() {
+    fun `shared-queue-09 add は既に同一 id が含まれていれば無変更`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b")), currentIndex = 0)
 
         val result = queue.add(ep("b"))
@@ -109,7 +109,7 @@ class PlaybackQueueConformanceTest {
     // --- playNext ---
 
     @Test
-    fun `Q-10 playNext は現在の直後へ挿入する`() {
+    fun `shared-queue-10 playNext は現在の直後へ挿入する`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 1)
 
         val result = queue.playNext(ep("d"))
@@ -120,7 +120,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-11 playNext は既存の重複を取り除いてから現在の直後へ挿入する`() {
+    fun `shared-queue-11 playNext は既存の重複を取り除いてから現在の直後へ挿入する`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 0)
 
         val result = queue.playNext(ep("c"))
@@ -131,7 +131,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-12 playNext は現在再生中と同一 id なら無変更`() {
+    fun `shared-queue-12 playNext は現在再生中と同一 id なら無変更`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 0)
 
         val result = queue.playNext(ep("a"))
@@ -140,7 +140,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-13 playNext は現在が無い場合は先頭に挿入し currentIndex は null のまま`() {
+    fun `shared-queue-13 playNext は現在が無い場合は先頭に挿入し currentIndex は null のまま`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b")), currentIndex = null)
 
         val result = queue.playNext(ep("c"))
@@ -152,7 +152,7 @@ class PlaybackQueueConformanceTest {
     // --- jump / advance ---
 
     @Test
-    fun `Q-14 jump は指定 id が既にあればそれを現在位置にする`() {
+    fun `shared-queue-14 jump は指定 id が既にあればそれを現在位置にする`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 0)
 
         val (result, found) = queue.jump("c")
@@ -162,7 +162,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-15 jump は id が見つからなければ found=false でキューは不変`() {
+    fun `shared-queue-15 jump は id が見つからなければ found=false でキューは不変`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 0)
 
         val (result, found) = queue.jump("zzz")
@@ -172,7 +172,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-16 advance は currentIndex が null かつ非空なら先頭を現在にする`() {
+    fun `shared-queue-16 advance は currentIndex が null かつ非空なら先頭を現在にする`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = null)
 
         val (result, next) = queue.advance()
@@ -182,7 +182,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-17 advance は次があれば currentIndex を進めて返す`() {
+    fun `shared-queue-17 advance は次があれば currentIndex を進めて返す`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 0)
 
         val (result, next) = queue.advance()
@@ -192,7 +192,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-18 advance は末尾で次が無ければ currentIndex を維持して null を返す`() {
+    fun `shared-queue-18 advance は末尾で次が無ければ currentIndex を維持して null を返す`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 2)
 
         val (result, next) = queue.advance()
@@ -202,7 +202,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-19 advance は空キューで currentIndex が null なら null を返す`() {
+    fun `shared-queue-19 advance は空キューで currentIndex が null なら null を返す`() {
         val queue = PlaybackQueue<TestEpisode>()
 
         val (_, next) = queue.advance()
@@ -213,7 +213,7 @@ class PlaybackQueueConformanceTest {
     // --- remove ---
 
     @Test
-    fun `Q-20 remove は削除位置が currentIndex より前なら現在を追従する`() {
+    fun `shared-queue-20 remove は削除位置が currentIndex より前なら現在を追従する`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 2)
 
         val result = queue.remove("a")
@@ -223,7 +223,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-21 remove は削除位置が currentIndex と同じなら同位置の次を現在に昇格する`() {
+    fun `shared-queue-21 remove は削除位置が currentIndex と同じなら同位置の次を現在に昇格する`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 1)
 
         val result = queue.remove("b")
@@ -233,7 +233,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-22 remove は現在が末尾で削除されたら末尾にクランプする`() {
+    fun `shared-queue-22 remove は現在が末尾で削除されたら末尾にクランプする`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 2)
 
         val result = queue.remove("c")
@@ -243,7 +243,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-23 remove は削除位置が currentIndex より後ろなら currentIndex は不変`() {
+    fun `shared-queue-23 remove は削除位置が currentIndex より後ろなら currentIndex は不変`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 0)
 
         val result = queue.remove("c")
@@ -253,7 +253,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-24 remove は id が見つからなければ無変更`() {
+    fun `shared-queue-24 remove は id が見つからなければ無変更`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = 1)
 
         val result = queue.remove("zzz")
@@ -263,7 +263,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-25 remove で空になれば currentIndex は null になる`() {
+    fun `shared-queue-25 remove で空になれば currentIndex は null になる`() {
         val queue = PlaybackQueue(items = listOf(ep("a")), currentIndex = 0)
 
         val result = queue.remove("a")
@@ -275,7 +275,7 @@ class PlaybackQueueConformanceTest {
     // --- moveUpNext（SwiftUI onMove 規約＝削除前オフセット方式） ---
 
     @Test
-    fun `Q-26 moveUpNext 前方移動は削除前オフセット方式`() {
+    fun `shared-queue-26 moveUpNext 前方移動は削除前オフセット方式`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c"), ep("d")), currentIndex = 0)
 
         val result = queue.moveUpNext(from = 0, toOffset = 2)
@@ -286,7 +286,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-27 moveUpNext 後方移動は両方式が一致する`() {
+    fun `shared-queue-27 moveUpNext 後方移動は両方式が一致する`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c"), ep("d")), currentIndex = 0)
 
         val result = queue.moveUpNext(from = 2, toOffset = 0)
@@ -296,7 +296,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-28 moveUpNext toOffset が upNextCount と等しければ末尾移動`() {
+    fun `shared-queue-28 moveUpNext toOffset が upNextCount と等しければ末尾移動`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c"), ep("d")), currentIndex = 0)
 
         val result = queue.moveUpNext(from = 0, toOffset = 3)
@@ -306,7 +306,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-29 moveUpNext toOffset が範囲外なら無変更`() {
+    fun `shared-queue-29 moveUpNext toOffset が範囲外なら無変更`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c"), ep("d")), currentIndex = 0)
 
         val result = queue.moveUpNext(from = 0, toOffset = 4)
@@ -315,7 +315,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-30 moveUpNext from が範囲外なら無変更`() {
+    fun `shared-queue-30 moveUpNext from が範囲外なら無変更`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c"), ep("d")), currentIndex = 0)
 
         val result = queue.moveUpNext(from = 5, toOffset = 0)
@@ -324,7 +324,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-31 moveUpNext 同位置は無変更`() {
+    fun `shared-queue-31 moveUpNext 同位置は無変更`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c"), ep("d")), currentIndex = 0)
 
         val result = queue.moveUpNext(from = 1, toOffset = 1)
@@ -333,7 +333,7 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-32 moveUpNext は currentIndex が null なら upNext は items 全体を対象にする`() {
+    fun `shared-queue-32 moveUpNext は currentIndex が null なら upNext は items 全体を対象にする`() {
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b"), ep("c")), currentIndex = null)
 
         val result = queue.moveUpNext(from = 0, toOffset = 2)
@@ -346,32 +346,32 @@ class PlaybackQueueConformanceTest {
     // --- 不変条件 1〜3（構築時の検査）と setQueue の dedupe ---
 
     @Test
-    fun `CI-T7 index が範囲外の構築は IllegalArgumentException`() {
-        // verifies: CI-T7
+    fun `android-contract-09 index が範囲外の構築は IllegalArgumentException`() {
+        // verifies: android-contract-09
         assertThrows(IllegalArgumentException::class.java) {
             PlaybackQueue(items = listOf(ep("a"), ep("b")), currentIndex = 2)
         }
     }
 
     @Test
-    fun `CI-T7 空のキューで index 0 の構築は IllegalArgumentException`() {
-        // verifies: CI-T7
+    fun `android-contract-09 空のキューで index 0 の構築は IllegalArgumentException`() {
+        // verifies: android-contract-09
         assertThrows(IllegalArgumentException::class.java) {
             PlaybackQueue<TestEpisode>(items = emptyList(), currentIndex = 0)
         }
     }
 
     @Test
-    fun `CI-T7 id が重複する構築は IllegalArgumentException`() {
-        // verifies: CI-T7
+    fun `android-contract-09 id が重複する構築は IllegalArgumentException`() {
+        // verifies: android-contract-09
         assertThrows(IllegalArgumentException::class.java) {
             PlaybackQueue(items = listOf(ep("a"), ep("a")), currentIndex = null)
         }
     }
 
     @Test
-    fun `CI-T7 copy も不変条件を検査する`() {
-        // verifies: CI-T7
+    fun `android-contract-09 copy も不変条件を検査する`() {
+        // verifies: android-contract-09
         val queue = PlaybackQueue(items = listOf(ep("a"), ep("b")), currentIndex = 0)
 
         assertThrows(IllegalArgumentException::class.java) {
@@ -380,8 +380,8 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `CI-T7 setQueue は重複 id を先勝ちで除く`() {
-        // verifies: CI-T7
+    fun `android-contract-09 setQueue は重複 id を先勝ちで除く`() {
+        // verifies: android-contract-09
         val result = PlaybackQueue<TestEpisode>().setQueue(listOf(ep("a"), ep("a"), ep("b")), startAt = 0)
 
         assertEquals(listOf(ep("a"), ep("b")), result.items)
@@ -389,8 +389,8 @@ class PlaybackQueueConformanceTest {
     }
 
     @Test
-    fun `Q-33 setQueue は元の入力で clamp した id の位置から開始する`() {
-        // verifies: CI-T7
+    fun `shared-queue-33 setQueue は元の入力で clamp した id の位置から開始する`() {
+        // verifies: android-contract-09
         val result = PlaybackQueue<TestEpisode>()
             .setQueue(listOf(ep("a"), ep("b"), ep("a"), ep("c")), startAt = 2)
 

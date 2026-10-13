@@ -1,7 +1,7 @@
 package com.rioikeda.newslisten.architecture
 
 /**
- * main の全 `.kt` を層へ対応づける表（Spec §3.2・§7 TA-V1）。
+ * main の全 `.kt` を層へ対応づける表（Spec §3.2・§7 android-check-01）。
  *
  * ファイルごとに明示する。directory の規則にしないのは、新しいファイルを足したときに
  * 「対応表に無いファイル」で落とすため。層の名前の規則と、directory・全ファイルで判定する規則の
@@ -195,17 +195,17 @@ object LayerMap {
 
     val byFile: Map<String, Layer> = rows.toMap()
 
-    /** `NowPlaying` は A-S2b2a が `PlaybackSession.kt` に足す。宣言が無い間は検査を skip する（CI-13）。 */
+    /** `NowPlaying` は android-slice-playback-03 が `PlaybackSession.kt` に足す。宣言が無い間は検査を skip する（CI-13）。 */
     val typeRows: List<TypeRow> = listOf(
-        TypeRow("podcast/PlaybackSession.kt", "NowPlaying", Layer.READ_MODEL, "A-S2b2a"),
+        TypeRow("podcast/PlaybackSession.kt", "NowPlaying", Layer.READ_MODEL, "android-slice-playback-03"),
     )
 
     val permanentExceptions: List<PermanentException> = listOf(
-        // RF17: foreground service を起動するため entry の PlaybackService を import する（Spec §4 TA-D5）。
-        PermanentException("PE-1", "TA-D5", "podcast/ExoPlayerController.kt", "layer:ENTRY"),
+        // RF17: foreground service を起動するため entry の PlaybackService を import する（Spec §4 android-dep-05）。
+        PermanentException("PE-1", "android-dep-05", "podcast/ExoPlayerController.kt", "layer:ENTRY"),
         // PE-3 の生成に要る CredentialManagerPasskeyProvider の import（MainActivity.kt:35）。
-        PermanentException("PE-2", "TA-D4", "MainActivity.kt", "layer:ADAPTER"),
-        // Activity の Context が要るので MainActivity で生成する（Spec §4 TA-D6）。
-        PermanentException("PE-3", "TA-D6", "MainActivity.kt", "CredentialManagerPasskeyProvider"),
+        PermanentException("PE-2", "android-dep-04", "MainActivity.kt", "layer:ADAPTER"),
+        // Activity の Context が要るので MainActivity で生成する（Spec §4 android-dep-06）。
+        PermanentException("PE-3", "android-dep-06", "MainActivity.kt", "CredentialManagerPasskeyProvider"),
     )
 }

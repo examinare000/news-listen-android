@@ -55,7 +55,7 @@ class InMemoryPreferencesStoreTest {
 
     @Test
     fun setDefaultPlaybackSpeedは8段外の値を拒否し直前の値を維持する() = runTest {
-        // verifies: CI-T15
+        // verifies: android-contract-17
         val store = InMemoryPreferencesStore()
         store.setDefaultPlaybackSpeed(1.5)
         assertEquals(1.5, store.defaultPlaybackSpeed.value, 0.0)

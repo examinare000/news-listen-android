@@ -132,11 +132,11 @@ class AuthInterceptorTest {
         assertNull(chain.capturedRequest?.header("Authorization"))
     }
 
-    // --- onUnauthorized（CI-T11, T-T11。#19: DV-S0-2 = 案B、401 判定は response.code == 401） ---
+    // --- onUnauthorized（android-contract-13, android-test-13。#19: DV-S0-2 = 案B、401 判定は response.code == 401） ---
 
     @Test
     fun attached_401_一致するURLでトークン付与済み401ならonUnauthorizedに記録される() {
-        // verifies: CI-T11, CI-A13, CI-A14
+        // verifies: android-contract-13, CI-A13, CI-A14
         var token: String? = "t1"
         val recorded = mutableListOf<String>()
         val interceptor = AuthInterceptor(baseUrl, "secret-key", onUnauthorized = { recorded.add(it) }) { token }
@@ -151,7 +151,7 @@ class AuthInterceptorTest {
 
     @Test
     fun no_token_トークン無しの401ではonUnauthorizedを呼ばない() {
-        // verifies: CI-T11
+        // verifies: android-contract-13
         var token: String? = null
         val recorded = mutableListOf<String>()
         val interceptor = AuthInterceptor(baseUrl, "secret-key", onUnauthorized = { recorded.add(it) }) { token }
@@ -164,7 +164,7 @@ class AuthInterceptorTest {
 
     @Test
     fun foreign_host_一致しないhostの401ではonUnauthorizedを呼ばずヘッダも付けない() {
-        // verifies: CI-T11
+        // verifies: android-contract-13
         var token: String? = "t1"
         val recorded = mutableListOf<String>()
         val interceptor = AuthInterceptor(baseUrl, "secret-key", onUnauthorized = { recorded.add(it) }) { token }
@@ -179,7 +179,7 @@ class AuthInterceptorTest {
 
     @Test
     fun non_401_一致するURLで200または403または500ならonUnauthorizedを呼ばない() {
-        // verifies: CI-T11
+        // verifies: android-contract-13
         val token: String? = "t1"
         listOf(200, 403, 500).forEach { code ->
             val recorded = mutableListOf<String>()
@@ -194,7 +194,7 @@ class AuthInterceptorTest {
 
     @Test
     fun no_reevaluation_応答時にtokenProviderを再評価せず送信時のトークンで通知する() {
-        // verifies: CI-T11
+        // verifies: android-contract-13
         var token: String? = "t1"
         val recorded = mutableListOf<String>()
         val interceptor = AuthInterceptor(baseUrl, "secret-key", onUnauthorized = { recorded.add(it) }) { token }

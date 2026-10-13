@@ -41,7 +41,7 @@ class AuthViewModel(
     private val preferencesStore: PreferencesStore,
     /**
      * logout 時に追加で行うクリーンアップ（フェーズ8-D・shared-playback-spec.md §6.3）。
-     * android S0（SG-R18）で `onLogoutCleanup` から改名（挙動不変。呼出元は logout 経路のみ）。
+     * android-slice-auth-01（SG-R18）で `onLogoutCleanup` から改名（挙動不変。呼出元は logout 経路のみ）。
      *
      * spec §6.3 は共有端末対応として「logout 時にユーザー固有キャッシュ（音声）を完全削除する」ことを
      * 全プラットフォーム共通の方針として定めるが、実体（AudioCacheManager）は podcast/network 層に属し、
@@ -78,7 +78,7 @@ class AuthViewModel(
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
     /**
-     * 直近の refreshAuth 失敗（一時障害のみ。CI-T10・android S0）。
+     * 直近の refreshAuth 失敗（一時障害のみ。android-contract-12・android-slice-auth-01）。
      *
      * `Unauthorized` はトークンを破棄して `Unauthenticated` へ確定するため対象外。
      * `NetworkError` / `HttpError` / `DecodingError` はトークンを保持したまま UI に再試行導線
@@ -165,7 +165,7 @@ class AuthViewModel(
     /**
      * 保存済みトークンで /auth/me を解決し、認証状態を確定する。
      *
-     * android S0（CI-T10）: `Unauthorized`（保存済みトークンの失効）のみトークンを破棄して
+     * android-slice-auth-01（android-contract-12）: `Unauthorized`（保存済みトークンの失効）のみトークンを破棄して
      * `Unauthenticated` へ確定する。`NetworkError` / `HttpError` / `DecodingError`（一時障害）は
      * トークンを保持したまま現在の [authState] を変えず（起動直後の初回失敗なら `Unknown` の
      * まま、画面回転等で `Authenticated` 中に再実行して一時障害が起きても `Authenticated` を
@@ -176,7 +176,7 @@ class AuthViewModel(
      * 照合してから行う（CI-S0-5）。me() 実行中に失効通知や再ログインが割り込んだ場合、
      * 古い結果で新しいセッションを上書きしない。
      *
-     * 開始時に [_lastFailure] を `null` に戻す（CI-T10。再試行の間は UI がローディング表示に戻る。
+     * 開始時に [_lastFailure] を `null` に戻す（android-contract-12。再試行の間は UI がローディング表示に戻る。
      * CI-S0-6）。
      */
     suspend fun refreshAuth(): Unit = withContext(dispatcher) {
@@ -210,7 +210,7 @@ class AuthViewModel(
             // 一時障害: authState には触れない（Unknown へ落として再ログイン画面を出してしまわないため）。
             // 画面回転等で Authenticated 中に再実行された一時障害、または並行する refreshAuth が
             // 先に Authenticated へ遷移させていた場合は完全に無視する（F-2・third_vote_completion
-            // CI-T10 race 修正: 判定を開始時のスナップショットではなく、書込みと同じ sessionLock 区間内の
+            // android-contract-12 race 修正: 判定を開始時のスナップショットではなく、書込みと同じ sessionLock 区間内の
             // 現在値で行い、Authenticated かつ lastFailure != null になる交差を防ぐ）。
             applyIfCurrent(token) {
                 if (_authState.value !is AuthState.Authenticated) {
@@ -221,7 +221,7 @@ class AuthViewModel(
     }
 
     /**
-     * OkHttp から届く失効通知を受け取る（android S0・CI-T11・CI-S0-5・CI-S0-10・DV-S0-1・#14）。
+     * OkHttp から届く失効通知を受け取る（android-slice-auth-01・android-contract-13・CI-S0-5・CI-S0-10・DV-S0-1・#14）。
      *
      * [AuthInterceptor.onUnauthorized]（OkHttp のコールバックスレッドから同期的に呼ばれる）が
      * 「三点一致かつ `Authorization` を付与したリクエストの 401」のときのみ呼ぶため、送信時に
@@ -280,7 +280,7 @@ class AuthViewModel(
      * ユーザー存在を露出しない汎用文言に丸める方針は iOS LoginViewModel.swift 準拠
      * （`Unauthorized` のみ専用文言、429 含むそれ以外は汎用文言）。
      *
-     * android S0（CI-T21・leakage guard）: 401 か否かは [ApiException.HttpError.code] の数値比較では
+     * android-slice-auth-01（android-contract-23・leakage guard）: 401 か否かは [ApiException.HttpError.code] の数値比較では
      * なく [ApiException.Unauthorized] の型で判定する（`network/` の外でステータスコード比較を残さない）。
      */
     suspend fun login(username: String, password: String): Unit = withContext(dispatcher) {
@@ -304,7 +304,7 @@ class AuthViewModel(
                 }
             }
             if (!saved) {
-                // CI-T14: 保存失敗時は Authenticated へ遷移させない。
+                // android-contract-16: 保存失敗時は Authenticated へ遷移させない。
                 _loginErrorMessage.value = SESSION_SAVE_ERROR_MESSAGE
                 return@withContext
             }
@@ -321,7 +321,7 @@ class AuthViewModel(
      * ログアウトしてサーバ側セッションを破棄し、ローカル状態を未認証にする。
      * サーバ失効に失敗してもローカルのトークン・状態は必ず落とす（iOS `try?` 相当のベストエフォート）。
      *
-     * android S0（CI-S0-10・SG-S0-7 = (a)）: 実行中（サーバ側失効・後始末含む）は [logoutsInProgress]
+     * android-slice-auth-01（CI-S0-10・SG-S0-7 = (a)）: 実行中（サーバ側失効・後始末含む）は [logoutsInProgress]
      * を立てて [onUnauthorized] を抑止する。`withContext` に入った直後、減算の `finally` を持つ
      * `try` の直前に [sessionLock] の中で加算する（増加と `try` の間に suspend する地点を挟まない）。
      * `try` には `apiClient.logout()` を含めるため、cancel されても `finally` が必ず走り、ガードが
@@ -365,7 +365,7 @@ class AuthViewModel(
      * （auth 層がセッションの正本という既存の責務分担を維持するため、passkey 層から
      * sessionStore/authState を直接操作させない設計）。
      *
-     * android S0（CI-S0-3）: [login] と同じ保存失敗の保証を持つ。
+     * android-slice-auth-01（CI-S0-3）: [login] と同じ保存失敗の保証を持つ。
      */
     suspend fun completePasskeyLogin(response: LoginResponse): Unit = withContext(dispatcher) {
         // login と同じく、save → loginErrorMessage=null → Authenticated → lastFailure=null を
@@ -407,7 +407,7 @@ class AuthViewModel(
     private companion object {
         const val GENERIC_LOGIN_ERROR_MESSAGE = "ログインに失敗しました。接続設定を確認してください"
 
-        /** CI-T14・CI-S0-3: SessionStore.save 失敗時の文言（spec §3 wording）。 */
+        /** android-contract-16・CI-S0-3: SessionStore.save 失敗時の文言（spec §3 wording）。 */
         const val SESSION_SAVE_ERROR_MESSAGE = "ログイン状態を端末に保存できませんでした。もう一度お試しください"
     }
 }

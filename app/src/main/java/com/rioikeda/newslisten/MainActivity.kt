@@ -112,7 +112,7 @@ class MainActivity : ComponentActivity() {
 
                 // authState を購読
                 val authState = authViewModel.authState.collectAsStateWithLifecycle()
-                // 一時障害の再試行導線（android S0・CI-S0-6）: NetworkError/HttpError/DecodingError
+                // 一時障害の再試行導線（android-slice-auth-01・CI-S0-6）: NetworkError/HttpError/DecodingError
                 // では authState が Unknown のまま lastFailure が立つ。
                 val lastFailure = authViewModel.lastFailure.collectAsStateWithLifecycle()
 
