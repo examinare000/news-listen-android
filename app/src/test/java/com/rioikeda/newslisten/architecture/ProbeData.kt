@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.architecture
 
+import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.model.AchievementResponse
 import com.rioikeda.newslisten.model.ArticleResponse
 import com.rioikeda.newslisten.model.FeaturedSite
@@ -11,7 +12,6 @@ import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.OnboardingStatusResponse
 import com.rioikeda.newslisten.model.PasskeyCredential
 import com.rioikeda.newslisten.model.PasskeyCredentialsListResponse
-import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.QuizStatsResponse
 import com.rioikeda.newslisten.model.RssSource
@@ -24,6 +24,7 @@ import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.model.VocabularyTestItemResponse
 import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
 import com.rioikeda.newslisten.network.ApiException
+import com.rioikeda.newslisten.network.EpisodeDecoder
 
 /**
  * 各 context の probe set が使う canned の値と scenario の道具。
@@ -49,7 +50,7 @@ internal object ProbeData {
 
     val feed: FeedResponse = FeedResponse(articles = listOf(article), date = "2026-10-14")
 
-    val podcast: PodcastResponse = PodcastResponse(
+    val podcast: Episode = EpisodeDecoder.decode(PodcastResponse(
         id = "podcast-1",
         type = "daily",
         articleIds = listOf("article-1"),
@@ -59,9 +60,9 @@ internal object ProbeData {
         durationSeconds = 120,
         status = "completed",
         createdAt = "2026-10-14T00:00:00Z",
-    )
+    ))
 
-    val podcastList: PodcastListResponse = PodcastListResponse(podcasts = listOf(podcast))
+    val podcastList: List<Episode> = listOf(podcast)
 
     val user: UserResponse = UserResponse(username = "probe-user", role = "user", displayName = "Probe User")
 

@@ -1,7 +1,6 @@
 package com.rioikeda.newslisten.network
 
-import com.rioikeda.newslisten.model.PodcastListResponse
-import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.catalog.domain.Episode
 
 /**
  * 再生 use case が使う狭い port（android-contract-18）。`ApiClient` の全 44 操作のうち、再生に必要な
@@ -11,13 +10,13 @@ import com.rioikeda.newslisten.model.PodcastResponse
  */
 interface PodcastApi {
     /** Podcast 一覧を取得する。 */
-    suspend fun fetchPodcasts(): PodcastListResponse
+    suspend fun fetchPodcasts(): List<Episode>
 
     /** 指定 ID の Podcast を取得する（署名付き audio_url の再取得にも使う）。 */
-    suspend fun fetchPodcast(id: String): PodcastResponse
+    suspend fun fetchPodcast(id: String): Episode
 
     /** 指定 Podcast の再生位置を更新する。レスポンスは更新後の Podcast 全体。 */
-    suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse
+    suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): Episode
 
     /** 完聴を best-effort で記録する呼び出し元のための API。 */
     suspend fun markCompleted(id: String)

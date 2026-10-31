@@ -150,7 +150,6 @@ object LayerMap {
         "podcast/AudioPlayerSection.kt",
         "podcast/PodcastRowView.kt",
         "podcast/PodcastScreen.kt",
-        "podcast/PodcastStatusBadge.kt",
         "podcast/QueueSheet.kt",
         "podcast/QuizSheet.kt",
         "settings/SettingsScreen.kt",

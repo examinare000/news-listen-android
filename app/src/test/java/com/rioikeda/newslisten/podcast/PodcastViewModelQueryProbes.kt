@@ -14,8 +14,8 @@ import com.rioikeda.newslisten.network.AudioCacheManager
  */
 internal val podcastViewModelQueryProbes: QueryProbeSet = run {
     val canned = mapOf(
-        "ApiClient#fetchPodcasts" to ProbeData.repeated(ProbeData.podcastList),
-        "ApiClient#fetchPodcast" to ProbeData.repeated(ProbeData.podcast),
+        "PodcastApi#fetchPodcasts" to ProbeData.repeated(ProbeData.podcastList),
+        "PodcastApi#fetchPodcast" to ProbeData.repeated(ProbeData.podcast),
         "ApiClient#fetchVocabulary" to ProbeData.repeated(ProbeData.vocabularyList),
         "ApiClient#fetchListeningStreak" to ProbeData.increasingStreaks(),
         "FileSystem#exists" to ProbeData.repeated(false, 64),
@@ -34,7 +34,7 @@ internal val podcastViewModelQueryProbes: QueryProbeSet = run {
         ),
     ) { env ->
         PodcastViewModel(
-            podcastApi = env.apiClient,
+            podcastApi = env.podcastApi,
             apiClient = env.apiClient,
             playerController = env.playerController,
             cacheManager = AudioCacheManager(env.fileSystem, "/probe-cache"),

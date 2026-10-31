@@ -164,8 +164,6 @@ object OperationLedger {
         structural("PendingArticleAction#getIndex", "保留中の操作（値）"),
         structural("PendingArticleAction#getKind", "保留中の操作（値）"),
         structural("PendingArticleAction#getMessage", "保留中の操作（値）"),
-        structural("PodcastStatusBadge.Companion#from", "Podcast の状態の表示分類（値）"),
-        structural("PodcastStatusBadge.Failed#getMessage", "Podcast の状態の表示分類（値）"),
         command("PodcastViewModel#addToQueue", "キューへ積む command（何も再生していなければ再生を始める）", specId = "android-cmd-playback-02", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#cancelDownloadsAndClearCache", "主体の離脱で音声のキャッシュを消す command", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#clearError", "画面の通知を消す command", specId = "android-cmd-playback-07", facade = "android-slice-playapp-01"),

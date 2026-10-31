@@ -50,7 +50,7 @@ data class EffectTypeCatalog(
             ports = listOf(
                 PortRow(
                     port = "ApiClient",
-                    interfaces = setOf("$NETWORK.ApiClient", "$NETWORK.PodcastApi", "$NETWORK.LearningApi", "$NETWORK.VocabularyTestApi"),
+                    interfaces = setOf("$NETWORK.ApiClient", "$NETWORK.LearningApi", "$NETWORK.VocabularyTestApi"),
                     writes = setOf(
                         "login", "logout", "starArticle", "dismissArticle", "updatePlaybackPosition", "markCompleted",
                         "submitQuizAnswers", "registerDeviceToken", "unregisterDeviceToken", "createSource", "updateSource",
@@ -65,6 +65,13 @@ data class EffectTypeCatalog(
                         "fetchVocabulary", "fetchVocabularyTestSession", "listSessions", "fetchOnboardingStatus",
                         "listPasskeyCredentials",
                     ),
+                    propertyReads = emptySet(),
+                ),
+                PortRow(
+                    port = "PodcastApi",
+                    interfaces = setOf("$NETWORK.PodcastApi"),
+                    writes = setOf("updatePlaybackPosition", "markCompleted"),
+                    sequenceReads = setOf("fetchPodcasts", "fetchPodcast", "downloadAudio"),
                     propertyReads = emptySet(),
                 ),
                 PortRow(

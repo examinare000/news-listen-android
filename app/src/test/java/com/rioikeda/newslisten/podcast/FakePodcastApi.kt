@@ -1,7 +1,6 @@
 package com.rioikeda.newslisten.podcast
 
-import com.rioikeda.newslisten.model.PodcastListResponse
-import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.network.PodcastApi
 
 /**
@@ -11,11 +10,11 @@ import com.rioikeda.newslisten.network.PodcastApi
  * （android-slice-playback-02・android-slice-playback-03・android-slice-playback-04 で移し替えるときに意味が変わらないようにするため）。
  */
 class FakePodcastApi(
-    private val onFetchPodcasts: suspend () -> PodcastListResponse =
+    private val onFetchPodcasts: suspend () -> List<Episode> =
         { error("fetchPodcasts is not stubbed") },
-    private val onFetchPodcast: suspend (id: String) -> PodcastResponse =
+    private val onFetchPodcast: suspend (id: String) -> Episode =
         { error("fetchPodcast is not stubbed") },
-    private val onUpdatePlaybackPosition: suspend (id: String, positionSeconds: Double) -> PodcastResponse =
+    private val onUpdatePlaybackPosition: suspend (id: String, positionSeconds: Double) -> Episode =
         { id, _ -> error("updatePlaybackPosition is not stubbed for id=$id") },
     private val onDownloadAudio: suspend (url: String) -> ByteArray =
         { error("downloadAudio is not stubbed") },
@@ -37,17 +36,17 @@ class FakePodcastApi(
     /** markCompleted に渡された完聴 ID の呼び出し履歴。 */
     val markCompletedCalls: MutableList<String> = mutableListOf()
 
-    override suspend fun fetchPodcasts(): PodcastListResponse {
+    override suspend fun fetchPodcasts(): List<Episode> {
         fetchPodcastsCallCount++
         return onFetchPodcasts()
     }
 
-    override suspend fun fetchPodcast(id: String): PodcastResponse {
+    override suspend fun fetchPodcast(id: String): Episode {
         fetchPodcastCalls.add(id)
         return onFetchPodcast(id)
     }
 
-    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse {
+    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): Episode {
         updatePlaybackPositionCalls.add(id to positionSeconds)
         return onUpdatePlaybackPosition(id, positionSeconds)
     }

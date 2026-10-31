@@ -2,7 +2,6 @@ package com.rioikeda.newslisten.architecture.fixture.wiring
 
 import android.content.Context
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.PodcastApi
 import com.rioikeda.newslisten.network.SessionStore
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -63,7 +62,7 @@ class MixedInfraOwner(
     private val api: ApiClient,
     private val onItem: suspend (String) -> Unit,
     private val reorder: (List<String>) -> List<String>,
-    private val optionalApi: PodcastApi?,
+    private val optionalApi: ApiClient?,
 ) {
     private var job: Job? = null
     private val flag = AtomicBoolean(false)

@@ -245,7 +245,7 @@ class ProbeWiringTest {
 
     // ---- 組み立て直後に null の INFRA・同期の型・引数を取る hook ----
 
-    private fun mixedSet(optionalApi: (ProbeEnvironment) -> com.rioikeda.newslisten.network.PodcastApi?) = probe("MixedInfraOwner", "count") { env ->
+    private fun mixedSet(optionalApi: (ProbeEnvironment) -> com.rioikeda.newslisten.network.ApiClient?) = probe("MixedInfraOwner", "count") { env ->
         MixedInfraOwner(
             api = env.apiClient,
             onItem = env.hooks.suspendWrite1<String>("MixedInfraOwner#onItem"),

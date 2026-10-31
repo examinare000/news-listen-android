@@ -1,6 +1,6 @@
 package com.rioikeda.newslisten.architecture.fixture.cancel
 
-import com.rioikeda.newslisten.network.PodcastApi
+import com.rioikeda.newslisten.network.ApiClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 // 15 秒ごとに `updatePlaybackPosition(同じ値)` を呼ぶ timer を張る。
 
 /** query が timer の Job を cancel して、同じ書込を直接 2 回呼ぶ。 */
-class CancelTimerAndWrite(private val api: PodcastApi, dispatcher: CoroutineDispatcher) {
+class CancelTimerAndWrite(private val api: ApiClient, dispatcher: CoroutineDispatcher) {
     private var job: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
@@ -35,7 +35,7 @@ class CancelTimerAndWrite(private val api: PodcastApi, dispatcher: CoroutineDisp
 }
 
 /** query が timer を cancel して、同じ位相で張り直す。 */
-class RestartTimerInPhase(private val api: PodcastApi, dispatcher: CoroutineDispatcher) {
+class RestartTimerInPhase(private val api: ApiClient, dispatcher: CoroutineDispatcher) {
     private var job: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
@@ -57,7 +57,7 @@ class RestartTimerInPhase(private val api: PodcastApi, dispatcher: CoroutineDisp
 }
 
 /** timer の書込は flag の中にあり、query が flag を落として、同じ書込を内部 scope の coroutine から 2 回呼ぶ。 */
-class SuppressTimerAndWriteNow(private val api: PodcastApi, dispatcher: CoroutineDispatcher) {
+class SuppressTimerAndWriteNow(private val api: ApiClient, dispatcher: CoroutineDispatcher) {
     private var job: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private var enabled = true

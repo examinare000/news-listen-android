@@ -44,9 +44,9 @@ import androidx.compose.ui.unit.dp
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.DSFeedback
-import com.rioikeda.newslisten.model.PodcastResponse
-import com.rioikeda.newslisten.model.TranscriptSegment
-import com.rioikeda.newslisten.model.VocabularyEntry
+import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.catalog.domain.EpisodeGlossaryEntry
+import com.rioikeda.newslisten.catalog.domain.EpisodeTranscriptSegment
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
@@ -74,7 +74,7 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
     var isTranscriptExpanded by remember { mutableStateOf(false) }
     var isVocabularyExpanded by remember(currentPodcast?.id) { mutableStateOf(false) }
     // クイズシート用スナップショット: ボタン押下時の Podcast を保持し、送信ずっと表示
-    var quizPodcast: PodcastResponse? by remember { mutableStateOf(null as PodcastResponse?) }
+    var quizPodcast: Episode.Playable? by remember { mutableStateOf(null as Episode.Playable?) }
 
     Box(
         modifier = Modifier
@@ -112,7 +112,7 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
             }
 
             // トランスクリプト折りたたみセクション
-            currentPodcast?.segments?.let { segments ->
+            currentPodcast?.transcript?.let { segments ->
                 if (segments.isNotEmpty()) {
                     TranscriptSection(
                         segments = segments,
@@ -122,7 +122,7 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
                 }
             }
 
-            currentPodcast?.vocabulary?.takeIf { !it.isNullOrEmpty() }?.let { entries ->
+            currentPodcast?.glossary?.takeIf { !it.isNullOrEmpty() }?.let { entries ->
                 val podcastId = currentPodcast?.id ?: return@let
                 VocabularySection(
                     podcastId = podcastId,
@@ -293,7 +293,7 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
 @Composable
 private fun VocabularySection(
     podcastId: String,
-    entries: List<VocabularyEntry>,
+    entries: List<EpisodeGlossaryEntry>,
     isExpanded: Boolean,
     onToggle: () -> Unit,
     registeredVocabularyKeys: Set<String>,
@@ -396,7 +396,7 @@ private fun VocabularySection(
  */
 @Composable
 private fun TranscriptSection(
-    segments: List<TranscriptSegment>,
+    segments: List<EpisodeTranscriptSegment>,
     isExpanded: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier

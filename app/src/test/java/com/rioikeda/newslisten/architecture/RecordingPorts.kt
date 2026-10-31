@@ -18,6 +18,7 @@ import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.OnboardingStatusResponse
 import com.rioikeda.newslisten.model.PasskeyCredentialsListResponse
 import com.rioikeda.newslisten.model.PasskeyOptionsResponse
+import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
@@ -34,6 +35,8 @@ import com.rioikeda.newslisten.model.VocabularyTestResultItemRequest
 import com.rioikeda.newslisten.model.VocabularyTestResultResponse
 import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
 import com.rioikeda.newslisten.network.ApiClient
+import com.rioikeda.newslisten.network.EpisodeDecoder
+import com.rioikeda.newslisten.network.PodcastApi
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.FileSystem
 import com.rioikeda.newslisten.network.NetworkMonitoring
@@ -212,7 +215,7 @@ class Hooks(private val recorder: EffectRecorder) {
  *
  * - [canned] のキーは `<port>#<操作名>`（例 `ApiClient#fetchFeed`）。値の list を呼出ごとに 1 つ進めて返す。
  * - [initialProperties] のキーは `<port>#get<property 名>`（例 `NetworkMonitoring#getIsOnline`）。
- * - [readFailure] を与えると ApiClient 系の列の読みがそのインスタンスを投げる（scenario B）。書込と property の読みは失敗しない。
+ * - [readFailure] を与えると ApiClient 系と PodcastApi の列の読みがそのインスタンスを投げる（scenario B）。書込と property の読みは失敗しない。
  * - [warmUp] は所有者を組み立てた後、観測の窓の前に query と command を任意の順で呼ぶ。無ければ [noWarmUpReason] に理由を書く。
  */
 data class ProbeScenario(
@@ -250,7 +253,7 @@ internal abstract class RecordingFake(
         return list[index] as T
     }
 
-    /** scenario B の注入。ApiClient 系の列の読みだけが呼ぶ。 */
+    /** scenario B の注入。ApiClient 系と PodcastApi の列の読みだけが呼ぶ。 */
     protected fun injectedFailure() {
         scenario.readFailure?.let {
             if (recorder.injected.none { existing -> existing === it }) recorder.injected += it
@@ -280,6 +283,7 @@ object RecordingDefaults {
         status = "completed",
         createdAt = "2026-01-01T00:00:00Z",
     )
+    val episode: Episode = EpisodeDecoder.decode(podcastResponse)
     val actionResponse: ActionResponse = ActionResponse(status = "ok", articleId = "default-article")
     val quizAnswerResponse: QuizAnswerResponse =
         QuizAnswerResponse(correctCount = 0, total = 0, correctRate = 0.0, results = emptyList())
@@ -313,8 +317,8 @@ object RecordingDefaults {
     const val INITIAL_IS_ONLINE: Boolean = true
 }
 
-internal class ApiFake(recorder: EffectRecorder, scenario: ProbeScenario) :
-    RecordingFake("ApiClient", recorder, scenario) {
+internal class ApiFake(recorder: EffectRecorder, scenario: ProbeScenario, port: String = "ApiClient") :
+    RecordingFake(port, recorder, scenario) {
 
     /** 列の読み。scenario B では注入した例外を投げる。 */
     fun <T> read(op: String): T {
@@ -323,6 +327,27 @@ internal class ApiFake(recorder: EffectRecorder, scenario: ProbeScenario) :
     }
 
     fun write(op: String) = written(op)
+}
+
+/** 再生 port [PodcastApi] の記録 fake。列の読みは [ApiFake.read] と同じく先頭で注入された失敗を投げる。 */
+class RecordingPodcastApi(
+    val recorder: EffectRecorder,
+    val scenario: ProbeScenario,
+) : PodcastApi {
+    private val core = ApiFake(recorder, scenario, port = "PodcastApi")
+
+    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): Episode {
+        core.write("updatePlaybackPosition")
+        return RecordingDefaults.episode
+    }
+
+    override suspend fun markCompleted(id: String) = core.write("markCompleted")
+
+    override suspend fun fetchPodcasts(): List<Episode> = core.read("fetchPodcasts")
+
+    override suspend fun fetchPodcast(id: String): Episode = core.read("fetchPodcast")
+
+    override suspend fun downloadAudio(url: String): ByteArray = core.read("downloadAudio")
 }
 
 /** ApiClient 系の 4 つの interface の記録 fake。`BaseFakeApiClient` は継承しない（`error(...)` を引き継がない）。 */
@@ -687,6 +712,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
     val hooks: Hooks = Hooks(recorder)
 
     val apiClient: RecordingApiClient = RecordingApiClient(recorder, scenario)
+    val podcastApi: RecordingPodcastApi = RecordingPodcastApi(recorder, scenario)
     val preferencesStore: RecordingPreferencesStore = RecordingPreferencesStore(recorder, scenario)
     val sessionStore: RecordingSessionStore = RecordingSessionStore(recorder, scenario)
     val playerController: RecordingPlayerController = RecordingPlayerController(recorder, scenario)
@@ -697,7 +723,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
 
     /** この実行単位の記録 fake の全部。配線の検査が「記録 fake であること」を照合する。 */
     val fakes: List<Any> = listOf(
-        apiClient, preferencesStore, sessionStore, playerController,
+        apiClient, podcastApi, preferencesStore, sessionStore, playerController,
         fileSystem, networkMonitor, passkeyProvider, feedbackPlayer,
     )
 

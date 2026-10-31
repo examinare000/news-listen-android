@@ -1,6 +1,6 @@
 package com.rioikeda.newslisten.podcast
 
-import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.catalog.domain.Episode
 
 /**
  * 再生セッションの状態。遷移関数は新しい値を返し、受信側は変えない。
@@ -11,32 +11,32 @@ import com.rioikeda.newslisten.model.PodcastResponse
  */
 sealed class PlaybackSession {
     data object NothingPlaying : PlaybackSession()
-    data class Starting(val episode: PodcastResponse, val resumePosition: Double, val speed: Double) : PlaybackSession()
-    data class Active(val episode: PodcastResponse, val speed: Double) : PlaybackSession()
-    data class Completed(val episode: PodcastResponse) : PlaybackSession()
-    data class Stopped(val episode: PodcastResponse) : PlaybackSession()
+    data class Starting(val episode: Episode.Playable, val resumePosition: Double, val speed: Double) : PlaybackSession()
+    data class Active(val episode: Episode.Playable, val speed: Double) : PlaybackSession()
+    data class Completed(val episode: Episode.Playable) : PlaybackSession()
+    data class Stopped(val episode: Episode.Playable) : PlaybackSession()
     data class Errored(val ref: SessionEpisodeRef, val reason: SessionErrorReason) : PlaybackSession()
 
     /** NothingPlaying / Stopped / Errored から再生を始める。 */
-    fun start(episode: PodcastResponse, resumePosition: Double, speed: Double): Starting = when (this) {
+    fun start(episode: Episode.Playable, resumePosition: Double, speed: Double): Starting = when (this) {
         is NothingPlaying, is Stopped, is Errored -> Starting(episode, resumePosition, speed)
         else -> rejected("start")
     }
 
     /** Errored から、取り直したエピソードで再試行する。 */
-    fun retry(episode: PodcastResponse, resumePosition: Double, speed: Double): Starting = when (this) {
+    fun retry(episode: Episode.Playable, resumePosition: Double, speed: Double): Starting = when (this) {
         is Errored -> Starting(episode, resumePosition, speed)
         else -> rejected("retry")
     }
 
     /** Completed から次のエピソードへ進む。 */
-    fun advance(next: PodcastResponse, resumePosition: Double, speed: Double): Starting = when (this) {
+    fun advance(next: Episode.Playable, resumePosition: Double, speed: Double): Starting = when (this) {
         is Completed -> Starting(next, resumePosition, speed)
         else -> rejected("advance")
     }
 
     /** Active から別のエピソードを即座に再生する。 */
-    fun playNow(episode: PodcastResponse, resumePosition: Double, speed: Double): Starting = when (this) {
+    fun playNow(episode: Episode.Playable, resumePosition: Double, speed: Double): Starting = when (this) {
         is Active -> Starting(episode, resumePosition, speed)
         else -> rejected("playNow")
     }
@@ -77,11 +77,11 @@ sealed class PlaybackSession {
         throw IllegalStateException("$operation は ${this::class.simpleName} から呼べません")
 }
 
-/** Errored が指すエピソード。DTO を取得済みか、id だけ分かっているかを区別する。 */
+/** Errored が指すエピソード。Episode を取得済みか、id だけ分かっているかを区別する。 */
 sealed interface SessionEpisodeRef {
     val id: String
 
-    data class Loaded(val episode: PodcastResponse) : SessionEpisodeRef {
+    data class Loaded(val episode: Episode.Playable) : SessionEpisodeRef {
         override val id: String get() = episode.id
     }
 

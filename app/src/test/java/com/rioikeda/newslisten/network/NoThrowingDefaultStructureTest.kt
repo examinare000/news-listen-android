@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.network
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -82,6 +83,44 @@ class NoThrowingDefaultStructureTest {
         assertTrue(
             "podcastApi 経由の呼出は空でなく再生5操作のみであるべき（実際: $podcastApiCalls）",
             podcastApiCalls.isNotEmpty() && podcastApiCalls.all { it in playbackOps },
+        )
+    }
+
+    @Test
+    fun AppContainerはPodcastViewModelのpodcastApiへPodcastApiAdapterを渡す() {
+        // verifies: android-contract-18
+        val root = resolveMainSourceRoot()
+        val file = root.walkTopDown().firstOrNull { it.name == "AppContainer.kt" }
+            ?: error("走査ルート $root に AppContainer.kt が見つからない")
+        val text = file.readText()
+
+        val callStart = text.indexOf("PodcastViewModel(")
+        check(callStart >= 0) { "${file.path} に PodcastViewModel( の呼び出しが見つからない（vacuous pass ガード）" }
+        val call = text.substring(callStart)
+        val podcastApiArg = Regex("""podcastApi\s*=\s*(\w+)\(""").find(call)
+        assertTrue(
+            "podcastApi = の引数が PodcastApiAdapter( で始まっていない（実際: ${podcastApiArg?.groupValues?.get(1)}）",
+            podcastApiArg?.groupValues?.get(1) == "PodcastApiAdapter",
+        )
+    }
+
+    @Test
+    fun ApiClientは再生5操作のportであるPodcastApiを継承しない() {
+        // verifies: android-contract-18
+        val root = resolveMainSourceRoot()
+        val file = root.walkTopDown().firstOrNull { it.name == "ApiClient.kt" }
+            ?: error("走査ルート $root に ApiClient.kt が見つからない")
+        val text = file.readText()
+
+        val declStart = text.indexOf("interface ApiClient")
+        check(declStart >= 0) { "${file.path} に interface ApiClient の宣言が見つからない（vacuous pass ガード）" }
+        val bodyStart = text.indexOf('{', declStart)
+        check(bodyStart > declStart) { "${file.path} の interface ApiClient に本体の { が見つからない" }
+        val supertypes = text.substring(declStart, bodyStart)
+
+        assertFalse(
+            "interface ApiClient の上位型に PodcastApi が残っている: $supertypes",
+            Regex("""\bPodcastApi\b""").containsMatchIn(supertypes),
         )
     }
 }

@@ -1,35 +1,37 @@
 package com.rioikeda.newslisten.podcast
 
-import com.rioikeda.newslisten.model.PodcastListResponse
-import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.model.QuizAnswerRequest
+import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.model.VocabularyItemResponse
 import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.network.BaseFakeApiClient
+import com.rioikeda.newslisten.network.PodcastApi
 
 /**
  * [PodcastViewModel] のテスト専用フェイク。
  *
- * フェーズ5（Podcast 再生）で使う fetchPodcasts/fetchPodcast/updatePlaybackPosition のみ
- * 挙動を差し替え可能にする。それ以外はこのテストスイートのスコープ外のため、
- * 誤って呼ばれた場合は即座に失敗させて検出できるよう例外を投げる（auth/feed の Fake と同じ方針）。
+ * 再生 5 操作は [PodcastApi]（domain の値 [Episode] を返す port）として実装する。学習の中継 3 操作
+ * （クイズ・語彙）は ApiClient のままなので、内側の [learning] が持つ（VM の第 2 引数に渡す）。
+ * stub していない操作が誤って呼ばれた場合は即座に失敗させる（auth/feed の Fake と同じ方針）。
  */
 class FakePodcastApiClient(
-    private val onFetchPodcasts: suspend () -> PodcastListResponse =
+    private val onFetchPodcasts: suspend () -> List<Episode> =
         { error("fetchPodcasts is not stubbed") },
-    private val onFetchPodcast: suspend (id: String) -> PodcastResponse =
+    private val onFetchPodcast: suspend (id: String) -> Episode =
         { error("fetchPodcast is not stubbed") },
-    private val onUpdatePlaybackPosition: suspend (id: String, positionSeconds: Double) -> PodcastResponse =
+    private val onUpdatePlaybackPosition: suspend (id: String, positionSeconds: Double) -> Episode =
         { id, _ -> error("updatePlaybackPosition is not stubbed for id=$id") },
     private val onDownloadAudio: suspend (url: String) -> ByteArray =
         { error("downloadAudio is not stubbed") },
     private val onMarkCompleted: suspend (id: String) -> Unit = {},
-    private val onSubmitQuizAnswers: suspend (podcastId: String, request: com.rioikeda.newslisten.model.QuizAnswerRequest) -> com.rioikeda.newslisten.model.QuizAnswerResponse =
+    private val onSubmitQuizAnswers: suspend (podcastId: String, request: QuizAnswerRequest) -> QuizAnswerResponse =
         { podcastId, _ -> error("submitQuizAnswers is not stubbed for podcastId=$podcastId") },
     private val onFetchVocabulary: suspend () -> VocabularyListResponse =
         { VocabularyListResponse(emptyList(), 0) },
     private val onSaveVocabulary: suspend (podcastId: String, term: String) -> VocabularyItemResponse =
         { podcastId, term -> error("saveVocabulary is not stubbed for podcastId=$podcastId term=$term") },
-) : BaseFakeApiClient() {
+) : PodcastApi {
     /** fetchPodcasts が呼ばれた回数。 */
     var fetchPodcastsCallCount = 0
         private set
@@ -45,19 +47,36 @@ class FakePodcastApiClient(
 
     /** markCompleted に渡された完聴 ID。 */
     val markCompletedCalls: MutableList<String> = mutableListOf()
+
+    /** saveVocabulary に渡された (podcastId, term)。記録は [learning] の呼び出しで増える。 */
     val saveVocabularyCalls: MutableList<Pair<String, String>> = mutableListOf()
 
-    override suspend fun fetchPodcasts(): PodcastListResponse {
+    /** 学習の中継 3 操作を受け持つ ApiClient。`PodcastViewModel` の第 2 引数に渡す。 */
+    val learning: BaseFakeApiClient = object : BaseFakeApiClient() {
+        override suspend fun submitQuizAnswers(
+            id: String,
+            request: QuizAnswerRequest,
+        ): QuizAnswerResponse = onSubmitQuizAnswers(id, request)
+
+        override suspend fun fetchVocabulary(): VocabularyListResponse = onFetchVocabulary()
+
+        override suspend fun saveVocabulary(podcastId: String, term: String): VocabularyItemResponse {
+            saveVocabularyCalls += podcastId to term
+            return onSaveVocabulary(podcastId, term)
+        }
+    }
+
+    override suspend fun fetchPodcasts(): List<Episode> {
         fetchPodcastsCallCount++
         return onFetchPodcasts()
     }
 
-    override suspend fun fetchPodcast(id: String): PodcastResponse {
+    override suspend fun fetchPodcast(id: String): Episode {
         fetchPodcastCalls.add(id)
         return onFetchPodcast(id)
     }
 
-    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse {
+    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): Episode {
         updatePlaybackPositionCalls.add(id to positionSeconds)
         return onUpdatePlaybackPosition(id, positionSeconds)
     }
@@ -65,19 +84,6 @@ class FakePodcastApiClient(
     override suspend fun markCompleted(id: String) {
         markCompletedCalls.add(id)
         onMarkCompleted(id)
-    }
-
-    override suspend fun submitQuizAnswers(
-        podcastId: String,
-        request: com.rioikeda.newslisten.model.QuizAnswerRequest,
-    ): com.rioikeda.newslisten.model.QuizAnswerResponse =
-        onSubmitQuizAnswers(podcastId, request)
-
-    override suspend fun fetchVocabulary(): VocabularyListResponse = onFetchVocabulary()
-
-    override suspend fun saveVocabulary(podcastId: String, term: String): VocabularyItemResponse {
-        saveVocabularyCalls += podcastId to term
-        return onSaveVocabulary(podcastId, term)
     }
 
     override suspend fun downloadAudio(url: String): ByteArray {
