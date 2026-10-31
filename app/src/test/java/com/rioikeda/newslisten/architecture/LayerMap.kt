@@ -6,6 +6,7 @@ package com.rioikeda.newslisten.architecture
  * ファイルごとに明示する。directory の規則にしないのは、新しいファイルを足したときに
  * 「対応表に無いファイル」で落とすため。層の名前の規則と、directory・全ファイルで判定する規則の
  * 範囲は、`ArchitectureStructureTest` が仕様どおりに当てる。
+ * `*ViewModel` は presentation に置く（android-dec-09）。
  *
  * 限界:
  * - 同じ package の参照は import に現れないので、依存の向きの検査では見えない。
@@ -49,21 +50,9 @@ object LayerMap {
     )
 
     private val application = listOf(
-        "podcast/PodcastViewModel.kt",
-        "auth/AuthViewModel.kt",
-        "account/AccountViewModel.kt",
-        "account/SessionsViewModel.kt",
-        "passkey/PasskeyCredentialsViewModel.kt",
-        "passkey/PasskeyLoginViewModel.kt",
-        "passkey/PasskeyRegistrationViewModel.kt",
-        "feed/FeedViewModel.kt",
         "feed/BulkActionResult.kt",
         "feed/PendingArticleAction.kt",
-        "learning/LearningViewModel.kt",
         "engagement/ListeningStreakStore.kt",
-        "vocabulary/VocabularyTestViewModel.kt",
-        "settings/SettingsViewModel.kt",
-        "onboarding/OnboardingViewModel.kt",
         "notification/FcmTokenRegistrar.kt",
     )
 
@@ -163,6 +152,18 @@ object LayerMap {
         "podcast/QuizSheet.kt",
         "settings/SettingsScreen.kt",
         "vocabulary/VocabularyTestScreen.kt",
+        "podcast/PodcastViewModel.kt",
+        "auth/AuthViewModel.kt",
+        "account/AccountViewModel.kt",
+        "account/SessionsViewModel.kt",
+        "passkey/PasskeyCredentialsViewModel.kt",
+        "passkey/PasskeyLoginViewModel.kt",
+        "passkey/PasskeyRegistrationViewModel.kt",
+        "feed/FeedViewModel.kt",
+        "learning/LearningViewModel.kt",
+        "vocabulary/VocabularyTestViewModel.kt",
+        "settings/SettingsViewModel.kt",
+        "onboarding/OnboardingViewModel.kt",
     )
 
     private val entry = listOf(

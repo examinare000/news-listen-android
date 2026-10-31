@@ -11,6 +11,7 @@ data class AllowEntry(val rule: String, val file: String, val target: String, va
 /**
  * 今の違反の固定（Spec §8.4 android-slice-skeleton-01。order §3.1 の 115 組）。以後の slice は、違反を消したら組を消す。
  * 走査の出力から生成しない。差が出たら、走査と仕様のどちらが誤りかを先に決める。
+ * android-slice-skeleton-03 で、`*ViewModel` の presentation 化（android-dec-09）に合わせて 24 組を消し 43 組を足した。
  *
  * 持ち主の導出規則: その組を成す行をすべて消す slice のうち、§8.1 の順で最も後のもの。
  * android-check-08 のファイルは test の根からの相対 path。
@@ -71,48 +72,15 @@ object Allowlist {
             rule("android-dep-02", "androidx", "android-slice-periphery-02", "model/FeaturedCategory.kt") +
             rule("android-dep-02", "R", "android-slice-periphery-02", "model/FeaturedCategory.kt") +
 
-            // android-dep-03 (31): network 14 + model 17
-            rule(
-                "android-dep-03", "network", "android-slice-account-02",
-                "account/AccountViewModel.kt",
-                "account/SessionsViewModel.kt",
-                "passkey/PasskeyCredentialsViewModel.kt",
-                "passkey/PasskeyLoginViewModel.kt",
-                "passkey/PasskeyRegistrationViewModel.kt",
-            ) +
+            // android-dep-03 (8): network 2 + model 6
             rule("android-dep-03", "network", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
-            rule("android-dep-03", "network", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
-            rule(
-                "android-dep-03", "network", "android-slice-periphery-02",
-                "notification/FcmTokenRegistrar.kt",
-                "onboarding/OnboardingViewModel.kt",
-                "settings/SettingsViewModel.kt",
-            ) +
-            // port の置き場を移すのが android-slice-closure-01（Spec §3.2）
-            rule(
-                "android-dep-03", "network", "android-slice-closure-01",
-                "auth/AuthViewModel.kt",
-                "learning/LearningViewModel.kt",
-                "podcast/PodcastViewModel.kt",
-                "vocabulary/VocabularyTestViewModel.kt",
-            ) +
-            rule(
-                "android-dep-03", "model", "android-slice-account-02",
-                "account/SessionsViewModel.kt",
-                "passkey/PasskeyCredentialsViewModel.kt",
-                "passkey/PasskeyLoginViewModel.kt",
-                "passkey/PasskeyRegistrationViewModel.kt",
-            ) +
-            rule("android-dep-03", "model", "android-slice-account-01", "auth/AuthViewModel.kt") +
-            rule("android-dep-03", "model", "android-slice-learning-01", "engagement/ListeningStreakStore.kt", "learning/LearningViewModel.kt") +
-            rule("android-dep-03", "model", "android-slice-learning-02", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-03", "model", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
-            rule("android-dep-03", "model", "android-slice-periphery-01", "feed/FeedViewModel.kt", "feed/PendingArticleAction.kt") +
-            rule("android-dep-03", "model", "android-slice-periphery-02", "onboarding/OnboardingViewModel.kt", "settings/SettingsViewModel.kt") +
+            rule("android-dep-03", "network", "android-slice-periphery-02", "notification/FcmTokenRegistrar.kt") +
+            rule("android-dep-03", "model", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
+            rule("android-dep-03", "model", "android-slice-periphery-01", "feed/PendingArticleAction.kt") +
             rule("android-dep-03", "model", "android-slice-episode-02", "podcast/PlaybackMetadata.kt", "network/PodcastApi.kt") +
             rule("android-dep-03", "model", "android-slice-learning-03", "network/LearningApi.kt", "network/VocabularyTestApi.kt") +
 
-            // android-dep-04 (17)
+            // android-dep-04 (60)
             rule(
                 "android-dep-04", "model", "android-slice-episode-02",
                 "podcast/AudioPlayerSection.kt",
@@ -135,14 +103,44 @@ object Allowlist {
                 "settings/SettingsScreen.kt",
             ) +
             rule("android-dep-04", "preferencesStore.set", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
+            rule("android-dep-04", "network", "android-slice-account-02", "account/AccountViewModel.kt", "account/SessionsViewModel.kt", "passkey/PasskeyCredentialsViewModel.kt", "passkey/PasskeyLoginViewModel.kt", "passkey/PasskeyRegistrationViewModel.kt") +
+            rule("android-dep-04", "model", "android-slice-account-02", "account/SessionsViewModel.kt", "passkey/PasskeyCredentialsViewModel.kt", "passkey/PasskeyLoginViewModel.kt", "passkey/PasskeyRegistrationViewModel.kt") +
+            rule("android-dep-04", "PasskeyProvider", "android-slice-account-02", "passkey/PasskeyLoginViewModel.kt", "passkey/PasskeyRegistrationViewModel.kt") +
+            rule("android-dep-04", "model", "android-slice-account-01", "auth/AuthViewModel.kt") +
+            rule("android-dep-04", "SessionStore", "android-slice-account-01", "auth/AuthViewModel.kt") +
+            rule("android-dep-04", "network", "android-slice-account-01", "auth/AuthViewModel.kt") +
+            rule("android-dep-04", "PreferencesStore", "android-slice-prefs-01", "auth/AuthViewModel.kt", "settings/SettingsViewModel.kt") +
+            rule("android-dep-04", "preferencesStore.set", "android-slice-prefs-01", "auth/AuthViewModel.kt", "settings/SettingsViewModel.kt") +
+            rule("android-dep-04", "model", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
+            rule("android-dep-04", "network", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
+            rule("android-dep-04", "PreferencesStore", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
+            rule("android-dep-04", "model", "android-slice-learning-01", "learning/LearningViewModel.kt") +
+            rule("android-dep-04", "LearningApi", "android-slice-learning-01", "learning/LearningViewModel.kt") +
+            rule("android-dep-04", "PreferencesStore", "android-slice-learning-01", "learning/LearningViewModel.kt") +
+            rule("android-dep-04", "network", "android-slice-learning-01", "learning/LearningViewModel.kt") +
+            rule("android-dep-04", "model", "android-slice-periphery-02", "onboarding/OnboardingViewModel.kt", "settings/SettingsViewModel.kt") +
+            rule("android-dep-04", "network", "android-slice-periphery-02", "onboarding/OnboardingViewModel.kt", "settings/SettingsViewModel.kt") +
+            rule("android-dep-04", "model", "android-slice-learning-02", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "network", "android-slice-learning-02", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "NetworkMonitoring", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "PlayerController", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "PodcastApi", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:add", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:advance", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:jump", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:moveUpNext", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:playNext", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:remove", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "model", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
+            rule("android-dep-04", "VocabularyTestApi", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
+            rule("android-dep-04", "network", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
 
             // android-dep-06 (1)
             rule("android-dep-06", "== \"", "android-slice-account-01", "di/AppContainer.kt") +
 
-            // android-dep-07 (3)
+            // android-dep-07 (2)
             rule("android-dep-07", "公開の var", "android-slice-playback-05", "podcast/PlayerController.kt") +
             rule("android-dep-07", "公開の var", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
-            rule("android-dep-07", "公開の var", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
 
             // android-dep-09 (8)
             rule(
