@@ -34,4 +34,17 @@ data class PodcastResponse(
     val vocabulary: List<VocabularyEntry>? = null,
     val quiz: List<QuizQuestion>? = null,
     @SerialName("created_at") val createdAt: String,
+    // WHY(android-dec-16): 旧 client が受理した入力を新 client も同じ値で受理するよう、足した field は
+    // すべて nullable・既定値 null にする。ADR-090・ADR-095 の出典。
+    @SerialName("source_kind") val sourceKind: String? = null,
+    @SerialName("source_articles") val sourceArticles: List<PodcastSourceArticleResponse>? = null,
 ) : QueueItem
+
+/** 出典記事 DTO。正本: backend/shared/models.py の `PodcastSourceArticle`。欠けた field は `null` で受ける（android-dec-16）。 */
+@Serializable
+data class PodcastSourceArticleResponse(
+    @SerialName("article_id") val articleId: String? = null,
+    val title: String? = null,
+    val url: String? = null,
+    val source: String? = null,
+)
