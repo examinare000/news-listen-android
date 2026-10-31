@@ -47,6 +47,7 @@ object LayerMap {
         "preferences/ArticleOpenMode.kt",
         "preferences/TimeFormat.kt",
         "feed/ArticleUrlValidator.kt",
+        "catalog/domain/Episode.kt",
     )
 
     private val application = listOf(
