@@ -87,6 +87,8 @@ object LayerMap {
         "network/JavaFileSystem.kt",
         "network/KeystoreSessionStore.kt",
         "network/OkHttpApiClient.kt",
+        "network/EpisodeDecoder.kt",
+        "network/PodcastApiAdapter.kt",
         "observability/CrashReporter.kt",
         "observability/CrashReportFormatter.kt",
         "model/ActionResponse.kt",
