@@ -149,6 +149,7 @@ data class EffectTypeCatalog(
                 ),
                 HookRow("ApiListeningStreakStore#fetchListeningStreak", HookKind.READ, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("SettingsViewModel#isAdminProvider", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
+                HookRow("PodcastViewModel#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("VocabularyTestViewModel#shuffle", HookKind.READ, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("FcmTokenRegistrar#tokenProvider", HookKind.READ, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("FcmTokenRegistrar#permissionChecker", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),

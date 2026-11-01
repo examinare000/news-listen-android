@@ -352,6 +352,7 @@ class AppContainer(context: Context) {
             networkMonitor = networkMonitor,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
             listeningStreakStore = _listeningStreakStore,
+            preferencesStore = preferencesStore,
         )
     }
 

@@ -7,6 +7,7 @@ import com.rioikeda.newslisten.network.BaseFakeApiClient
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
+import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -48,6 +49,7 @@ class PodcastViewModelPortTest {
             cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
             networkMonitor = StubNetworkMonitor(initialIsOnline = true),
             dispatcher = StandardTestDispatcher(testScheduler),
+            preferencesStore = InMemoryPreferencesStore(),
         )
 
         viewModel.fetchPodcasts()

@@ -41,6 +41,8 @@ internal val podcastViewModelQueryProbes: QueryProbeSet = run {
             networkMonitor = env.networkMonitor,
             dispatcher = env.newDispatcher(),
             listeningStreakStore = probeListeningStreakStore(env),
+            preferencesStore = env.preferencesStore,
+            currentSubject = env.hooks.read("PodcastViewModel#currentSubject") { null },
         )
     }
 }

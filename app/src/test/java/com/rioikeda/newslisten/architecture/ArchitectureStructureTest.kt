@@ -959,7 +959,7 @@ object ArchitectureScanner {
     private const val PREFERENCES_SETTER = "preferencesStore.set"
     private val transitionFunctions = listOf(
         "start", "setQueue", "add", "playNext", "jump", "advance", "remove", "moveUpNext",
-        "retry", "playNow", "playerStarted", "playerEnded", "fail", "queueExhausted",
+        "retry", "playNow", "playerStarted", "playerEnded", "fail", "queueExhausted", "stop", "failBeforeStart",
     )
     private val transitionCall = Regex(
         """(?:\b(?:PlaybackQueue|PlaybackSession)(?:<[^>]*>)?(?:\([^)]*\))?|\b\w*(?:queue|Queue|session|Session))""" +
