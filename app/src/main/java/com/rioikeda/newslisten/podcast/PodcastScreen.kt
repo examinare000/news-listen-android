@@ -41,7 +41,6 @@ import androidx.compose.ui.res.stringResource
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.DSFeedback
-import com.rioikeda.newslisten.model.PodcastResponse
 
 /**
  * Podcast タブのルートスクリーン。一覧表示と再生中のプレイヤーを担う。

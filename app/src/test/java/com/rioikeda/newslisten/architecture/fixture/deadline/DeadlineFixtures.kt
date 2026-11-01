@@ -1,6 +1,6 @@
 package com.rioikeda.newslisten.architecture.fixture.deadline
 
-import com.rioikeda.newslisten.network.PodcastApi
+import com.rioikeda.newslisten.network.ApiClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 
 /** command `start()` が 15 秒ごとに書く。getter `getState()` は所有者自身の `StateFlow` で、副作用が無い。 */
-class PeriodicWriterWithStateGetter(private val api: PodcastApi, dispatcher: CoroutineDispatcher) {
+class PeriodicWriterWithStateGetter(private val api: ApiClient, dispatcher: CoroutineDispatcher) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private var job: Job? = null
     private val mutableState = MutableStateFlow(0)
@@ -32,7 +32,7 @@ class PeriodicWriterWithStateGetter(private val api: PodcastApi, dispatcher: Cor
 }
 
 /** 収集の開始から 59 秒後（期限の内）に 1 回書く `early` と、61 秒後（期限の後）に書く `late`。 */
-class DelayedFlowOwner(private val api: PodcastApi) {
+class DelayedFlowOwner(private val api: ApiClient) {
     fun early(): Flow<Int> = flowOf(1).onStart {
         delay(59_000)
         api.updatePlaybackPosition("p", 1.0)

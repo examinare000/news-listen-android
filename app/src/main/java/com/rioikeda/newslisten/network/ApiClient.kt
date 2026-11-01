@@ -34,7 +34,7 @@ import kotlinx.serialization.json.JsonObject
  *
  * 正本: ios/NewsListenApp/NewsListenApp/Networking/APIClient.swift のミラー。
  */
-interface ApiClient : LearningApi, VocabularyTestApi, PodcastApi {
+interface ApiClient : LearningApi, VocabularyTestApi {
     /** ログインしてセッショントークンとユーザー情報を取得する。 */
     suspend fun login(username: String, password: String): LoginResponse
 
@@ -54,16 +54,16 @@ interface ApiClient : LearningApi, VocabularyTestApi, PodcastApi {
     suspend fun dismissArticle(id: String): ActionResponse
 
     /** Podcast 一覧を取得する。 */
-    override suspend fun fetchPodcasts(): PodcastListResponse
+    suspend fun fetchPodcasts(): PodcastListResponse
 
     /** 指定 ID の Podcast を取得する（署名付き audio_url の再取得にも使う）。 */
-    override suspend fun fetchPodcast(id: String): PodcastResponse
+    suspend fun fetchPodcast(id: String): PodcastResponse
 
     /** 指定 Podcast の再生位置を更新する。レスポンスは更新後の Podcast 全体。 */
-    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse
+    suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse
 
     /** 完聴を best-effort で記録する呼び出し元のための API。 */
-    override suspend fun markCompleted(id: String)
+    suspend fun markCompleted(id: String)
 
     /** 公開設問への回答をサーバーで採点する。 */
     suspend fun submitQuizAnswers(id: String, request: QuizAnswerRequest): QuizAnswerResponse
@@ -76,7 +76,7 @@ interface ApiClient : LearningApi, VocabularyTestApi, PodcastApi {
      *
      * 実ファイル保存への接続はフェーズ8 で行うため、フェーズ2 はバイト列取得までの実装。
      */
-    override suspend fun downloadAudio(url: String): ByteArray
+    suspend fun downloadAudio(url: String): ByteArray
 
     /**
      * デバイストークン（FCM）を登録する（冪等: 同一 token は upsert。フェーズ9）。

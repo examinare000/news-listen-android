@@ -24,6 +24,7 @@ import com.rioikeda.newslisten.network.ConnectivityNetworkMonitor
 import com.rioikeda.newslisten.network.JavaFileSystem
 import com.rioikeda.newslisten.network.KeystoreSessionStore
 import com.rioikeda.newslisten.network.OkHttpApiClient
+import com.rioikeda.newslisten.network.PodcastApiAdapter
 import com.rioikeda.newslisten.network.SessionStore
 import com.rioikeda.newslisten.notification.FcmTokenRegistrar
 import com.rioikeda.newslisten.observability.CrashReporter
@@ -344,7 +345,7 @@ class AppContainer(context: Context) {
      */
     private val _podcastViewModel: PodcastViewModel by lazy {
         PodcastViewModel(
-            podcastApi = apiClient,
+            podcastApi = PodcastApiAdapter(apiClient),
             apiClient = apiClient,
             playerController = _playerController,
             cacheManager = audioCacheManager,

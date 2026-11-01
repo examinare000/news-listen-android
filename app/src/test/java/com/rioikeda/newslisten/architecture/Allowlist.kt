@@ -22,22 +22,11 @@ object Allowlist {
         files.map { AllowEntry(ruleId, it, target, owner) }
 
     val entries: List<AllowEntry> =
-        // android-dep-01 (3)
-        rule("android-dep-01", "model", "android-slice-episode-02", "podcast/PlaybackSession.kt") +
-            rule("android-dep-01", "model", "android-slice-account-01", "auth/AuthState.kt") +
+        // android-dep-01 (2)
+        rule("android-dep-01", "model", "android-slice-account-01", "auth/AuthState.kt") +
             rule("android-dep-01", "androidx", "android-slice-playapp-01", "podcast/PlaybackState.kt") +
 
-            // android-dep-02 (30)
-            rule(
-                "android-dep-02", "model", "android-slice-episode-02",
-                "podcast/PlaybackSession.kt",
-                "podcast/PodcastStatusBadge.kt",
-                "podcast/PlaybackMetadata.kt",
-                "podcast/PodcastRowView.kt",
-                "podcast/PodcastScreen.kt",
-                "podcast/QueueSheet.kt",
-                "podcast/AudioPlayerSection.kt",
-            ) +
+            // android-dep-02 (22)
             rule("android-dep-02", "model", "android-slice-account-01", "auth/AuthState.kt", "auth/AuthViewModel.kt") +
             rule(
                 "android-dep-02", "model", "android-slice-account-02",
@@ -68,27 +57,17 @@ object Allowlist {
                 "onboarding/OnboardingViewModel.kt",
                 "onboarding/OnboardingScreen.kt",
             ) +
-            rule("android-dep-02", "core.QueueItem", "android-slice-episode-02", "model/PodcastResponse.kt") +
             rule("android-dep-02", "androidx", "android-slice-periphery-02", "model/FeaturedCategory.kt") +
             rule("android-dep-02", "R", "android-slice-periphery-02", "model/FeaturedCategory.kt") +
 
-            // android-dep-03 (8): network 2 + model 6
+            // android-dep-03 (6): network 2 + model 4
             rule("android-dep-03", "network", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
             rule("android-dep-03", "network", "android-slice-periphery-02", "notification/FcmTokenRegistrar.kt") +
             rule("android-dep-03", "model", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
             rule("android-dep-03", "model", "android-slice-periphery-01", "feed/PendingArticleAction.kt") +
-            rule("android-dep-03", "model", "android-slice-episode-02", "podcast/PlaybackMetadata.kt", "network/PodcastApi.kt") +
             rule("android-dep-03", "model", "android-slice-learning-03", "network/LearningApi.kt", "network/VocabularyTestApi.kt") +
 
-            // android-dep-04 (60)
-            rule(
-                "android-dep-04", "model", "android-slice-episode-02",
-                "podcast/AudioPlayerSection.kt",
-                "podcast/PodcastRowView.kt",
-                "podcast/PodcastScreen.kt",
-                "podcast/PodcastStatusBadge.kt",
-                "podcast/QueueSheet.kt",
-            ) +
+            // android-dep-04 (55)
             rule("android-dep-04", "model", "android-slice-learning-01", "AppScaffold.kt", "learning/LearningScreen.kt") +
             rule("android-dep-04", "model", "android-slice-learning-02", "podcast/QuizSheet.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-01", "feed/FeedScreen.kt") +
@@ -155,20 +134,14 @@ object Allowlist {
             rule("android-dep-09", "= e.message", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
             rule("android-dep-09", "= e.message", "android-slice-playapp-03", "podcast/PodcastViewModel.kt") +
 
-            // android-check-02 (8)
-            rule("android-check-02", "fetchPodcasts", "android-slice-episode-02", "network/PodcastApi.kt") +
-            rule("android-check-02", "fetchPodcast", "android-slice-episode-02", "network/PodcastApi.kt") +
-            rule("android-check-02", "updatePlaybackPosition", "android-slice-episode-02", "network/PodcastApi.kt") +
+            // android-check-02 (5)
             rule("android-check-02", "fetchLearningDashboard", "android-slice-learning-01", "network/LearningApi.kt") +
             rule("android-check-02", "fetchVocabulary", "android-slice-learning-02", "network/LearningApi.kt") +
             rule("android-check-02", "fetchVocabularyTestSession", "android-slice-learning-03", "network/LearningApi.kt") +
             rule("android-check-02", "fetchVocabularyTestSession", "android-slice-learning-03", "network/VocabularyTestApi.kt") +
             rule("android-check-02", "submitVocabularyTestResults", "android-slice-learning-03", "network/VocabularyTestApi.kt") +
 
-            // android-check-04 (13)
-            rule("android-check-04", "\"processing\"", "android-slice-episode-02", "podcast/PodcastStatusBadge.kt") +
-            rule("android-check-04", "\"failed\"", "android-slice-episode-02", "podcast/PodcastStatusBadge.kt") +
-            rule("android-check-04", "\"partial_failed\"", "android-slice-episode-02", "podcast/PodcastStatusBadge.kt") +
+            // android-check-04 (10)
             rule("android-check-04", "PLAYBACK_SPEEDS", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
             rule("android-check-04", "listOf(3, 5, 7, 10)", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
             rule("android-check-04", "/ 7.0", "android-slice-prefs-02", "settings/SettingsScreen.kt") +

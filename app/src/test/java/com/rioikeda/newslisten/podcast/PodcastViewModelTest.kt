@@ -1,8 +1,8 @@
 package com.rioikeda.newslisten.podcast
 
+import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.engagement.ListeningStreakStore
 import com.rioikeda.newslisten.model.ListeningStreakResponse
-import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.model.QuizGradeResult
@@ -10,9 +10,11 @@ import com.rioikeda.newslisten.model.VocabularyItemResponse
 import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.AudioCacheManager
+import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
 import java.io.IOException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,18 +47,20 @@ class PodcastViewModelTest {
         audioUrl: String = "https://example.com/$id-stale.mp3",
         errorMessage: String? = null,
         playbackPositionSeconds: Double = 0.0,
-    ): PodcastResponse = PodcastResponse(
-        id = id,
-        type = "daily",
-        articleIds = listOf("a1"),
-        difficulty = "toeic_600",
-        audioUrl = audioUrl,
-        japaneseIntroText = "intro",
-        durationSeconds = 300,
-        status = status,
-        errorMessage = errorMessage,
-        playbackPositionSeconds = playbackPositionSeconds,
-        createdAt = "2026-07-01T00:00:00Z",
+    ): Episode = EpisodeDecoder.decode(
+        PodcastResponse(
+            id = id,
+            type = "daily",
+            articleIds = listOf("a1"),
+            difficulty = "toeic_600",
+            audioUrl = audioUrl,
+            japaneseIntroText = "intro",
+            durationSeconds = 300,
+            status = status,
+            errorMessage = errorMessage,
+            playbackPositionSeconds = playbackPositionSeconds,
+            createdAt = "2026-07-01T00:00:00Z",
+        ),
     )
 
     private fun TestScope.newViewModel(
@@ -68,7 +72,7 @@ class PodcastViewModelTest {
     ): PodcastViewModel =
         PodcastViewModel(
             apiClient,
-            apiClient,
+            apiClient.learning,
             playerController,
             cacheManager,
             networkMonitor,
@@ -81,7 +85,7 @@ class PodcastViewModelTest {
     @Test
     fun fetchPodcasts成功でpodcastsが更新される() = runTest {
         val podcasts = listOf(podcast("1"), podcast("2"))
-        val apiClient = FakePodcastApiClient(onFetchPodcasts = { PodcastListResponse(podcasts) })
+        val apiClient = FakePodcastApiClient(onFetchPodcasts = { podcasts })
         val viewModel = newViewModel(apiClient, FakePlayerController())
 
         viewModel.fetchPodcasts()
@@ -589,9 +593,9 @@ class PodcastViewModelTest {
         viewModel.stopPlayback()
     }
 
-    // --- 再生キュー統合（フェーズ6 T1: PlaybackQueue<PodcastResponse> + 自動次遷移） ---
+    // --- 再生キュー統合（フェーズ6 T1: PlaybackQueue<Episode> + 自動次遷移） ---
 
-    private fun queueApiClient(vararg podcasts: PodcastResponse): FakePodcastApiClient {
+    private fun queueApiClient(vararg podcasts: Episode): FakePodcastApiClient {
         val byId = podcasts.associateBy { it.id }
         return FakePodcastApiClient(
             onFetchPodcast = { id -> byId.getValue(id) },
@@ -990,7 +994,7 @@ class PodcastViewModelTest {
         val fileSystem = FakeFileSystem()
         val cacheManager = AudioCacheManager(fileSystem, baseDir = "/cache")
         cacheManager.cache("p1", byteArrayOf(1)) // 事前に p1 だけキャッシュ済みの状態を再現する
-        val apiClient = FakePodcastApiClient(onFetchPodcasts = { PodcastListResponse(listOf(p1, p2)) })
+        val apiClient = FakePodcastApiClient(onFetchPodcasts = { listOf(p1, p2) })
         val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
 
         viewModel.fetchPodcasts()
@@ -1195,6 +1199,390 @@ class PodcastViewModelTest {
 
         assertEquals(listOf("p1" to "Resilient"), apiClient.saveVocabularyCalls)
         assertTrue(viewModel.isVocabularyRegistered("p1", "resilient"))
+    }
+
+    // --- 再生可否は Episode の種類で判定する（shared-session-08・android-deriv-26・android-dec-22） ---
+
+    @Test
+    fun `shared-session-08 completedでもerrorMessageを持つ行はfetchせず再生不可でerrorMessageを出す`() = runTest {
+        val apiClient = FakePodcastApiClient()
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+
+        viewModel.play(podcast(status = "completed", errorMessage = "X"))
+
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertTrue(player.prepareCalls.isEmpty())
+        assertEquals("X", viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `android-deriv-26 completedでもURLが空の行はfetchせず再生不可になる`() = runTest {
+        val apiClient = FakePodcastApiClient()
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+
+        viewModel.play(podcast(status = "completed", audioUrl = ""))
+
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertTrue(player.prepareCalls.isEmpty())
+        assertEquals("生成に失敗しました", viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `android-deriv-26 未知のstatusの行はfetchせず再生不可になる`() = runTest {
+        val apiClient = FakePodcastApiClient()
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+
+        viewModel.play(podcast(status = "weird"))
+
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertTrue(player.prepareCalls.isEmpty())
+        assertEquals("生成に失敗しました", viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `android-dec-22 failedでerrorMessageが空文字なら生成に失敗しましたを出す`() = runTest {
+        val apiClient = FakePodcastApiClient()
+        val viewModel = newViewModel(apiClient, FakePlayerController())
+
+        viewModel.play(podcast(status = "failed", errorMessage = ""))
+
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertEquals("生成に失敗しました", viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `shared-session-08 正の対照 completedでURLがありerrorMessageが無い行は取り直した URL で再生する`() = runTest {
+        val listed = podcast(id = "p1")
+        val fresh = podcast(id = "p1", audioUrl = "https://example.com/p1-fresh.mp3")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { fresh },
+            onUpdatePlaybackPosition = { _, _ -> fresh },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+
+        viewModel.play(listed)
+
+        assertEquals(listOf("p1"), apiClient.fetchPodcastCalls)
+        assertEquals(listOf("https://example.com/p1-fresh.mp3"), player.prepareCalls)
+        assertEquals(1, player.playCallCount)
+        assertNull(viewModel.errorMessage.value)
+
+        viewModel.stopPlayback()
+    }
+
+    // --- 取り直した値が再生不可でも、前の再生を壊さない（android-deriv-17・android-dec-21） ---
+
+    @Test
+    fun `android-deriv-17 一覧の判定で拒否されても再生中の位置同期は続く`() = runTest {
+        val pA = podcast(id = "pA")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { pA },
+            onUpdatePlaybackPosition = { _, _ -> pA },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.play(pA)
+
+        viewModel.play(podcast(id = "pX", status = "failed", errorMessage = "boom"))
+        apiClient.updatePlaybackPositionCalls.clear()
+        player.setPosition(5.0)
+        advanceTimeBy(15_000)
+        runCurrent()
+
+        assertEquals(listOf("pA" to 5.0), apiClient.updatePlaybackPositionCalls)
+        assertEquals(pA, viewModel.currentPodcast.value)
+        assertEquals("boom", viewModel.errorMessage.value)
+
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-deriv-17 取り直した値がGeneratingなら前の再生を止めず生成中を出す`() = runTest {
+        val pA = podcast(id = "pA")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> if (id == "pB") podcast(id = "pB", status = "processing") else pA },
+            onUpdatePlaybackPosition = { _, _ -> pA },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.play(pA)
+
+        viewModel.play(podcast(id = "pB"))
+
+        assertEquals(0, player.stopCallCount)
+        assertEquals(pA, viewModel.currentPodcast.value)
+        assertEquals("生成中のため再生できません", viewModel.errorMessage.value)
+
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-deriv-17 取り直した値がFailedなら前の再生を止めずそのerrorMessageを出す`() = runTest {
+        val pA = podcast(id = "pA")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> if (id == "pB") podcast(id = "pB", status = "failed", errorMessage = "E") else pA },
+            onUpdatePlaybackPosition = { _, _ -> pA },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.play(pA)
+
+        viewModel.play(podcast(id = "pB"))
+
+        assertEquals(0, player.stopCallCount)
+        assertEquals(pA, viewModel.currentPodcast.value)
+        assertEquals("E", viewModel.errorMessage.value)
+
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-deriv-17 取り直した値が拒否された後も前の再生の位置同期は続く`() = runTest {
+        val pA = podcast(id = "pA")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> if (id == "pB") podcast(id = "pB", status = "processing") else pA },
+            onUpdatePlaybackPosition = { _, _ -> pA },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.play(pA)
+        viewModel.play(podcast(id = "pB"))
+
+        apiClient.updatePlaybackPositionCalls.clear()
+        player.setPosition(8.0)
+        advanceTimeBy(15_000)
+        runCurrent()
+
+        assertEquals(listOf("pA" to 8.0), apiClient.updatePlaybackPositionCalls)
+
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-deriv-17 NETWORK再生はfetchの往復が終わるまで前の再生を止めない`() = runTest {
+        val pA = podcast(id = "pA")
+        val pBFresh = podcast(id = "pB", audioUrl = "https://example.com/pB-fresh.mp3")
+        val fetchGate = CompletableDeferred<Unit>()
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id ->
+                if (id == "pB") {
+                    fetchGate.await()
+                    pBFresh
+                } else {
+                    pA
+                }
+            },
+            onUpdatePlaybackPosition = { id, _ -> if (id == "pA") pA else pBFresh },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.play(pA)
+
+        launch { viewModel.play(podcast(id = "pB")) }
+        runCurrent()
+
+        // 観測 1: pB の fetch の途中。前の再生はまだ止まっていない。
+        assertEquals(0, player.stopCallCount)
+        assertFalse(player.prepareCalls.contains("https://example.com/pB-fresh.mp3"))
+        assertTrue(apiClient.updatePlaybackPositionCalls.none { it.first == "pA" })
+
+        fetchGate.complete(Unit)
+        runCurrent()
+
+        // 観測 2: fetch の後で止まり、取り直した URL で始まる。
+        assertEquals(1, player.stopCallCount)
+        assertEquals("https://example.com/pB-fresh.mp3", player.prepareCalls.last())
+        assertEquals(1, apiClient.updatePlaybackPositionCalls.count { it.first == "pA" })
+        assertEquals(pBFresh, viewModel.currentPodcast.value)
+
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-deriv-17 fetchがApiExceptionなら前の再生を止めてerrorMessageを出す`() = runTest {
+        val pA = podcast(id = "pA")
+        val exception = ApiException.NetworkError(RuntimeException("offline"))
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> if (id == "pB") throw exception else pA },
+            onUpdatePlaybackPosition = { _, _ -> pA },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.play(pA)
+
+        viewModel.play(podcast(id = "pB"))
+
+        assertEquals(1, player.stopCallCount)
+        assertNull(viewModel.currentPodcast.value)
+        assertEquals(exception.message, viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `android-deriv-17 自動前進先の取り直し値がGeneratingなら止めてcurrentPodcastをnullにする`() = runTest {
+        val pA = podcast(id = "pA")
+        val pB = podcast(id = "pB")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> if (id == "pB") podcast(id = "pB", status = "processing") else pA },
+            onUpdatePlaybackPosition = { _, _ -> pA },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+        viewModel.playNext(pB)
+
+        player.completePlayback()
+        runCurrent()
+
+        assertNull(viewModel.currentPodcast.value)
+        assertEquals("生成中のため再生できません", viewModel.errorMessage.value)
+        assertEquals(1, player.stopCallCount)
+    }
+
+    @Test
+    fun `android-deriv-17 自動前進先の取り直し値がFailedならそのerrorMessageを出して止める`() = runTest {
+        val pA = podcast(id = "pA")
+        val pB = podcast(id = "pB")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> if (id == "pB") podcast(id = "pB", status = "failed", errorMessage = "E") else pA },
+            onUpdatePlaybackPosition = { _, _ -> pA },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+        viewModel.playNext(pB)
+
+        player.completePlayback()
+        runCurrent()
+
+        assertNull(viewModel.currentPodcast.value)
+        assertEquals("E", viewModel.errorMessage.value)
+        assertEquals(1, player.stopCallCount)
+    }
+
+    @Test
+    fun `android-deriv-17 downloadで取り直した値がFailedならcacheせずerrorMessageを出す`() = runTest {
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { podcast(id = "p1", status = "failed", errorMessage = "E") },
+            onDownloadAudio = { byteArrayOf(1) },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val viewModel = newViewModel(apiClient, FakePlayerController(), cacheManager)
+
+        viewModel.download(p1)
+
+        assertTrue(apiClient.downloadAudioCalls.isEmpty())
+        assertFalse(cacheManager.isCached("p1"))
+        assertEquals(emptySet<String>(), viewModel.downloadedIds.value)
+        assertEquals(emptySet<String>(), viewModel.downloadingIds.value)
+        assertEquals("E", viewModel.errorMessage.value)
+    }
+
+    // --- CACHED / UNAVAILABLE でも前の再生は止まり、最終同期が行われる（android-dec-21） ---
+
+    @Test
+    fun `android-dec-21 CACHED再生は前の再生を止め最終同期してキャッシュURIで始める`() = runTest {
+        val pA = podcast(id = "pA")
+        val pB = podcast(id = "pB")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { pA },
+            onUpdatePlaybackPosition = { id, _ -> if (id == "pA") pA else pB },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, cacheManager)
+        viewModel.play(pA)
+        cacheManager.cache("pB", byteArrayOf(1))
+
+        viewModel.play(pB)
+
+        assertEquals(1, player.stopCallCount)
+        assertEquals(1, apiClient.updatePlaybackPositionCalls.count { it.first == "pA" })
+        assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
+        assertEquals("file:///cache/audio/pB.mp3", player.prepareCalls.last())
+        assertEquals(pB, viewModel.currentPodcast.value)
+
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-dec-21 UNAVAILABLE再生は前の再生を止め最終同期してオフラインを出す`() = runTest {
+        val pA = podcast(id = "pA")
+        val pB = podcast(id = "pB")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { pA },
+            onUpdatePlaybackPosition = { id, _ -> if (id == "pA") pA else pB },
+        )
+        val networkMonitor = StubNetworkMonitor(initialIsOnline = true)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, networkMonitor = networkMonitor)
+        viewModel.play(pA)
+        networkMonitor.setOnline(false)
+
+        viewModel.play(pB)
+
+        assertEquals(1, player.stopCallCount)
+        assertEquals(1, apiClient.updatePlaybackPositionCalls.count { it.first == "pA" })
+        assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
+        assertNull(viewModel.currentPodcast.value)
+        assertEquals("オフラインのため再生できません", viewModel.errorMessage.value)
+    }
+
+    // --- play が playMutex を保持している間に届いた前の再生の完了通知では、キューを前進しない（android-dec-27） ---
+
+    @Test
+    fun `android-dec-27 別のepisodeのplayが取得中に前の再生が終わっても完了は記録しキューは前進しない`() = runTest {
+        val pA = podcast(id = "pA")
+        val pB = podcast(id = "pB")
+        val pC = podcast(id = "pC")
+        val pBFresh = podcast(id = "pB", audioUrl = "https://example.com/pB-fresh.mp3")
+        val fetchGate = CompletableDeferred<Unit>()
+        val markGate = CompletableDeferred<Unit>()
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id ->
+                when (id) {
+                    "pB" -> {
+                        fetchGate.await()
+                        pBFresh
+                    }
+                    "pC" -> pC
+                    else -> pA
+                }
+            },
+            onUpdatePlaybackPosition = { id, _ -> if (id == "pA") pA else pBFresh },
+            onMarkCompleted = { markGate.await() },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+        viewModel.addToQueue(pB)
+        viewModel.addToQueue(pC)
+
+        // pB の play が fetch の往復で playMutex を保持している間に、pA の完了通知が届く。
+        launch { viewModel.playNow(pB) }
+        runCurrent()
+        player.completePlayback()
+        runCurrent() // 完了の記録（markCompleted(pA)）の途中で止まる
+
+        // 記録の途中で pB の取得が終わり、ロックが外れる。そのあとで記録が終わる。
+        fetchGate.complete(Unit)
+        runCurrent()
+        markGate.complete(Unit)
+        runCurrent()
+        advanceTimeBy(1_000)
+        runCurrent()
+
+        assertEquals(listOf("pA"), apiClient.markCompletedCalls)
+        assertEquals(pB, viewModel.queue.value.current)
+        assertEquals(pBFresh, viewModel.currentPodcast.value)
+        assertEquals("https://example.com/pB-fresh.mp3", player.prepareCalls.last())
+        assertTrue(apiClient.fetchPodcastCalls.none { it == "pC" })
+
+        viewModel.stopPlayback()
     }
 
     private fun vocabularyItem(podcastId: String, term: String) = VocabularyItemResponse(

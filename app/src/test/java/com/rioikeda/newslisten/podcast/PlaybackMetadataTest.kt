@@ -1,11 +1,13 @@
 package com.rioikeda.newslisten.podcast
 
+import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.network.EpisodeDecoder
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * [PodcastResponse.displayTitle] / [PlaybackMetadata] の検証（フェーズ7 前半: 通知メタデータ）。
+ * [Episode.displayTitle] / [PlaybackMetadata] の検証（フェーズ7 前半: 通知メタデータ）。
  *
  * 正本:
  * - displayTitle 優先順位: ios/NewsListenApp/NewsListenApp/Models/Podcast.swift:107-112（displayTitle）
@@ -17,7 +19,7 @@ class PlaybackMetadataTest {
         title: String = "",
         japaneseIntroText: String = "",
         difficulty: String = "toeic_600",
-    ): PodcastResponse = PodcastResponse(
+    ): Episode = EpisodeDecoder.decode(PodcastResponse(
         id = "p1",
         type = "daily",
         articleIds = listOf("a1"),
@@ -28,7 +30,7 @@ class PlaybackMetadataTest {
         status = "completed",
         title = title,
         createdAt = "2026-07-01T00:00:00Z",
-    )
+    ))
 
     // --- displayTitle: 3段フォールバック（title → japaneseIntroText → 既定文言） ---
 

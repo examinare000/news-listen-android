@@ -28,7 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSSpacing
-import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.catalog.domain.Episode
 
 /**
  * Podcast 一覧の各行。タイトル・難易度・日付・長さ・ステータスバッジを表示する。
@@ -37,7 +37,7 @@ import com.rioikeda.newslisten.model.PodcastResponse
  */
 @Composable
 fun PodcastRowView(
-    podcast: PodcastResponse,
+    podcast: Episode,
     isPlaying: Boolean,
     downloadingIds: Set<String> = emptySet(),
     downloadedIds: Set<String> = emptySet(),
@@ -90,7 +90,7 @@ fun PodcastRowView(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // 難易度バッジ
-                    DifficultyBadge(podcast.difficulty)
+                    DifficultyBadge(podcast.difficultyCode)
 
                     // 長さ
                     Text(
@@ -100,25 +100,23 @@ fun PodcastRowView(
                     )
 
                     // ステータスバッジ
-                    PodcastStatusBadge.from(podcast).let { badge ->
-                        when (badge) {
-                            is PodcastStatusBadge.Processing -> {
-                                Text(
-                                    text = "生成中",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            is PodcastStatusBadge.Failed -> {
-                                Text(
-                                    text = "失敗",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-                            is PodcastStatusBadge.None -> {
-                                // completed 状態はバッジ非表示
-                            }
+                    when (podcast) {
+                        is Episode.Generating -> {
+                            Text(
+                                text = "生成中",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        is Episode.Failed -> {
+                            Text(
+                                text = "失敗",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        is Episode.Playable -> {
+                            // 再生可能な状態はバッジ非表示
                         }
                     }
 
@@ -133,7 +131,7 @@ fun PodcastRowView(
                     )
 
                     // ダウンロードボタン（processing/failed の場合は表示しない）
-                    if (PodcastStatusBadge.from(podcast) is PodcastStatusBadge.None) {
+                    if (podcast is Episode.Playable) {
                         DownloadButton(
                             isDownloading = podcast.id in downloadingIds,
                             isDownloaded = podcast.id in downloadedIds,

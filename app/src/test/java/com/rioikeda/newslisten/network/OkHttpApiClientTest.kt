@@ -151,12 +151,10 @@ class OkHttpApiClientTest {
         assertEquals(3, response.remaining)
     }
 
-    // --- fetchPodcasts / fetchPodcast（PodcastApi port。android-contract-18） ---
+    // --- fetchPodcasts / fetchPodcast ---
 
     @Test
-    fun fetchPodcastsはPodcastApi型の参照からGETでPodcastListResponseを返す() = runTest {
-        // verifies: android-contract-18
-        val podcastApi: PodcastApi = client
+    fun fetchPodcastsはGETでPodcastListResponseを返す() = runTest {
         server.enqueue(
             MockResponse().setResponseCode(200).setBody(
                 """
@@ -173,7 +171,7 @@ class OkHttpApiClientTest {
             )
         )
 
-        val response = podcastApi.fetchPodcasts()
+        val response = client.fetchPodcasts()
 
         val recorded = server.takeRequest()
         assertEquals("GET", recorded.method)
@@ -183,9 +181,7 @@ class OkHttpApiClientTest {
     }
 
     @Test
-    fun fetchPodcastはPodcastApi型の参照からGETでPodcastResponseを返す() = runTest {
-        // verifies: android-contract-18
-        val podcastApi: PodcastApi = client
+    fun fetchPodcastはGETでPodcastResponseを返す() = runTest {
         server.enqueue(
             MockResponse().setResponseCode(200).setBody(
                 """
@@ -198,7 +194,7 @@ class OkHttpApiClientTest {
             )
         )
 
-        val response = podcastApi.fetchPodcast("p1")
+        val response = client.fetchPodcast("p1")
 
         val recorded = server.takeRequest()
         assertEquals("GET", recorded.method)

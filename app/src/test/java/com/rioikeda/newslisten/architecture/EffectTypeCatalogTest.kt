@@ -19,13 +19,22 @@ class EffectTypeCatalogTest {
     // ---- 本番 ----
 
     @Test
-    fun 本番の分類表は8つのportと15のhookを持つ() {
+    fun 本番の分類表は9つのportと15のhookを持つ() {
         assertEquals(
             setOf(
-                "ApiClient", "PreferencesStore", "SessionStore", "PlayerController",
+                "ApiClient", "PodcastApi", "PreferencesStore", "SessionStore", "PlayerController",
                 "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer",
             ),
             production.ports.map { it.port }.toSet(),
+        )
+        // ApiClient は PodcastApi を継承しなくなったので、PodcastApi は独立した port 行になる（android-contract-18）。
+        val podcastApi = portRow(production, "PodcastApi")
+        assertEquals(setOf("updatePlaybackPosition", "markCompleted"), podcastApi.writes)
+        assertEquals(setOf("fetchPodcasts", "fetchPodcast", "downloadAudio"), podcastApi.sequenceReads)
+        assertTrue(podcastApi.propertyReads.isEmpty())
+        assertTrue(
+            "ApiClient 行の interfaces に PodcastApi が残っている",
+            portRow(production, "ApiClient").interfaces.none { it.endsWith(".PodcastApi") },
         )
         val api = portRow(production, "ApiClient")
         assertEquals("ApiClient 系の書込（GET 以外）は 28", 28, api.writes.size)

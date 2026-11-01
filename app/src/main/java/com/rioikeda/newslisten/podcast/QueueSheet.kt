@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.core.PlaybackQueue
 import com.rioikeda.newslisten.designsystem.DSSpacing
-import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.catalog.domain.Episode
 import kotlinx.coroutines.launch
 
 /**
@@ -152,7 +152,7 @@ fun QueueSheet(
  * 再生中のエピソード行（タイトル＝日本語イントロ要約・難易度・長さ）。
  */
 @Composable
-private fun QueueRow(podcast: PodcastResponse) {
+private fun QueueRow(podcast: Episode) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -170,7 +170,7 @@ private fun QueueRow(podcast: PodcastResponse) {
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = "${podcast.difficulty} · ${formatDuration(podcast.durationSeconds)}",
+            text = "${podcast.difficultyCode} · ${formatDuration(podcast.durationSeconds)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -191,7 +191,7 @@ private fun QueueRow(podcast: PodcastResponse) {
  */
 @Composable
 private fun QueueUpNextRow(
-    podcast: PodcastResponse,
+    podcast: Episode,
     index: Int,
     totalCount: Int,
     onDelete: () -> Unit,
@@ -224,7 +224,7 @@ private fun QueueUpNextRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${podcast.difficulty} · ${formatDuration(podcast.durationSeconds)}",
+                    text = "${podcast.difficultyCode} · ${formatDuration(podcast.durationSeconds)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

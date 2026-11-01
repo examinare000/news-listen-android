@@ -1,6 +1,8 @@
 package com.rioikeda.newslisten.podcast
 
+import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.podcast.PlaybackSession.Active
 import com.rioikeda.newslisten.podcast.PlaybackSession.Completed
 import com.rioikeda.newslisten.podcast.PlaybackSession.Errored
@@ -23,7 +25,7 @@ import org.junit.Test
  */
 class PlaybackSessionTest {
 
-    private fun podcast(id: String): PodcastResponse = PodcastResponse(
+    private fun podcast(id: String): Episode.Playable = EpisodeDecoder.decode(PodcastResponse(
         id = id,
         type = "daily",
         articleIds = listOf("a1"),
@@ -33,7 +35,7 @@ class PlaybackSessionTest {
         durationSeconds = 300,
         status = "completed",
         createdAt = "2026-07-01T00:00:00Z",
-    )
+    )) as Episode.Playable
 
     private val a = podcast("a")
     private val b = podcast("b")

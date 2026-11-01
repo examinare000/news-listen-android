@@ -1,9 +1,10 @@
 package com.rioikeda.newslisten.podcast
 
-import com.rioikeda.newslisten.model.PodcastListResponse
+import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.BaseFakeApiClient
+import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -19,22 +20,24 @@ import org.junit.Test
  */
 class PodcastViewModelPortTest {
 
-    private fun podcast(id: String = "p1"): PodcastResponse = PodcastResponse(
-        id = id,
-        type = "daily",
-        articleIds = listOf("a1"),
-        difficulty = "toeic_600",
-        audioUrl = "https://example.com/$id.mp3",
-        japaneseIntroText = "intro",
-        durationSeconds = 300,
-        status = "completed",
-        createdAt = "2026-07-01T00:00:00Z",
+    private fun podcast(id: String = "p1"): Episode = EpisodeDecoder.decode(
+        PodcastResponse(
+            id = id,
+            type = "daily",
+            articleIds = listOf("a1"),
+            difficulty = "toeic_600",
+            audioUrl = "https://example.com/$id.mp3",
+            japaneseIntroText = "intro",
+            durationSeconds = 300,
+            status = "completed",
+            createdAt = "2026-07-01T00:00:00Z",
+        ),
     )
 
     @Test
     fun fetchPodcastsはpodcastApi経由で呼ばれapiClient経由では呼ばれない() = runTest {
         // verifies: android-contract-18
-        val podcastApi = FakePodcastApi(onFetchPodcasts = { PodcastListResponse(listOf(podcast("p1"))) })
+        val podcastApi = FakePodcastApi(onFetchPodcasts = { listOf(podcast("p1")) })
         // 何も stub しない基底を渡す。fetchPodcasts が誤って apiClient 経由で呼ばれたら error で fail する。
         val apiClient = object : BaseFakeApiClient() {}
 

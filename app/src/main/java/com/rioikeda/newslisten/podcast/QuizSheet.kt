@@ -41,7 +41,7 @@ import com.rioikeda.newslisten.designsystem.DSFeedback
 import com.rioikeda.newslisten.designsystem.DSFeedbackVocabulary
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.success
-import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.launch
@@ -53,7 +53,7 @@ internal fun quizFeedbackVocabulary(correctRate: Double): DSFeedbackVocabulary =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuizSheet(
-    podcast: PodcastResponse,
+    podcast: Episode.Playable,
     feedback: DSFeedback,
     submit: suspend (podcastId: String, answers: List<Int>) -> QuizAnswerResponse,
     onDismiss: () -> Unit,
