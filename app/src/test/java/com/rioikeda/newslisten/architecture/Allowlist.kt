@@ -67,7 +67,7 @@ object Allowlist {
             rule("android-dep-03", "model", "android-slice-periphery-01", "feed/PendingArticleAction.kt") +
             rule("android-dep-03", "model", "android-slice-learning-03", "network/LearningApi.kt", "network/VocabularyTestApi.kt") +
 
-            // android-dep-04 (55)
+            // android-dep-04 (65)
             rule("android-dep-04", "model", "android-slice-learning-01", "AppScaffold.kt", "learning/LearningScreen.kt") +
             rule("android-dep-04", "model", "android-slice-learning-02", "podcast/QuizSheet.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-01", "feed/FeedScreen.kt") +
@@ -110,6 +110,17 @@ object Allowlist {
             rule("android-dep-04", "transition:moveUpNext", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
             rule("android-dep-04", "transition:playNext", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
             rule("android-dep-04", "transition:remove", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            // android-slice-playback-03 が足す一時経路（android-temp-13）。PlaybackCoordinator の切り出し（android-slice-playapp-01）で消す。
+            rule("android-dep-04", "PreferencesStore", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:start", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:retry", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:playNow", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:playerStarted", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:playerEnded", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:fail", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:queueExhausted", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:stop", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "transition:failBeforeStart", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
             rule("android-dep-04", "model", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
             rule("android-dep-04", "VocabularyTestApi", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
             rule("android-dep-04", "network", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +

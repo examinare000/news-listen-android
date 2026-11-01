@@ -13,6 +13,14 @@ import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
+import com.rioikeda.newslisten.podcast.PlaybackSession.Active
+import com.rioikeda.newslisten.podcast.PlaybackSession.Completed
+import com.rioikeda.newslisten.podcast.PlaybackSession.Errored
+import com.rioikeda.newslisten.podcast.PlaybackSession.NothingPlaying
+import com.rioikeda.newslisten.podcast.PlaybackSession.Starting
+import com.rioikeda.newslisten.podcast.PlaybackSession.Stopped
+import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
+import com.rioikeda.newslisten.preferences.PreferencesStore
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,6 +37,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -69,16 +78,29 @@ class PodcastViewModelTest {
         cacheManager: AudioCacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
         networkMonitor: StubNetworkMonitor = StubNetworkMonitor(initialIsOnline = true),
         listeningStreakStore: ListeningStreakStore? = null,
+        preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
+        currentSubject: () -> String? = { null },
     ): PodcastViewModel =
         PodcastViewModel(
-            apiClient,
-            apiClient.learning,
-            playerController,
-            cacheManager,
-            networkMonitor,
-            StandardTestDispatcher(testScheduler),
-            listeningStreakStore,
+            podcastApi = apiClient,
+            apiClient = apiClient.learning,
+            playerController = playerController,
+            cacheManager = cacheManager,
+            networkMonitor = networkMonitor,
+            dispatcher = StandardTestDispatcher(testScheduler),
+            listeningStreakStore = listeningStreakStore,
+            preferencesStore = preferencesStore,
+            currentSubject = currentSubject,
         )
+
+    /** shared-session-04（shared-inv-01）: 再生中のものとキューの現在位置が食い違わない。公開操作の後に毎回確かめる。 */
+    private fun assertSharedInv01(viewModel: PodcastViewModel) {
+        val currentId = viewModel.queue.value.current?.id
+        assertTrue(
+            "shared-session-04: session=${viewModel.session.value} queue.current=$currentId",
+            viewModel.session.value.satisfiesInvariantP1(currentId),
+        )
+    }
 
     // --- fetchPodcasts ---
 
@@ -393,7 +415,7 @@ class PodcastViewModelTest {
     // --- 速度8段階の伝播 ---
 
     @Test
-    fun setSpeedは8段階全てがplayerControllerに伝播する() = runTest {
+    fun `shared-session-10 setSpeedは開始時の既定速度に続けて8段階全てがplayerControllerに伝播する`() = runTest {
         val fresh = podcast(id = "p1")
         val apiClient = FakePodcastApiClient(
             onFetchPodcast = { fresh },
@@ -405,7 +427,8 @@ class PodcastViewModelTest {
 
         PlaybackConstants.speeds.forEach { viewModel.setSpeed(it) }
 
-        assertEquals(PlaybackConstants.speeds.map { it.toFloat() }, player.speedCalls)
+        // 先頭の 1 件は、開始の確定時に player へ設定した既定速度（InMemoryPreferencesStore の既定 1.0）。
+        assertEquals(listOf(1.0f) + PlaybackConstants.speeds.map { it.toFloat() }, player.speedCalls)
 
         viewModel.stopPlayback()
     }
@@ -1403,7 +1426,7 @@ class PodcastViewModelTest {
     }
 
     @Test
-    fun `android-deriv-17 fetchがApiExceptionなら前の再生を止めてerrorMessageを出す`() = runTest {
+    fun `shared-session-13 android-deriv-17 fetchがApiExceptionなら前の再生を止めずerrorMessageを出す`() = runTest {
         val pA = podcast(id = "pA")
         val exception = ApiException.NetworkError(RuntimeException("offline"))
         val apiClient = FakePodcastApiClient(
@@ -1416,9 +1439,11 @@ class PodcastViewModelTest {
 
         viewModel.play(podcast(id = "pB"))
 
-        assertEquals(1, player.stopCallCount)
-        assertNull(viewModel.currentPodcast.value)
+        assertEquals(0, player.stopCallCount)
+        assertEquals(pA, viewModel.currentPodcast.value)
         assertEquals(exception.message, viewModel.errorMessage.value)
+
+        viewModel.stopPlayback()
     }
 
     @Test
@@ -1510,7 +1535,7 @@ class PodcastViewModelTest {
     }
 
     @Test
-    fun `android-dec-21 UNAVAILABLE再生は前の再生を止め最終同期してオフラインを出す`() = runTest {
+    fun `shared-session-13 android-dec-21 UNAVAILABLE再生は前の再生を止めず最終同期もせずオフラインを出す`() = runTest {
         val pA = podcast(id = "pA")
         val pB = podcast(id = "pB")
         val apiClient = FakePodcastApiClient(
@@ -1525,11 +1550,13 @@ class PodcastViewModelTest {
 
         viewModel.play(pB)
 
-        assertEquals(1, player.stopCallCount)
-        assertEquals(1, apiClient.updatePlaybackPositionCalls.count { it.first == "pA" })
+        assertEquals(0, player.stopCallCount)
+        assertEquals(0, apiClient.updatePlaybackPositionCalls.count { it.first == "pA" })
         assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
-        assertNull(viewModel.currentPodcast.value)
+        assertEquals(pA, viewModel.currentPodcast.value)
         assertEquals("オフラインのため再生できません", viewModel.errorMessage.value)
+
+        viewModel.stopPlayback()
     }
 
     // --- play が playMutex を保持している間に届いた前の再生の完了通知では、キューを前進しない（android-dec-27） ---
@@ -1581,6 +1608,808 @@ class PodcastViewModelTest {
         assertEquals(pBFresh, viewModel.currentPodcast.value)
         assertEquals("https://example.com/pB-fresh.mp3", player.prepareCalls.last())
         assertTrue(apiClient.fetchPodcastCalls.none { it == "pC" })
+
+        viewModel.stopPlayback()
+    }
+
+    // --- 現在再生中の正本は session（android-slice-playback-03） ---
+
+    private fun playable(episode: Episode): Episode.Playable = episode as Episode.Playable
+
+    private fun starting(episode: Episode) = Starting(playable(episode), 0.0, 1.0)
+
+    private fun erroredIdOnly(id: String, reason: SessionErrorReason) = Errored(SessionEpisodeRef.IdOnly(id), reason)
+
+    private fun erroredLoaded(episode: Episode, reason: PlaybackFailureReason) =
+        Errored(SessionEpisodeRef.Loaded(playable(episode)), SessionErrorReason.Player(reason))
+
+    /** player の事象を注入し、購読が session へ反映するまで進める（同じ値の連続は届かないので呼び分ける）。 */
+    private fun TestScope.emit(player: FakePlayerController, state: PlaybackState) {
+        player.setState(state)
+        runCurrent()
+    }
+
+    private fun TestScope.emitPlaying(player: FakePlayerController) = emit(player, PlaybackState.Playing(0.0, 300.0))
+
+    // 既定速度と再開位置（shared-session-10・android-contract-06）
+
+    @Test
+    fun `android-test-05 shared-session-10 android-contract-06 既定速度で開始しセッション中の速度変更は既定速度を書き換えず次のepisodeも既定速度で始まる`() = runTest {
+        val preferences = InMemoryPreferencesStore(initialDefaultPlaybackSpeed = 1.5)
+        val listedA = podcast(id = "pA")
+        val freshA = podcast(id = "pA", audioUrl = "https://example.com/pA-fresh.mp3", playbackPositionSeconds = 120.0)
+        val listedB = podcast(id = "pB", playbackPositionSeconds = 40.0)
+        val apiClient = FakePodcastApiClient(onFetchPodcast = { freshA }, onUpdatePlaybackPosition = { _, _ -> freshA })
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        cacheManager.cache("pB", byteArrayOf(1))
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, cacheManager, preferencesStore = preferences)
+
+        viewModel.playNow(listedA) // NETWORK: 再開位置は取り直した値（一覧の 0 ではない）
+        assertEquals(listOf(1.5f), player.speedCalls)
+        assertEquals(listOf(120.0), player.seekCalls)
+
+        viewModel.setSpeed(2.0)
+        viewModel.playNow(listedB) // CACHED: 再開位置は一覧の値
+
+        assertEquals(listOf(1.5f, 2.0f, 1.5f), player.speedCalls)
+        assertEquals(listOf(120.0, 40.0), player.seekCalls)
+        assertEquals(1.5, preferences.defaultPlaybackSpeed.value, 0.0)
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-test-05 shared-session-10 android-contract-06 再開位置が0か末尾2秒窓ならseekToを呼ばず窓の手前なら適用する`() = runTest {
+        val episodes = listOf(0.0, 299.0, 298.0, 297.5).mapIndexed { i, seconds ->
+            podcast(id = "p$i", playbackPositionSeconds = seconds)
+        }
+        val player = FakePlayerController()
+        val viewModel = newViewModel(queueApiClient(*episodes.toTypedArray()), player)
+
+        episodes.take(3).forEach { viewModel.playNow(it) }
+        assertTrue(player.seekCalls.isEmpty())
+
+        viewModel.playNow(episodes[3])
+        assertEquals(listOf(297.5), player.seekCalls)
+        viewModel.stopPlayback()
+    }
+
+    // 完聴後の自動前進の開始前の失敗（shared-session-01・02・03・12）
+
+    @Test
+    fun `android-test-06 shared-session-01 shared-session-02 shared-session-04 shared-session-12 android-contract-07 advance後のNETWORK取得失敗はIdOnlyのErroredで進まずretryが取得からやり直す`() = runTest {
+        val (pA, pB, pC, pD) = listOf("pA", "pB", "pC", "pD").map { podcast(id = it) }
+        val exception = ApiException.NetworkError(RuntimeException("offline"))
+        var bFails = true
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> if (id == "pB") (if (bFails) throw exception else pB) else if (id == "pC") pC else pA },
+            onUpdatePlaybackPosition = { _, _ -> pA },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+        viewModel.addToQueue(pB)
+        viewModel.addToQueue(pC)
+        val stopsBefore = player.stopCallCount
+
+        player.completePlayback()
+        runCurrent()
+
+        assertEquals(erroredIdOnly("pB", SessionErrorReason.FetchFailed), viewModel.session.value)
+        assertEquals(pB, viewModel.queue.value.current) // 自動で pC へ進まない
+        assertEquals(stopsBefore + 1, player.stopCallCount)
+        assertEquals(exception.message, viewModel.errorMessage.value)
+        assertEquals(listOf("pA"), apiClient.markCompletedCalls)
+        assertNull(viewModel.nowPlaying.value)
+        assertNull(viewModel.currentPodcast.value)
+        assertTrue(apiClient.fetchPodcastCalls.none { it == "pC" })
+        assertSharedInv01(viewModel)
+
+        val preparesAfterFailure = player.prepareCalls.size
+        viewModel.addToQueue(pD) // Errored の間は即再生しない
+        assertEquals(preparesAfterFailure, player.prepareCalls.size)
+        assertEquals(listOf(pA, pB, pC, pD), viewModel.queue.value.items)
+        assertSharedInv01(viewModel)
+
+        bFails = false
+        viewModel.retry()
+
+        assertEquals(listOf("pA", "pB", "pB"), apiClient.fetchPodcastCalls)
+        assertEquals(starting(pB), viewModel.session.value)
+        assertEquals(playable(pB).audioUrl, player.prepareCalls.last())
+        assertNull(viewModel.errorMessage.value)
+        assertSharedInv01(viewModel)
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-test-07 shared-session-03 shared-session-12 android-contract-08 advance後のオフライン未キャッシュはfetchせずSourceUnavailableのErrored`() = runTest {
+        val (pA, pB) = listOf("pA", "pB").map { podcast(id = it) }
+        val apiClient = queueApiClient(pA, pB)
+        val networkMonitor = StubNetworkMonitor(initialIsOnline = true)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, networkMonitor = networkMonitor)
+        viewModel.playNow(pA)
+        viewModel.addToQueue(pB)
+        networkMonitor.setOnline(false)
+
+        player.completePlayback()
+        runCurrent()
+
+        assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
+        assertEquals(erroredIdOnly("pB", SessionErrorReason.SourceUnavailable), viewModel.session.value)
+        assertEquals("オフラインのため再生できません", viewModel.errorMessage.value)
+        assertEquals(pB, viewModel.queue.value.current)
+        assertSharedInv01(viewModel)
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-test-06 shared-session-12 advance先の取り直し値がGeneratingならNotPlayableのErrored`() = runTest {
+        val pA = podcast(id = "pA")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> if (id == "pB") podcast(id = "pB", status = "processing") else pA },
+            onUpdatePlaybackPosition = { _, _ -> pA },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+        viewModel.addToQueue(podcast(id = "pB"))
+
+        player.completePlayback()
+        runCurrent()
+
+        assertEquals(erroredIdOnly("pB", SessionErrorReason.NotPlayable), viewModel.session.value)
+        assertEquals("生成中のため再生できません", viewModel.errorMessage.value)
+        assertSharedInv01(viewModel)
+    }
+
+    // 手動の開始が開始前に落ちるとき、キューも session も player も変えない（shared-session-13・shared-dec-16）
+
+    private suspend fun TestScope.assertManualStartRejectedKeepsState(
+        listedB: Episode,
+        expectedMessage: String?,
+        expectFetchOfB: Boolean,
+        online: Boolean = true,
+        fetchB: suspend () -> Episode = { listedB },
+        start: suspend (PodcastViewModel, Episode) -> Unit = { viewModel, episode -> viewModel.playNow(episode) },
+    ) {
+        val pA = podcast(id = "pA")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> if (id == "pB") fetchB() else pA },
+            onUpdatePlaybackPosition = { _, _ -> pA },
+        )
+        val networkMonitor = StubNetworkMonitor(initialIsOnline = true)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player, networkMonitor = networkMonitor)
+        viewModel.playNow(pA)
+        emitPlaying(player)
+        assertTrue(viewModel.session.value is Active)
+        networkMonitor.setOnline(online)
+        val queueBefore = viewModel.queue.value
+        val sessionBefore = viewModel.session.value
+        val playerBefore = listOf(player.prepareCalls.toList(), player.seekCalls.toList(), player.speedCalls.toList())
+        val countsBefore = listOf(player.playCallCount, player.stopCallCount)
+        val updatesBefore = apiClient.updatePlaybackPositionCalls.toList()
+        val fetchesBefore = apiClient.fetchPodcastCalls.toList()
+
+        start(viewModel, listedB)
+
+        assertEquals(queueBefore, viewModel.queue.value)
+        assertEquals(sessionBefore, viewModel.session.value)
+        assertEquals(playerBefore, listOf(player.prepareCalls, player.seekCalls, player.speedCalls))
+        assertEquals(countsBefore, listOf(player.playCallCount, player.stopCallCount))
+        assertEquals(updatesBefore, apiClient.updatePlaybackPositionCalls)
+        assertEquals(expectedMessage, viewModel.errorMessage.value)
+        if (!expectFetchOfB) assertEquals(fetchesBefore, apiClient.fetchPodcastCalls)
+        assertSharedInv01(viewModel)
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-test-08 shared-session-13 shared-dec-16 一覧の判定がGeneratingなら状態を変えず生成中を出す`() = runTest {
+        assertManualStartRejectedKeepsState(podcast(id = "pB", status = "processing"), "生成中のため再生できません", expectFetchOfB = false)
+    }
+
+    @Test
+    fun `android-test-08 shared-session-13 shared-dec-16 一覧の判定がFailedなら状態を変えずそのerrorMessageを出す`() = runTest {
+        assertManualStartRejectedKeepsState(podcast(id = "pB", status = "failed", errorMessage = "E"), "E", expectFetchOfB = false)
+    }
+
+    @Test
+    fun `android-test-08 shared-session-13 shared-dec-16 オフライン未キャッシュなら状態を変えずfetchもせずオフラインを出す`() = runTest {
+        assertManualStartRejectedKeepsState(podcast(id = "pB"), "オフラインのため再生できません", expectFetchOfB = false, online = false)
+    }
+
+    @Test
+    fun `android-test-08 shared-session-13 shared-dec-16 取得がApiExceptionなら状態を変えずe_messageを出す`() = runTest {
+        val exception = ApiException.NetworkError(RuntimeException("offline"))
+        assertManualStartRejectedKeepsState(podcast(id = "pB"), exception.message, expectFetchOfB = true, fetchB = { throw exception })
+    }
+
+    @Test
+    fun `android-test-08 shared-session-13 shared-dec-16 取り直した値がGeneratingなら状態を変えず生成中を出す`() = runTest {
+        assertManualStartRejectedKeepsState(
+            podcast(id = "pB"), "生成中のため再生できません", expectFetchOfB = true,
+            fetchB = { podcast(id = "pB", status = "processing") },
+        )
+    }
+
+    @Test
+    fun `android-test-08 shared-session-13 shared-dec-16 playでも取得失敗は状態を変えない`() = runTest {
+        val exception = ApiException.NetworkError(RuntimeException("offline"))
+        assertManualStartRejectedKeepsState(
+            podcast(id = "pB"), exception.message, expectFetchOfB = true,
+            fetchB = { throw exception }, start = { viewModel, episode -> viewModel.play(episode) },
+        )
+    }
+
+    @Test
+    fun `android-test-08 shared-session-13 shared-dec-16 NothingPlayingでaddToQueueした再生不可のepisodeはキューに残りsessionはNothingPlayingのまま`() = runTest {
+        val pB = podcast(id = "pB", status = "processing")
+        val player = FakePlayerController()
+        val viewModel = newViewModel(FakePodcastApiClient(), player)
+
+        viewModel.addToQueue(pB)
+
+        assertEquals(listOf(pB), viewModel.queue.value.items)
+        assertTrue(viewModel.session.value is NothingPlaying)
+        assertEquals("生成中のため再生できません", viewModel.errorMessage.value)
+        assertTrue(player.prepareCalls.isEmpty())
+    }
+
+    @Test
+    fun `android-test-08 android-dec-32 手動の開始が取得中に届いた完聴はmarkCompletedだけでplayerEndedもadvanceもしない`() = runTest {
+        val (pA, pB, pC) = listOf("pA", "pB", "pC").map { podcast(id = it) }
+        val fetchGate = CompletableDeferred<Unit>()
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id ->
+                when (id) {
+                    "pB" -> { fetchGate.await(); pB }
+                    "pC" -> pC
+                    else -> pA
+                }
+            },
+            onUpdatePlaybackPosition = { _, _ -> pA },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+        viewModel.addToQueue(pB)
+        viewModel.addToQueue(pC)
+
+        launch { viewModel.playNow(pB) }
+        runCurrent()
+        player.completePlayback()
+        runCurrent()
+
+        assertEquals(listOf("pA"), apiClient.markCompletedCalls)
+        assertEquals(starting(pA), viewModel.session.value) // playerEnded を呼んでいない
+        assertEquals(pA, viewModel.queue.value.current)
+        assertSharedInv01(viewModel)
+
+        fetchGate.complete(Unit)
+        runCurrent()
+
+        assertEquals(starting(pB), viewModel.session.value)
+        assertEquals(pB, viewModel.queue.value.current)
+        assertTrue(apiClient.fetchPodcastCalls.none { it == "pC" })
+        assertSharedInv01(viewModel)
+        viewModel.stopPlayback()
+    }
+
+    // player の失敗と CACHED 経路の invalidate（android-contract-11 の Coordinator 部分）
+
+    @Test
+    fun `android-test-11 android-contract-11 CACHED再生がFailedのSourceかDecodeならinvalidateしてErroredのLoadedになり次回はNETWORK`() = runTest {
+        for (reason in listOf(PlaybackFailureReason.Source, PlaybackFailureReason.Decode)) {
+            val pA = podcast(id = "pA")
+            val apiClient = FakePodcastApiClient(onFetchPodcast = { pA }, onUpdatePlaybackPosition = { _, _ -> pA })
+            val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+            cacheManager.cache("pA", byteArrayOf(1))
+            val player = FakePlayerController()
+            val viewModel = newViewModel(apiClient, player, cacheManager)
+            viewModel.playNow(pA)
+            assertEquals("file:///cache/audio/pA.mp3", player.prepareCalls.last())
+
+            emit(player, PlaybackState.Failed(reason))
+
+            assertFalse("$reason", cacheManager.isCached("pA"))
+            assertEquals(erroredLoaded(pA, reason), viewModel.session.value)
+            assertNull(viewModel.nowPlaying.value)
+            assertSharedInv01(viewModel)
+
+            viewModel.retry() // キャッシュを捨てたので取得からやり直す
+
+            assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
+            assertEquals(playable(pA).audioUrl, player.prepareCalls.last())
+            assertTrue(viewModel.session.value is Starting)
+            viewModel.stopPlayback()
+        }
+    }
+
+    @Test
+    fun `android-test-11 android-contract-11 CACHED再生でもFailedのNetworkとUnknownではinvalidateしない`() = runTest {
+        for (reason in listOf(PlaybackFailureReason.Network, PlaybackFailureReason.Unknown(code = 7))) {
+            val pA = podcast(id = "pA")
+            val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+            cacheManager.cache("pA", byteArrayOf(1))
+            val player = FakePlayerController()
+            val viewModel = newViewModel(queueApiClient(pA), player, cacheManager)
+            viewModel.playNow(pA)
+
+            emit(player, PlaybackState.Failed(reason))
+
+            assertTrue("$reason", cacheManager.isCached("pA"))
+            assertEquals(erroredLoaded(pA, reason), viewModel.session.value)
+            viewModel.stopPlayback()
+        }
+    }
+
+    @Test
+    fun `android-test-11 android-contract-11 NETWORK再生のFailedのSourceではキャッシュがあってもinvalidateしない`() = runTest {
+        val pA = podcast(id = "pA")
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val player = FakePlayerController()
+        val viewModel = newViewModel(queueApiClient(pA), player, cacheManager)
+        viewModel.playNow(pA)
+        cacheManager.cache("pA", byteArrayOf(1)) // NETWORK で始めた後にキャッシュが現れた状況
+
+        emit(player, PlaybackState.Failed(PlaybackFailureReason.Source))
+
+        assertTrue(cacheManager.isCached("pA"))
+        assertEquals(erroredLoaded(pA, PlaybackFailureReason.Source), viewModel.session.value)
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-test-11 android-contract-11 invalidateがAudioCacheExceptionを投げてもErroredのPlayerへ進みその後のplayer事象も受け取る`() = runTest {
+        val badId = podcast(id = "a.b") // "." を含む id は invalidate が InvalidId を投げる。isCached は検証しないので CACHED で始まる
+        val fileSystem = FakeFileSystem()
+        fileSystem.write("/cache/audio/a.b.mp3", byteArrayOf(1))
+        val player = FakePlayerController()
+        val viewModel = newViewModel(queueApiClient(badId), player, AudioCacheManager(fileSystem, baseDir = "/cache"))
+        viewModel.playNow(badId)
+
+        emit(player, PlaybackState.Failed(PlaybackFailureReason.Source))
+        assertEquals(erroredLoaded(badId, PlaybackFailureReason.Source), viewModel.session.value)
+
+        viewModel.retry() // 購読が生きていれば、この後の事象が session に届く
+        emitPlaying(player)
+        assertEquals(Active(playable(badId), 1.0), viewModel.session.value)
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-test-11 android-contract-11 currentSubjectは開始の要求1回につき1回だけ呼ばれplayer事象では呼ばれない`() = runTest {
+        val (pA, pB) = listOf("pA", "pB").map { podcast(id = it) }
+        var subjectCalls = 0
+        val player = FakePlayerController()
+        val viewModel = newViewModel(queueApiClient(pA, pB), player, currentSubject = { subjectCalls++; "user-1" })
+
+        viewModel.playNow(pA)
+        emit(player, PlaybackState.Failed(PlaybackFailureReason.Network))
+        assertEquals(1, subjectCalls)
+
+        viewModel.retry()
+        assertEquals(2, subjectCalls)
+
+        viewModel.playNow(pB)
+        viewModel.stopPlayback()
+        assertEquals(3, subjectCalls)
+    }
+
+    // player の事象の受け方（android-deriv-15 の本 PR の範囲）
+
+    @Test
+    fun `android-test-01 android-deriv-15 表に無い事象は無視されsessionは変わらず例外も出ない`() = runTest {
+        val pA = podcast(id = "pA")
+        val apiClient = queueApiClient(pA)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+
+        emit(player, PlaybackState.Loading)
+        emit(player, PlaybackState.Ended(duration = 300.0))
+        assertEquals(starting(pA), viewModel.session.value)
+
+        emit(player, PlaybackState.Paused(position = 0.0, duration = 300.0)) // Starting の列の Paused は playerStarted（位置は送らない）
+        assertEquals(Active(playable(pA), 1.0), viewModel.session.value)
+        assertTrue(apiClient.updatePlaybackPositionCalls.isEmpty())
+        emitPlaying(player) // Active の列の Playing・Paused は本 PR では何もしない
+        emit(player, PlaybackState.Paused(position = 3.0, duration = 300.0))
+        assertEquals(Active(playable(pA), 1.0), viewModel.session.value)
+
+        viewModel.stopPlayback()
+        emit(player, PlaybackState.Failed(PlaybackFailureReason.Network)) // NothingPlaying への Failed
+        assertTrue(viewModel.session.value is NothingPlaying)
+    }
+
+    // stopPlayback（shared-session-11・android-dec-04）
+
+    @Test
+    fun `android-test-26 shared-session-11 Activeからstopしたらplayerを止め最終同期しNothingPlayingになりキューは保持する`() = runTest {
+        val (pA, pB) = listOf("pA", "pB").map { podcast(id = it) }
+        val apiClient = queueApiClient(pA, pB)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+        viewModel.addToQueue(pB)
+        emitPlaying(player)
+        player.setPosition(42.0)
+
+        viewModel.stopPlayback()
+        viewModel.stopPlayback() // 2 回目は何も起きない
+
+        assertTrue(viewModel.session.value is NothingPlaying)
+        assertEquals(1, player.stopCallCount)
+        assertEquals(listOf("pA" to 42.0), apiClient.updatePlaybackPositionCalls)
+        assertEquals(listOf(pA, pB), viewModel.queue.value.items)
+        assertEquals(pA, viewModel.queue.value.current)
+        assertNull(viewModel.currentPodcast.value)
+        assertNull(viewModel.nowPlaying.value)
+        assertSharedInv01(viewModel)
+        advanceTimeBy(30_000)
+        runCurrent()
+        assertEquals(listOf("pA" to 42.0), apiClient.updatePlaybackPositionCalls)
+    }
+
+    @Test
+    fun `android-test-26 shared-session-11 NothingPlayingからstopしてもAPIもplayerも呼ばれない`() = runTest {
+        val apiClient = FakePodcastApiClient()
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+
+        viewModel.stopPlayback()
+
+        assertTrue(viewModel.session.value is NothingPlaying)
+        assertEquals(0, player.stopCallCount)
+        assertTrue(apiClient.updatePlaybackPositionCalls.isEmpty())
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertTrue(apiClient.markCompletedCalls.isEmpty())
+        assertTrue(player.prepareCalls.isEmpty())
+    }
+
+    @Test
+    fun `android-test-26 shared-session-11 ErroredのIdOnlyからstopしたら位置は送らずplayerを止めてNothingPlayingになる`() = runTest {
+        // 自動前進の開始前の失敗の後。現行は currentPodcast が null なので位置を送らない。
+        val (pA, pB) = listOf("pA", "pB").map { podcast(id = it) }
+        val exception = ApiException.NetworkError(RuntimeException("offline"))
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> if (id == "pB") throw exception else pA },
+            onUpdatePlaybackPosition = { _, _ -> pA },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+        viewModel.addToQueue(pB)
+        player.completePlayback()
+        runCurrent()
+        assertEquals(erroredIdOnly("pB", SessionErrorReason.FetchFailed), viewModel.session.value)
+        val updatesBefore = apiClient.updatePlaybackPositionCalls.toList()
+        val stopsBefore = player.stopCallCount
+
+        viewModel.stopPlayback()
+        advanceTimeBy(30_000)
+        runCurrent()
+
+        assertTrue(viewModel.session.value is NothingPlaying)
+        assertEquals(updatesBefore, apiClient.updatePlaybackPositionCalls)
+        assertEquals(stopsBefore + 1, player.stopCallCount)
+        assertEquals(pB, viewModel.queue.value.current)
+        assertSharedInv01(viewModel)
+    }
+
+    @Test
+    fun `android-test-26 shared-session-11 ErroredのLoadedからstopしたら現行どおり最終同期を1回送りタイマーも止まる`() = runTest {
+        // player の失敗の後（Errored の Loaded）。currentPodcast は null だが、停止直前処理が session で判定して 1 回送る。
+        val pA = podcast(id = "pA")
+        val apiClient = queueApiClient(pA)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+        emit(player, PlaybackState.Failed(PlaybackFailureReason.Network))
+        assertEquals(erroredLoaded(pA, PlaybackFailureReason.Network), viewModel.session.value)
+        player.setPosition(33.0)
+        val stopsBefore = player.stopCallCount
+
+        viewModel.stopPlayback()
+        advanceTimeBy(30_000) // session で判定しないと timer が孤児になる
+        runCurrent()
+
+        assertTrue(viewModel.session.value is NothingPlaying)
+        assertEquals(listOf("pA" to 33.0), apiClient.updatePlaybackPositionCalls)
+        assertEquals(stopsBefore + 1, player.stopCallCount)
+        assertSharedInv01(viewModel)
+    }
+
+    // 11 辺を Coordinator 経由で起こす（android-contract-01・shared-session-04）
+
+    @Test
+    fun `android-test-01 shared-session-04 開始から完聴を経て自動前進と末尾の停止までの辺がsessionに現れる`() = runTest {
+        val (pA, pB) = listOf("pA", "pB").map { podcast(id = it) }
+        val markGate = CompletableDeferred<Unit>()
+        val byId = listOf(pA, pB).associateBy { it.id }
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { id -> byId.getValue(id) },
+            onUpdatePlaybackPosition = { id, _ -> byId.getValue(id) },
+            onMarkCompleted = { markGate.await() },
+        )
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        assertTrue(viewModel.session.value is NothingPlaying)
+
+        viewModel.playNow(pA) // NothingPlaying から Starting
+        viewModel.addToQueue(pB)
+        assertEquals(starting(pA), viewModel.session.value)
+        assertSharedInv01(viewModel)
+
+        emitPlaying(player) // Starting から Active
+        assertEquals(Active(playable(pA), 1.0), viewModel.session.value)
+        assertSharedInv01(viewModel)
+
+        player.completePlayback() // Active から Completed（完聴の記録を保留している間に観測する）
+        runCurrent()
+        assertEquals(Completed(playable(pA)), viewModel.session.value)
+        assertSharedInv01(viewModel)
+
+        markGate.complete(Unit) // Completed から次の Starting（advance）
+        runCurrent()
+        assertEquals(starting(pB), viewModel.session.value)
+        assertEquals(pB, viewModel.queue.value.current)
+        assertSharedInv01(viewModel)
+
+        emit(player, PlaybackState.Loading)
+        emitPlaying(player)
+        player.completePlayback() // 末尾: Active から Completed を経て Stopped
+        runCurrent()
+        assertEquals(Stopped(playable(pB)), viewModel.session.value)
+        assertEquals(playable(pB), viewModel.currentPodcast.value)
+        assertSharedInv01(viewModel)
+
+        viewModel.playNow(pA) // Stopped から Starting
+        assertEquals(starting(pA), viewModel.session.value)
+        assertSharedInv01(viewModel)
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-test-01 shared-session-04 Activeからの手動の開始とStartingからの手動の開始がStartingになる`() = runTest {
+        val (pA, pB, pC) = listOf("pA", "pB", "pC").map { podcast(id = it) }
+        val player = FakePlayerController()
+        val viewModel = newViewModel(queueApiClient(pA, pB, pC), player)
+        viewModel.playNow(pA)
+        emitPlaying(player)
+        assertTrue(viewModel.session.value is Active)
+
+        viewModel.playNow(pB) // Active から playNow の辺
+        assertEquals(starting(pB), viewModel.session.value)
+        assertSharedInv01(viewModel)
+
+        viewModel.playNow(pC) // Starting の割り込みは stop の辺を経て start
+        assertEquals(starting(pC), viewModel.session.value)
+        assertEquals(pC, viewModel.queue.value.current)
+        assertSharedInv01(viewModel)
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-test-01 shared-session-04 失敗の辺とretryとErroredからの手動の開始がsessionに現れる`() = runTest {
+        val (pA, pB) = listOf("pA", "pB").map { podcast(id = it) }
+        val player = FakePlayerController()
+        val viewModel = newViewModel(queueApiClient(pA, pB), player)
+        viewModel.playNow(pA)
+
+        emit(player, PlaybackState.Failed(PlaybackFailureReason.Network)) // Starting から Errored
+        assertEquals(erroredLoaded(pA, PlaybackFailureReason.Network), viewModel.session.value)
+        assertSharedInv01(viewModel)
+
+        viewModel.retry() // Errored から Starting（retry）
+        assertEquals(starting(pA), viewModel.session.value)
+
+        emitPlaying(player)
+        emit(player, PlaybackState.Failed(PlaybackFailureReason.Decode)) // Active から Errored
+        assertEquals(erroredLoaded(pA, PlaybackFailureReason.Decode), viewModel.session.value)
+        assertSharedInv01(viewModel)
+
+        viewModel.playNow(pB) // Errored から Starting（start）
+        assertEquals(starting(pB), viewModel.session.value)
+        assertEquals(pB, viewModel.queue.value.current)
+        assertSharedInv01(viewModel)
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-test-01 shared-session-04 retryはErrored以外では何もしない`() = runTest {
+        val pA = podcast(id = "pA")
+        val apiClient = queueApiClient(pA)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+
+        viewModel.retry() // NothingPlaying
+        assertTrue(viewModel.session.value is NothingPlaying)
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertTrue(player.prepareCalls.isEmpty())
+
+        viewModel.playNow(pA)
+        emitPlaying(player)
+        val activeBefore = viewModel.session.value
+        viewModel.retry() // Active
+        assertEquals(activeBefore, viewModel.session.value)
+        assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
+        assertEquals(1, player.prepareCalls.size)
+        assertEquals(0, player.stopCallCount)
+        viewModel.stopPlayback()
+    }
+
+    // 旧経路の完聴は player の事象を注入しなくても進む（android-dec-31）
+
+    @Test
+    fun `android-test-01 android-dec-31 Startingのまま完聴しても例外なく次のepisodeのStartingへ進む`() = runTest {
+        val (pA, pB) = listOf("pA", "pB").map { podcast(id = it) }
+        val apiClient = queueApiClient(pA, pB)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+        viewModel.addToQueue(pB)
+
+        player.completePlayback()
+        runCurrent()
+
+        assertEquals(listOf("pA"), apiClient.markCompletedCalls)
+        assertEquals(starting(pB), viewModel.session.value)
+        assertEquals(pB, viewModel.queue.value.current)
+        assertSharedInv01(viewModel)
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-test-01 android-dec-31 Startingのまま末尾で完聴しても例外なくStoppedになりepisodeを保持する`() = runTest {
+        val pA = podcast(id = "pA")
+        val apiClient = queueApiClient(pA)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+
+        player.completePlayback()
+        runCurrent()
+
+        assertEquals(Stopped(playable(pA)), viewModel.session.value)
+        assertEquals(pA, viewModel.currentPodcast.value)
+        assertEquals(listOf("pA"), apiClient.markCompletedCalls)
+        assertSharedInv01(viewModel)
+    }
+
+    @Test
+    fun `android-test-01 android-dec-31 再生していない状態の完聴の通知は何もしない`() = runTest {
+        val pA = podcast(id = "pA")
+        val apiClient = queueApiClient(pA)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+        viewModel.stopPlayback()
+        val callsBefore = listOf(apiClient.markCompletedCalls.toList(), apiClient.fetchPodcastCalls.toList())
+
+        player.completePlayback()
+        runCurrent()
+
+        assertTrue(viewModel.session.value is NothingPlaying)
+        assertEquals(callsBefore, listOf(apiClient.markCompletedCalls, apiClient.fetchPodcastCalls))
+    }
+
+    // 何も再生していないときだけ即再生する（android-deriv-02）と、キュー操作の後の shared-inv-01
+
+    @Test
+    fun `android-deriv-02 Stoppedの間のaddToQueueは即再生しない`() = runTest {
+        val (pA, pC) = listOf("pA", "pC").map { podcast(id = it) }
+        val player = FakePlayerController()
+        val viewModel = newViewModel(queueApiClient(pA, pC), player)
+        viewModel.playNow(pA)
+        player.completePlayback()
+        runCurrent()
+        val preparesBefore = player.prepareCalls.size
+
+        viewModel.addToQueue(pC)
+
+        assertEquals(preparesBefore, player.prepareCalls.size)
+        assertEquals(listOf(pA, pC), viewModel.queue.value.items)
+        assertEquals(Stopped(playable(pA)), viewModel.session.value)
+        assertSharedInv01(viewModel)
+    }
+
+    @Test
+    fun `shared-session-04 moveUpNextと待機列のremoveFromQueueの後もsessionとキューの現在位置が一致する`() = runTest {
+        // removeFromQueue で現在の id を渡す経路は、既存の挙動（キューだけ更新）を保つため対象外。
+        val (pA, pB, pC) = listOf("pA", "pB", "pC").map { podcast(id = it) }
+        val viewModel = newViewModel(queueApiClient(pA, pB, pC), FakePlayerController())
+        viewModel.playNow(pA)
+        viewModel.playNext(pB)
+        viewModel.playNext(pC)
+
+        viewModel.moveUpNext(from = 1, toOffset = 0)
+        assertSharedInv01(viewModel)
+        viewModel.removeFromQueue(pC.id)
+
+        assertSharedInv01(viewModel)
+        assertEquals(pA, viewModel.queue.value.current)
+        viewModel.stopPlayback()
+    }
+
+    // nowPlaying・currentPodcast は session の派生（android-temp-05）
+
+    @Test
+    fun `android-temp-05 nowPlayingはEpisodePlayableの7fieldをそのまま同じ参照で持つ`() = runTest {
+        val pA = playableWithContent("pA")
+        val viewModel = newViewModel(queueApiClient(pA), FakePlayerController())
+
+        viewModel.playNow(pA)
+
+        val nowPlaying = viewModel.nowPlaying.value
+        assertNotNull(nowPlaying)
+        assertEquals(pA.id, nowPlaying!!.episodeId)
+        assertEquals(pA.displayTitle, nowPlaying.displayTitle)
+        assertEquals(pA.japaneseIntroText, nowPlaying.japaneseIntroText)
+        assertSame(pA.transcript, nowPlaying.segments)
+        assertSame(pA.glossary, nowPlaying.vocabulary)
+        assertSame(pA.quiz, nowPlaying.quiz)
+        assertEquals(pA.difficultyCode, nowPlaying.difficulty)
+        assertEquals(pA, viewModel.currentPodcast.value)
+        viewModel.stopPlayback()
+    }
+
+    @Test
+    fun `android-temp-05 nowPlayingとcurrentPodcastは状態ごとに同じ非null条件で同期して書き換わる`() = runTest {
+        val pA = playableWithContent("pA")
+        val player = FakePlayerController()
+        val viewModel = newViewModel(queueApiClient(pA), player)
+        fun assertDerived(expected: Episode.Playable?) {
+            assertEquals(expected, viewModel.currentPodcast.value)
+            assertEquals(expected?.id, viewModel.nowPlaying.value?.episodeId)
+        }
+        assertDerived(null)
+
+        viewModel.playNow(pA)
+        assertDerived(pA) // Starting
+        emitPlaying(player)
+        assertDerived(pA) // Active
+        emit(player, PlaybackState.Failed(PlaybackFailureReason.Network))
+        assertTrue(viewModel.session.value is Errored)
+        assertDerived(null)
+
+        viewModel.retry()
+        emitPlaying(player)
+        player.completePlayback()
+        runCurrent()
+        assertTrue(viewModel.session.value is Stopped)
+        assertDerived(pA)
+
+        viewModel.stopPlayback()
+        assertDerived(null)
+    }
+
+    // --- 連続した開始の切り替え（android-contract-22。baseline: 実装前の現行挙動で green） ---
+
+    @Test
+    fun `android-test-24 連続playNowの切り替えで前のidの最終同期は1回出てその後の周期送信は最後のepisodeだけ`() = runTest {
+        // verifies: android-contract-22 / android-test-24
+        val pA = podcast(id = "pA")
+        val pB = podcast(id = "pB")
+        val apiClient = queueApiClient(pA, pB)
+        val player = FakePlayerController()
+        val viewModel = newViewModel(apiClient, player)
+        viewModel.playNow(pA)
+        player.setPosition(20.0)
+
+        viewModel.playNow(pB)
+
+        assertEquals(listOf("pA" to 20.0), apiClient.updatePlaybackPositionCalls)
+
+        apiClient.updatePlaybackPositionCalls.clear()
+        player.setPosition(5.0)
+        advanceTimeBy(15_000)
+        runCurrent()
+
+        assertEquals(listOf("pB" to 5.0), apiClient.updatePlaybackPositionCalls)
 
         viewModel.stopPlayback()
     }

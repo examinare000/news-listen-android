@@ -21,7 +21,8 @@ import org.junit.Test
  *
  * verifies: android-contract-01
  * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §3.1・§4 android-contract-01。
- * 状態型は PlaybackSession の入れ子（PlaybackState と同じ形）。11 遷移だけが起き、表外は IllegalStateException。停止操作は持たない（停止は呼び出し側が NothingPlaying を代入する）。
+ * 状態型は PlaybackSession の入れ子（PlaybackState と同じ形）。11 遷移だけが起き、表外は IllegalStateException。
+ * 停止（stop）と開始前の失敗（failBeforeStart）は遷移表の外の辺で、分母 11 に数えない（android-rule-playback-02）。
  */
 class PlaybackSessionTest {
 
@@ -138,6 +139,68 @@ class PlaybackSessionTest {
         starting.playerStarted()
 
         assertEquals(Starting(a, 10.0, 1.0), starting)
+    }
+
+    // ---- 遷移表の外の辺（shared-dec-10・shared-dec-11・shared-dec-13。分母 11 に数えない） ----
+
+    @Test
+    fun `android-rule-playback-02 stop は6状態すべてから NothingPlaying`() {
+        val sessions: List<PlaybackSession> = listOf(
+            NothingPlaying,
+            Starting(a, 0.0, 1.0),
+            Active(a, 1.0),
+            Completed(a),
+            Stopped(a),
+            Errored(SessionEpisodeRef.Loaded(a), SessionErrorReason.NotPlayable),
+        )
+
+        sessions.forEach { session ->
+            assertEquals("$session", NothingPlaying, session.stop())
+        }
+    }
+
+    @Test
+    fun `android-rule-playback-02 stop は受信側インスタンスを変えない`() {
+        val active = Active(a, 1.5)
+
+        active.stop()
+
+        assertEquals(Active(a, 1.5), active)
+    }
+
+    @Test
+    fun `android-rule-playback-02 failBeforeStart は NothingPlaying Stopped Completed Errored から Errored`() {
+        val expected = Errored(SessionEpisodeRef.IdOnly("x"), SessionErrorReason.FetchFailed)
+        val sessions: List<PlaybackSession> = listOf(
+            NothingPlaying,
+            Stopped(a),
+            Completed(a),
+            Errored(SessionEpisodeRef.Loaded(a), SessionErrorReason.Player(PlaybackFailureReason.Network)),
+        )
+
+        sessions.forEach { session ->
+            assertEquals("$session", expected, session.failBeforeStart(SessionEpisodeRef.IdOnly("x"), SessionErrorReason.FetchFailed))
+        }
+    }
+
+    @Test
+    fun `android-rule-playback-02 failBeforeStart は reason と ref をそのまま Errored に持つ`() {
+        val ref = SessionEpisodeRef.IdOnly("b")
+
+        assertEquals(Errored(ref, SessionErrorReason.SourceUnavailable), Completed(a).failBeforeStart(ref, SessionErrorReason.SourceUnavailable))
+        assertEquals(Errored(ref, SessionErrorReason.NotPlayable), NothingPlaying.failBeforeStart(ref, SessionErrorReason.NotPlayable))
+    }
+
+    @Test
+    fun `android-rule-playback-02 failBeforeStart は Starting と Active からは IllegalStateException`() {
+        val ref = SessionEpisodeRef.IdOnly("x")
+
+        assertThrows(IllegalStateException::class.java) {
+            Starting(a, 0.0, 1.0).failBeforeStart(ref, SessionErrorReason.FetchFailed)
+        }
+        assertThrows(IllegalStateException::class.java) {
+            Active(a, 1.0).failBeforeStart(ref, SessionErrorReason.FetchFailed)
+        }
     }
 
     // ---- shared-inv-01 述語（shared-session-04 の session 側。共有仕様 shared-session-04 の保留解除は android-slice-playback-03・android-slice-playback-04） ----
