@@ -59,15 +59,26 @@ class PodcastViewModel(
 
     private var syncJob: Job? = null
 
+    // 直前に購読が受けた player の事象。Active の Paused で位置を送るかどうかの判定だけに使う。
+    private var lastPlayerState: PlaybackState? = null
+
+    // 主体の離脱の世代。離脱より前に要求された開始が、離脱の後に player や session を書かないための印（android-dec-42）。
+    private var leaveGeneration: Long = 0
+
+    // 完聴の記録を開始 1 回につき 1 回にするための番号。startSerial は session に Starting を置くたびに進み、
+    // playerStarted（Starting → Active）では進めない（同じ開始に属する）。
+    private var startSerial: Long = 0
+    private var completionRecordedSerial: Long? = null
+
     // 開始を確定した時点の再生元と主体。NothingPlaying へ戻るときに null にする。
     // sessionSubject は保持だけで、invalidate には渡さない（invalidate は id 1 引数のまま。主体別の扱いは android-slice-playback-04 以降）。
     private var sessionSource: PlaybackSource? = null
     private var sessionSubject: String? = null
 
-    // 開始（startEpisode）全体を直列化する Mutex。WHY: 開始は fetchPodcast という suspend 境界を挟むため、
-    // Mutex なしで2回連続呼び出すと両方が settlePlayback() の「前の再生なし」判定をすり抜けて
-    // 並行に進行し、startPositionSync() が同期タイマーの参照を奪い合って片方が孤児化する
-    // （キャンセルされずに動き続け、切り替え後も古い Podcast への PATCH を送り続ける）。
+    // 開始（startEpisode）全体を直列化する Mutex。WHY: 開始は fetchPodcast・settlePlayback の最終同期という
+    // suspend 境界を挟むため、Mutex なしで2回連続呼び出すと、両方が前の再生の後始末と session・キュー・player の
+    // 書込を交互に行い、session とキューの現在位置が食い違う。保持中に届いた完聴の扱い（android-dec-38）も
+    // isLocked で判定する。
     private val playMutex = Mutex()
 
     /** [PlayerController.isPlaying] の単純委譲公開。Compose 側が [playerController] へ直接触れずに済むように。 */
@@ -292,23 +303,28 @@ class PodcastViewModel(
      * @param podcast 再生対象（一覧の要素）。
      */
     suspend fun play(podcast: Episode): Unit = withContext(dispatcher) {
-        startEpisode(podcast, StartTrigger.MANUAL)
+        startEpisode(podcast, StartTrigger.MANUAL, leaveGeneration)
     }
 
     /** 開始の要求の出どころ。出どころで、開始前の失敗の扱いと確定時に使う辺が変わる。 */
     private enum class StartTrigger { MANUAL, ADVANCE, RETRY }
 
     /**
-     * 開始の本体。[playMutex] で全体を直列化する（fetchPodcast の suspend 境界を挟んで 2 つが並行に進むと、
-     * 同期タイマーが孤児になる）。主体は要求の冒頭で 1 回だけ捕捉する。
+     * 開始の本体。[playMutex] で全体を直列化する（suspend 境界を挟んで 2 つが並行に進むと、session・キュー・
+     * player の書込が交互になる）。主体は要求の冒頭で 1 回だけ捕捉する。
+     *
+     * [generation] は呼出側が要求の冒頭（[playMutex] を待つ前）で読んだ [leaveGeneration]。中断点のうち、
+     * [playMutex] を取った直後・取得の後・[settlePlayback] の後の 3 箇所で比べ、離脱を挟んでいたら何も書かずに捨てる。
+     * 再開位置の読みと player の開始は中断点ではないので、比較点にしない。
      */
-    private suspend fun startEpisode(episode: Episode, trigger: StartTrigger) {
+    private suspend fun startEpisode(episode: Episode, trigger: StartTrigger, generation: Long) {
         val subject = currentSubject()
         playMutex.withLock {
+            if (generation != leaveGeneration) return@withLock
             // 並んで待っていた 2 回目の retry は、1 回目の確定後の session では対象外。
             if (trigger == StartTrigger.RETRY && _session.value !is PlaybackSession.Errored) return@withLock
             if (episode !is Episode.Playable) {
-                rejectStart(episode.id, trigger, SessionErrorReason.NotPlayable, playabilityError(episode))
+                rejectStart(episode, trigger, SessionErrorReason.NotPlayable, playabilityError(episode))
                 return@withLock
             }
             val source = resolvePlaybackSource(hasCached = cacheManager.isCached(episode.id), isOnline = networkMonitor.isOnline.value)
@@ -327,55 +343,64 @@ class PodcastViewModel(
                     val fresh = try {
                         podcastApi.fetchPodcast(episode.id)
                     } catch (e: ApiException) {
-                        rejectStart(episode.id, trigger, SessionErrorReason.FetchFailed, e.message)
+                        if (generation != leaveGeneration) return@withLock
+                        rejectStart(episode, trigger, SessionErrorReason.FetchFailed, e.message)
                         return@withLock
                     }
+                    if (generation != leaveGeneration) return@withLock
                     if (fresh !is Episode.Playable) {
-                        rejectStart(episode.id, trigger, SessionErrorReason.NotPlayable, playabilityError(fresh))
+                        rejectStart(episode, trigger, SessionErrorReason.NotPlayable, playabilityError(fresh))
                         return@withLock
                     }
                     playable = fresh
                     url = fresh.audioUrl
                 }
                 PlaybackSource.UNAVAILABLE -> {
-                    rejectStart(episode.id, trigger, SessionErrorReason.SourceUnavailable, "オフラインのため再生できません")
+                    rejectStart(episode, trigger, SessionErrorReason.SourceUnavailable, "オフラインのため再生できません")
                     return@withLock
                 }
             }
 
-            if (trigger == StartTrigger.MANUAL) {
-                val (jumped, found) = _queue.value.jump(episode.id)
-                _queue.value = if (found) jumped else _queue.value.playNext(episode).jump(episode.id).first
+            // キューの書込は取得の後・settlePlayback の前（手動も前進も同じ位置）。前進は取得を待つ間、完聴した episode を現在に保つ。
+            when (trigger) {
+                StartTrigger.MANUAL -> {
+                    val (jumped, found) = _queue.value.jump(episode.id)
+                    _queue.value = if (found) jumped else _queue.value.playNext(episode).jump(episode.id).first
+                }
+                StartTrigger.ADVANCE -> _queue.value = _queue.value.playNext(episode).jump(episode.id).first
+                StartTrigger.RETRY -> Unit // キューが既にその episode を現在にしている
             }
             // 前の再生の最終同期・タイマー停止・stop は、切り替えが確定した後で行う（NETWORK は取得の間、前の音声を鳴らし続ける）。
             settlePlayback()
+            if (generation != leaveGeneration) return@withLock
             val resume = resolveResumePosition(playable.resumeHintSeconds, playable.durationSeconds)
             val speed = preferencesStore.defaultPlaybackSpeed.value
             applySession(beginSession(playable, resume, speed, trigger))
+            startSerial++
             sessionSource = source
             sessionSubject = subject
             _errorMessage.value = null
-            playerController.onPlaybackCompleted = { scope.launch { handlePlaybackEnded() } }
             playerController.prepare(url, playable.toPlaybackMetadata())
             playerController.setSpeed(speed.toFloat())
             if (resume > 0) playerController.seekTo(resume)
             playerController.play()
-            startPositionSync(playable.id)
         }
     }
 
     /**
      * 開始前の失敗。手動の開始は何も変えず [errorMessage] だけを出す（前の再生は続く）。
-     * キューが既にそのエピソードを現在にしている経路（自動前進・retry）は、domain の辺 failBeforeStart の戻り値を置く。
+     * 自動前進・retry は、domain の辺 failBeforeStart の戻り値を置く。前進はキューを書く前に失敗するので、ここで
+     * Errored(IdOnly) と食い違わないよう現在を合わせる（retry は既に合っている）。
      */
-    private suspend fun rejectStart(id: String, trigger: StartTrigger, reason: SessionErrorReason, message: String?) {
+    private suspend fun rejectStart(episode: Episode, trigger: StartTrigger, reason: SessionErrorReason, message: String?) {
         if (trigger != StartTrigger.MANUAL) {
             settlePlayback()
             // 手動の開始が先に確定していた競合では、失敗の辺は再生の開始後から呼べないので先に停止する。
             if (_session.value is PlaybackSession.Starting || _session.value is PlaybackSession.Active) {
                 applySession(_session.value.stop())
             }
-            applySession(_session.value.failBeforeStart(SessionEpisodeRef.IdOnly(id), reason))
+            if (trigger == StartTrigger.ADVANCE) _queue.value = _queue.value.playNext(episode).jump(episode.id).first
+            applySession(_session.value.failBeforeStart(SessionEpisodeRef.IdOnly(episode.id), reason))
         }
         _errorMessage.value = message
     }
@@ -421,15 +446,32 @@ class PodcastViewModel(
         difficulty = difficultyCode,
     )
 
-    /** player の状態を [session] へ写す（android-deriv-15 のうち Starting の Playing/Paused と Failed）。表に無い組合せは無視する。 */
+    /** player の事象を [session]・位置同期・完聴の処理へ写す（android-deriv-15）。表に無い組合せは無視する。 */
     private fun handlePlayerState(state: PlaybackState) {
         when (state) {
-            is PlaybackState.Playing, is PlaybackState.Paused -> {
-                if (_session.value is PlaybackSession.Starting) applySession(_session.value.playerStarted())
+            is PlaybackState.Playing -> when (val current = _session.value) {
+                is PlaybackSession.Starting -> {
+                    applySession(current.playerStarted())
+                    startPositionSync(current.episode.id)
+                }
+                is PlaybackSession.Active -> startPositionSync(current.episode.id)
+                else -> Unit
             }
+            is PlaybackState.Paused -> when (val current = _session.value) {
+                is PlaybackSession.Starting -> applySession(current.playerStarted())
+                is PlaybackSession.Active -> {
+                    stopPositionSync()
+                    if (lastPlayerState is PlaybackState.Playing) {
+                        scope.launch { syncPosition(current.episode.id, state.position) }
+                    }
+                }
+                else -> Unit
+            }
+            is PlaybackState.Ended -> handlePlayerEnded(state.duration)
             is PlaybackState.Failed -> handlePlayerFailure(state.reason)
             else -> Unit
         }
+        lastPlayerState = state
     }
 
     private fun handlePlayerFailure(reason: PlaybackFailureReason) {
@@ -438,6 +480,7 @@ class PodcastViewModel(
             is PlaybackSession.Active -> current.episode
             else -> return
         }
+        stopPositionSync()
         val unplayableCache = reason is PlaybackFailureReason.Source || reason is PlaybackFailureReason.Decode
         if (sessionSource == PlaybackSource.CACHED && unplayableCache) {
             try {
@@ -456,50 +499,64 @@ class PodcastViewModel(
     suspend fun retry(): Unit = withContext(dispatcher) {
         if (_session.value !is PlaybackSession.Errored) return@withContext
         val current = _queue.value.current ?: return@withContext
-        startEpisode(current, StartTrigger.RETRY)
+        startEpisode(current, StartTrigger.RETRY, leaveGeneration)
     }
 
     // --- 再生キュー（issue #81 相当。フェーズ6 T1） ---
 
     /**
-     * 再生終了時の自動次再生（完聴コールバックの旧経路。android-temp-02）。
-     * キューに次があれば再生し、無ければ Stopped にする。正本: PodcastViewModel.swift:272-281（handlePlaybackEnded）。
-     * 開始は [startEpisode] の判定・取得・Mutex・同期タイマーの規律をすべて経由する。
+     * 完聴（`Ended`）の処理。購読の中は非 suspend なので、launch の後では読めない値（`stop()` が位置と総時間を戻す）と
+     * 世代を、ここで同期的に先に読む。
      *
-     * Starting のまま届いても（Fake は state を動かさない）playerStarted を経由して完聴にする。
-     * 再生中でなければ何もしない。
+     * [playMutex] を保持している間に届いた完聴は、別の episode の開始が決める session を壊さないよう、
+     * 記録（`markCompleted`・streak）だけ行う（android-dec-38）。timer はどちらでも止める。
      */
-    private suspend fun handlePlaybackEnded() {
-        // WHY 冒頭で値に取る: 記録の通信を待つ間にロックが外れることがあり、待ちの後で読むと
-        // 別の episode の取得〜開始の途中に届いた通知を見分けられない。
-        val playInProgress = playMutex.isLocked
-
-        // キューを書き換える前に完聴対象を確定する。advance 後の session は次のエピソードを指す。
-        val completedPodcastId = when (val current = _session.value) {
-            is PlaybackSession.Starting -> current.episode.id
-            is PlaybackSession.Active -> current.episode.id
+    private fun handlePlayerEnded(endedDuration: Double?) {
+        val episode = when (val current = _session.value) {
+            is PlaybackSession.Starting -> current.episode
+            is PlaybackSession.Active -> current.episode
             else -> return
         }
-        // 別の episode の開始の途中で届いた通知では、その開始が決める session を壊さない（完聴の記録だけ行う）。
-        if (!playInProgress) {
-            if (_session.value is PlaybackSession.Starting) applySession(_session.value.playerStarted())
-            applySession(_session.value.playerEnded())
+        val position = playerController.positionSeconds.value
+        val playInProgress = playMutex.isLocked
+        val generation = leaveGeneration
+        val record = completionRecordedSerial != startSerial
+        if (record) completionRecordedSerial = startSerial
+        stopPositionSync()
+
+        if (playInProgress) {
+            if (record) scope.launch { sendCompletion(episode.id, record = true, totalSeconds = null) }
+            return
         }
-        try {
-            podcastApi.markCompleted(completedPodcastId)
-        } catch (_: ApiException) {
-            // 完聴記録は best-effort。失敗しても次エピソードへの遷移を止めない。
+        if (_session.value is PlaybackSession.Starting) applySession(_session.value.playerStarted())
+        applySession(_session.value.playerEnded())
+        val totalSeconds = endedDuration?.takeIf { it > 0 }
+            ?: episode.durationSeconds.toDouble().takeIf { it > 0 }
+            ?: position.takeIf { it > 0 }
+        scope.launch { sendCompletion(episode.id, record, totalSeconds) }
+        scope.launch { advanceAfterCompletion(generation) }
+    }
+
+    /** 完聴の送信の直列。各段は best-effort で、失敗しても次の段へ進む（前進はこの完了を待たない。shared-dec-15）。 */
+    private suspend fun sendCompletion(podcastId: String, record: Boolean, totalSeconds: Double?) {
+        if (record) {
+            try {
+                podcastApi.markCompleted(podcastId)
+            } catch (_: ApiException) {
+                // 完聴記録は best-effort。失敗しても次の段を止めない。
+            }
         }
+        if (totalSeconds != null) syncPosition(podcastId, totalSeconds)
         listeningStreakStore?.refresh()
+    }
 
-        // 別の episode の再生開始の途中で届いた通知では、その再生を優先して前進しない。
-        if (playInProgress) return
-
+    /** 完聴の後の自動前進。次が無ければ Stopped にする。キューは次を読むだけで、書込は startEpisode が取得の後に行う。 */
+    private suspend fun advanceAfterCompletion(generation: Long) {
         val (advanced, next) = _queue.value.advance()
-        _queue.value = advanced
         if (next != null) {
-            startEpisode(next, StartTrigger.ADVANCE)
+            startEpisode(next, StartTrigger.ADVANCE, generation)
         } else if (_session.value is PlaybackSession.Completed) {
+            _queue.value = advanced
             settlePlayback()
             applySession(_session.value.queueExhausted())
         }
@@ -605,6 +662,20 @@ class PodcastViewModel(
         applySession(_session.value.stop())
     }
 
+    /**
+     * 主体の離脱での停止（shared-leave-01）。世代を進め、timer を止め、player を止め、session とキューを空にする。
+     * 位置は送らない（shared-dec-09）。[playMutex] は取らない: 遅い取得の後ろで離脱が待たされないよう、
+     * 取得中の開始は世代の比較で捨てさせる（android-dec-42）。session を先に空にするのは、途中の状態でも
+     * session とキューの現在位置が食い違わないため。
+     */
+    suspend fun stopForSubjectLeave(): Unit = withContext(dispatcher) {
+        leaveGeneration++
+        stopPositionSync()
+        playerController.stop()
+        applySession(_session.value.stop())
+        _queue.value = PlaybackQueue()
+    }
+
     /** エラーメッセージをクリアする（UI の AlertDialog 閉じ時に呼ばれる）。 */
     fun clearError() {
         _errorMessage.value = null
@@ -623,8 +694,8 @@ class PodcastViewModel(
 
     /**
      * 前の再生の後始末（停止直前の位置の最終同期 → タイマー停止 → player の stop）。dispatcher コンテキスト内から呼ぶ。
-     * 最終同期の対象は player の失敗（Errored の Loaded）も含む現在のエピソード。開始前の失敗（Errored の IdOnly）は
-     * まだ読み込んでいないので送らない。何も再生していない状態では何もしない。
+     * 位置を送るのは Active のときだけ。Starting は player がまだ位置を報告していない。Completed・Stopped・Errored は
+     * 再生が終わっているか失敗している。何も再生していない状態では何もしない。
      *
      * WHY session で判定する: currentPodcast は Errored で null になるため、それで判定すると
      * player の失敗の後にタイマーが止まらず孤児になる。
@@ -636,45 +707,36 @@ class PodcastViewModel(
      */
     @Suppress("UNUSED_PARAMETER")
     private suspend fun settlePlayback(keepCurrentPodcast: Boolean = false) {
-        val podcastId = when (val current = _session.value) {
-            is PlaybackSession.NothingPlaying -> return
-            is PlaybackSession.Starting -> current.episode.id
-            is PlaybackSession.Active -> current.episode.id
-            is PlaybackSession.Completed -> current.episode.id
-            is PlaybackSession.Stopped -> current.episode.id
-            is PlaybackSession.Errored -> (current.ref as? SessionEpisodeRef.Loaded)?.episode?.id
-        }
-        if (podcastId != null) syncPosition(podcastId)
-        syncJob?.cancel()
-        syncJob = null
+        val current = _session.value
+        if (current is PlaybackSession.NothingPlaying) return
+        if (current is PlaybackSession.Active) syncPosition(current.episode.id, playerController.positionSeconds.value)
+        stopPositionSync()
         playerController.stop()
     }
 
     /**
-     * 再生位置をサーバーへ定期同期するタイマー（15秒毎）を開始する。
-     *
-     * WHY: iOS 実挙動の忠実写像（PodcastViewModel.swift:580-603）。syncTimer は stopPlayback でのみ
-     * 停止し、isPlaying によるガードは行わない（一時停止中も送信され続ける）。これはストリーク集計の
-     * 起点として「再生を開始したこと」自体を継続的に記録する現行仕様だが、一時停止中の送信継続は
-     * 仕様として妥当か再検討の余地があり、spec 改訂候補として follow-up 対象とする。
+     * 再生位置をサーバーへ定期同期するタイマー（15秒毎）を張る。`Playing` を受けたときに呼び、
+     * 張り直すときは古いタイマーを必ず止める（孤児化を構造的に防ぐ）。
      */
     private fun startPositionSync(podcastId: String) {
-        // 防御的キャンセル: 通常は settlePlayback() が事前に前のタイマーを止めているが、
-        // 呼び出し順に依らず「新しいタイマーを張る前に古いタイマーを必ず止める」ことを
-        // このメソッド自身の責務としても保証し、同期タイマーの孤児化を構造的に防ぐ。
-        syncJob?.cancel()
+        stopPositionSync()
         syncJob = scope.launch {
             while (isActive) {
                 delay(POSITION_SYNC_INTERVAL_MS)
-                syncPosition(podcastId)
+                syncPosition(podcastId, playerController.positionSeconds.value)
             }
         }
     }
 
-    /** 現在の再生位置をサーバーへ同期する。失敗時はサイレント（iOS syncPlaybackPositionIfNeeded 同様）。 */
-    private suspend fun syncPosition(podcastId: String) {
+    private fun stopPositionSync() {
+        syncJob?.cancel()
+        syncJob = null
+    }
+
+    /** 位置をサーバーへ同期する。失敗時はサイレント（iOS syncPlaybackPositionIfNeeded 同様）。 */
+    private suspend fun syncPosition(podcastId: String, positionSeconds: Double) {
         try {
-            podcastApi.updatePlaybackPosition(podcastId, playerController.positionSeconds.value)
+            podcastApi.updatePlaybackPosition(podcastId, positionSeconds)
         } catch (e: ApiException) {
             // ネットワーク一時的な失敗等をログしない（iOS 同様のベストエフォート）。
         }

@@ -248,9 +248,9 @@ class AppContainer(context: Context) {
      * ままであることを保証し、authState が Unknown にリセットされるのを防ぐ。
      *
      * onSubjectLeave（android-slice-auth-01・SG-R18 で onLogoutCleanup から改名）: フェーズ8-D・
-     * shared-playback-spec.md §6.3（共有端末対応）。logout 時に音声キャッシュを全削除し、
-     * 共有端末に他人の音声データが残らないようにする。auth 層に AudioCacheManager を
-     * 直接依存させないため、削除処理だけを関数として注入する
+     * shared-playback-spec.md §6.3（共有端末対応）。logout 時に再生を止め（位置は送らない。shared-dec-09）、
+     * 音声キャッシュを全削除し、FCM トークンを解除する。共有端末に他人の音声データが残らないようにする。
+     * auth 層に AudioCacheManager を直接依存させないため、後始末を関数として注入する
      * （詳細は AuthViewModel の onSubjectLeave コメント参照）。呼出元は logout 経路のみ
      * （失効経路からは呼ばない。order:12）。
      *
@@ -267,10 +267,17 @@ class AppContainer(context: Context) {
             sessionStore = sessionStore,
             dispatcher = Dispatchers.Default,
             preferencesStore = preferencesStore,
-            // フェーズ9: cancelDownloadsAndClearCache（既存・フェーズ8-D）と FCM トークン解除を
-            // 両方行う合成ラムダ。onSubjectLeave は単一のフック点のため、複数の後始末はここで束ねる。
+            // 再生の停止（shared-leave-01）→ cancelDownloadsAndClearCache（既存・フェーズ8-D）→ FCM トークン解除
+            // （フェーズ9）の順に行う合成ラムダ。onSubjectLeave は単一のフック点のため、複数の後始末はここで束ねる。
             // 各操作を独立した try/catch で保護し、前段の失敗が後段をスキップさせないようにする。
             onSubjectLeave = {
+                try {
+                    _podcastViewModel.stopForSubjectLeave()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // 再生の停止失敗はログアウト継続
+                }
                 try {
                     _podcastViewModel.cancelDownloadsAndClearCache()
                 } catch (e: CancellationException) {

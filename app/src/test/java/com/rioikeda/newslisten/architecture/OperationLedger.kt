@@ -198,6 +198,7 @@ object OperationLedger {
         command("PodcastViewModel#setSpeed", "再生の操作を player に送る command", specId = "android-cmd-playback-04", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#skipBackward", "再生の操作を player に送る command", specId = "android-cmd-playback-04", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#skipForward", "再生の操作を player に送る command", specId = "android-cmd-playback-04", facade = "android-slice-playapp-01"),
+        command("PodcastViewModel#stopForSubjectLeave", "主体の離脱で再生を止めキューを空にする command（位置は送らない）", specId = "android-cmd-playback-06", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#stopPlayback", "再生を止める command（最終同期を書く）", specId = "android-cmd-playback-06", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#submitQuizAnswers", "クイズの回答を送って採点を受ける command（POST。結果の DTO を返す既知の例外）", specId = "android-cmd-learning-01", facade = "android-slice-learning-02"),
         command("PodcastViewModel#togglePlayPause", "再生の操作を player に送る command", specId = "android-cmd-playback-04", facade = "android-slice-playapp-01"),
