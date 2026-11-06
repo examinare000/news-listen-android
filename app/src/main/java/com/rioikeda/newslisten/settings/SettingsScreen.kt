@@ -59,6 +59,7 @@ import com.rioikeda.newslisten.model.FeaturedCategory
 import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.passkey.PasskeyCredentialsViewModel
 import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
+import com.rioikeda.newslisten.podcast.PlaybackConstants
 import com.rioikeda.newslisten.preferences.ArticleOpenMode
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import com.rioikeda.newslisten.preferences.TimeFormat
@@ -179,8 +180,8 @@ fun SettingsScreen(
     LaunchedEffect(defaultDifficulty, defaultPlaybackSpeed, articleOpenMode, timeFormat, weeklyGoalEpisodes) {
         selectedDifficultyIndex = Difficulty.entries.indexOfFirst { it.code == defaultDifficulty }
             .takeIf { it >= 0 } ?: 0
-        selectedSpeedIndex = PLAYBACK_SPEEDS.indexOfFirst { it == defaultPlaybackSpeed }
-            .takeIf { it >= 0 } ?: PLAYBACK_SPEEDS.indexOfFirst { it == 1.0 }
+        selectedSpeedIndex = PlaybackConstants.speeds.indexOfFirst { it == defaultPlaybackSpeed }
+            .takeIf { it >= 0 } ?: PlaybackConstants.speeds.indexOfFirst { it == 1.0 }
         selectedArticleOpenModeIndex = ArticleOpenMode.entries.indexOf(articleOpenMode)
         selectedTimeFormatIndex = TimeFormat.entries.indexOf(timeFormat)
         selectedWeeklyGoalIndex = WEEKLY_GOAL_OPTIONS.indexOf(weeklyGoalEpisodes).coerceAtLeast(0)
@@ -651,12 +652,12 @@ fun SettingsScreen(
                 onSelectionChange = { index ->
                     selectedSpeedIndex = index
                     coroutineScope.launch {
-                        val newValue = PLAYBACK_SPEEDS[index]
+                        val newValue = PlaybackConstants.speeds[index]
                         val ok = viewModel.syncDefaultPlaybackSpeed(newValue)
                         if (!ok) {
                             // Revert on failure
-                            selectedSpeedIndex = PLAYBACK_SPEEDS.indexOfFirst { it == defaultPlaybackSpeed }
-                                .takeIf { it >= 0 } ?: PLAYBACK_SPEEDS.indexOfFirst { it == 1.0 }
+                            selectedSpeedIndex = PlaybackConstants.speeds.indexOfFirst { it == defaultPlaybackSpeed }
+                                .takeIf { it >= 0 } ?: PlaybackConstants.speeds.indexOfFirst { it == 1.0 }
                         }
                     }
                 }
@@ -1198,7 +1199,7 @@ private fun SettingsPlaybackSpeedDropdown(
     selectedIndex: Int,
     onSelectionChange: (Int) -> Unit,
 ) {
-    val speedLabels = PLAYBACK_SPEEDS.map { speed ->
+    val speedLabels = PlaybackConstants.speeds.map { speed ->
         stringResource(R.string.settings_playback_speed_format, speed)
     }
 
@@ -1357,6 +1358,4 @@ private fun LearningGoalChipRow(
     }
 }
 
-// Settings screen specific playback speeds (5-step: iOS SettingsView.swift:44)
-private val PLAYBACK_SPEEDS = listOf(0.75, 1.0, 1.25, 1.5, 2.0)
 private val WEEKLY_GOAL_OPTIONS = listOf(3, 5, 7, 10)
