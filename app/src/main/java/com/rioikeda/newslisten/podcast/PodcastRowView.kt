@@ -38,7 +38,7 @@ import com.rioikeda.newslisten.catalog.domain.Episode
 @Composable
 fun PodcastRowView(
     podcast: Episode,
-    isPlaying: Boolean,
+    isNowPlaying: Boolean,
     downloadingIds: Set<String> = emptySet(),
     downloadedIds: Set<String> = emptySet(),
     onDownloadTap: (() -> Unit)? = null,
@@ -61,9 +61,9 @@ fun PodcastRowView(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (isPlaying) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                    contentDescription = if (isPlaying) "再生中" else "未再生",
-                    tint = if (isPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    imageVector = if (isNowPlaying) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                    contentDescription = if (isNowPlaying) "再生中" else "未再生",
+                    tint = if (isNowPlaying) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                     modifier = Modifier
                 )
             }

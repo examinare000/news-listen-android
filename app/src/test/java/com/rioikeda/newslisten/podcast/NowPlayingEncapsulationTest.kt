@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -100,7 +101,7 @@ class NowPlayingEncapsulationTest {
 
         assertEquals(snapshot, select(viewModel.nowPlaying.value!!))
         assertEquals(snapshot, selectFromEpisode((viewModel.session.value as PlaybackSession.Starting).episode))
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -116,5 +117,19 @@ class NowPlayingEncapsulationTest {
     @Test
     fun `android-check-06 nowPlaying の quiz を書き換えようとしても次の値と session は変わらない`() = runTest {
         assertWriteIsRejected({ it.quiz }, { it.quiz }, EpisodeQuizQuestion("injected", listOf("x")))
+    }
+
+    @Test
+    fun `android-test-19 android-contract-19 旧い公開面は PodcastViewModel と PlayerController に無い`() {
+        // verifies: android-contract-19
+        // play は private 化の対象。完全一致の集合で調べる（playNow・playNext が public で残るため部分一致は不可）。
+        val names = PodcastViewModel::class.java.methods.map { it.name }.toSet()
+        assertFalse("getCurrent" + "Podcast" in names)
+        assertFalse("stop" + "Playback" in names)
+        assertFalse("play" in names)
+
+        val playerNames = PlayerController::class.java.methods.map { it.name }.toSet()
+        assertFalse("getOnPlayback" + "Completed" in playerNames)
+        assertFalse("setOnPlayback" + "Completed" in playerNames)
     }
 }

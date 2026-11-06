@@ -128,8 +128,7 @@ object Allowlist {
             // android-dep-06 (1)
             rule("android-dep-06", "== \"", "android-slice-account-01", "di/AppContainer.kt") +
 
-            // android-dep-07 (2)
-            rule("android-dep-07", "公開の var", "android-slice-playback-05", "podcast/PlayerController.kt") +
+            // android-dep-07 (1)
             rule("android-dep-07", "公開の var", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
 
             // android-dep-09 (8)
@@ -152,8 +151,7 @@ object Allowlist {
             rule("android-check-02", "fetchVocabularyTestSession", "android-slice-learning-03", "network/VocabularyTestApi.kt") +
             rule("android-check-02", "submitVocabularyTestResults", "android-slice-learning-03", "network/VocabularyTestApi.kt") +
 
-            // android-check-04 (10)
-            rule("android-check-04", "PLAYBACK_SPEEDS", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
+            // android-check-04 (9)
             rule("android-check-04", "listOf(3, 5, 7, 10)", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
             rule("android-check-04", "/ 7.0", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
             rule("android-check-04", "setOf(3, 5, 7, 10)", "android-slice-prefs-01", "settings/SettingsViewModel.kt") +

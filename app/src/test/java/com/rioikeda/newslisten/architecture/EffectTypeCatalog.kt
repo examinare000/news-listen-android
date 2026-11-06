@@ -97,11 +97,10 @@ data class EffectTypeCatalog(
                 PortRow(
                     port = "PlayerController",
                     interfaces = setOf("com.rioikeda.newslisten.podcast.PlayerController"),
-                    writes = setOf("prepare", "play", "pause", "seekTo", "setSpeed", "stop", "release", "setOnPlaybackCompleted"),
+                    writes = setOf("prepare", "play", "pause", "seekTo", "setSpeed", "stop", "release"),
                     sequenceReads = emptySet(),
                     propertyReads = setOf(
                         "isPlaying", "getPositionSeconds", "getDurationSeconds", "getPlaybackSpeed", "getState",
-                        "getOnPlaybackCompleted",
                     ),
                 ),
                 PortRow(

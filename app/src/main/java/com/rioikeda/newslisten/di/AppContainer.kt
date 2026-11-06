@@ -343,11 +343,11 @@ class AppContainer(context: Context) {
      *
      * Dispatcher: Dispatchers.Default.limitedParallelism(1) を使用し、状態変更を直列化する。
      * WHY: PodcastViewModel の fetchPodcasts() や play() などの操作が複数スレッドで
-     * 競合すると、currentPodcast の読み取り→書き込み、PlayerController の状態の
+     * 競合すると、nowPlaying の読み取り→書き込み、PlayerController の状態の
      * 同期ずれが生じ得る。iOS の @MainActor による直列実行を Kotlin で再現する。
      *
      * by lazy でシングルトンキャッシュ化：画面回転時に PodcastViewModel インスタンスが
-     * 同じままであることを保証し、fetchPodcasts() の loadingState や currentPodcast が
+     * 同じままであることを保証し、fetchPodcasts() の loadingState や nowPlaying が
      * リセットされるのを防ぐ。
      */
     private val _podcastViewModel: PodcastViewModel by lazy {

@@ -20,7 +20,7 @@ internal val podcastViewModelQueryProbes: QueryProbeSet = run {
         "ApiClient#fetchListeningStreak" to ProbeData.increasingStreaks(),
         "FileSystem#exists" to ProbeData.repeated(false, 64),
     )
-    val warmUp: suspend (Any, ProbeEnvironment) -> Unit = { owner, _ -> (owner as PodcastViewModel).play(ProbeData.podcast) }
+    val warmUp: suspend (Any, ProbeEnvironment) -> Unit = { owner, _ -> (owner as PodcastViewModel).playNow(ProbeData.podcast) }
     queryProbeSet(
         owner = "PodcastViewModel",
         scenarios = listOf(

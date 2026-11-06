@@ -55,7 +55,7 @@ fun QueueSheet(
     modifier: Modifier = Modifier
 ) {
     val queue by viewModel.queue.collectAsState()
-    val currentPodcast by viewModel.currentPodcast.collectAsState()
+    val nowPlaying by viewModel.nowPlaying.collectAsState()
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -79,8 +79,8 @@ fun QueueSheet(
                 .fillMaxWidth()
                 .padding(innerPadding)
         ) {
-            // 再生中セクション（currentPodcast と queue.current の両者が揃っているときのみ表示）
-            if (currentPodcast != null && queue.current != null) {
+            // 再生中セクション（nowPlaying があるときのみ表示。shared-inv-01 により queue.current も揃う）
+            if (nowPlaying != null) {
                 item {
                     Text(
                         text = stringResource(R.string.queue_section_now_playing),
@@ -93,7 +93,7 @@ fun QueueSheet(
                     )
                 }
                 item {
-                    QueueRow(podcast = queue.current!!)
+                    queue.current?.let { QueueRow(podcast = it) }
                 }
             }
 
