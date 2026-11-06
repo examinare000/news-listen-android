@@ -546,6 +546,31 @@ class OfflineLibraryTest {
     }
 
     @Test
+    fun `shared-leave-10 決定16 主体nullではsyncDownloadedStateがdownloadingIdsも空にする`() = runTest {
+        val x = podcast(id = "X")
+        var subject: String? = "A"
+        val gates = FetchGates()
+        val gateX = gates.arm("X")
+        val library = newLibrary(gatedApi(gates)) { subject }
+        launch { library.download(x) }
+        runCurrent()
+        assertEquals(setOf("X"), library.downloadingIds.value)
+
+        subject = null
+        library.syncDownloadedState(listOf(x))
+
+        assertEquals(emptySet<String>(), library.downloadingIds.value)
+        assertEquals(emptySet<String>(), library.downloadedIds.value)
+
+        // 正方向の対照: 主体が A に戻れば、同じ追跡中の X が downloadingIds に出る。
+        subject = "A"
+        library.syncDownloadedState(listOf(x))
+        assertEquals(setOf("X"), library.downloadingIds.value)
+        gateX.complete(x)
+        runCurrent()
+    }
+
+    @Test
     fun `shared-leave-10 決定16 主体nullではremoveDownloadは何もしない`() = runTest {
         val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
         cacheManager.cache("A", "p1", byteArrayOf(1))

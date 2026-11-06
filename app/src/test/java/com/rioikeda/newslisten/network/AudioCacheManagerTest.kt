@@ -259,6 +259,19 @@ class AudioCacheManagerTest {
         }
     }
 
+    @Test
+    fun `shared-leave-10 決定16 reclaimは形式不正な値と同名のディレクトリも削除する`() {
+        // "a.b" は形式不正（'.' は許可外）。同名のディレクトリがあっても「現在の主体」として残さない。
+        fileSystem.write("/cache/audio/a.b/x.mp3", byteArrayOf(1))
+        manager.cache("u1", "p1", byteArrayOf(2))
+        assertEquals(listOf("/cache/audio/a.b", "/cache/audio/u1"), fileSystem.listDirectories("/cache/audio").sorted())
+
+        manager.reclaim("a.b")
+
+        assertFalse(fileSystem.exists("/cache/audio/a.b/x.mp3"))
+        assertEquals(emptyList<String>(), fileSystem.listDirectories("/cache/audio"))
+    }
+
     // --- cacheSize: 実計算（Android の計画決定。iOS はスタブ0） ---
 
     @Test
