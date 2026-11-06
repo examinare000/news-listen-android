@@ -20,3 +20,20 @@ sealed class AuthState {
     /** ログイン済み。 */
     data class Authenticated(val user: UserResponse) : AuthState()
 }
+
+/**
+ * 端末ローカル資産（音声キャッシュなど）の持ち主。[userId] は `[A-Za-z0-9_-]+` を満たすときだけ値を持ち、
+ * 欠落・形式不正は `null`（その主体ではキャッシュを無効にして動作を続ける。ADR-104 決定 16）。
+ * 形式の判断はここの生成関数 1 箇所に置く。
+ */
+data class Subject(val userId: String?, val username: String) {
+    companion object {
+        private val VALID_USER_ID = Regex("[A-Za-z0-9_-]+")
+
+        fun from(user: UserResponse): Subject =
+            Subject(
+                userId = user.userId?.takeIf { VALID_USER_ID.matches(it) },
+                username = user.username,
+            )
+    }
+}

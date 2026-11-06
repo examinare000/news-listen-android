@@ -13,4 +13,6 @@ data class UserResponse(
     val username: String,
     val role: String,
     @SerialName("display_name") val displayName: String,
+    /** 端末ローカル資産の持ち主を識別する id。欠落しても decode は成功する（ADR-104 決定 16）。 */
+    @SerialName("user_id") val userId: String? = null,
 )

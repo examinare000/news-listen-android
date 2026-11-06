@@ -19,7 +19,7 @@ class EffectTypeCatalogTest {
     // ---- 本番 ----
 
     @Test
-    fun 本番の分類表は9つのportと16のhookを持つ() {
+    fun 本番の分類表は9つのportと18のhookを持つ() {
         assertEquals(
             setOf(
                 "ApiClient", "PodcastApi", "PreferencesStore", "SessionStore", "PlayerController",
@@ -53,14 +53,14 @@ class EffectTypeCatalogTest {
 
         assertEquals(setOf("save", "clear"), portRow(production, "SessionStore").writes)
         assertEquals(setOf("load"), portRow(production, "SessionStore").sequenceReads)
-        assertEquals(setOf("write", "delete", "ensureDirectory"), portRow(production, "FileSystem").writes)
-        assertEquals(setOf("exists", "listFiles", "fileSize"), portRow(production, "FileSystem").sequenceReads)
+        assertEquals(setOf("write", "delete", "deleteRecursively", "ensureDirectory"), portRow(production, "FileSystem").writes)
+        assertEquals(setOf("exists", "listFiles", "listDirectories", "fileSize"), portRow(production, "FileSystem").sequenceReads)
         assertEquals(setOf("start", "stop"), portRow(production, "NetworkMonitoring").writes)
         assertEquals(1, portRow(production, "NetworkMonitoring").propertyReads.size)
         assertEquals(setOf("createCredential", "getCredential"), portRow(production, "PasskeyProvider").writes)
         assertEquals(setOf("playSound", "performHaptic"), portRow(production, "FeedbackPlayer").writes)
 
-        assertEquals("hook は 16 個", 16, production.hooks.size)
+        assertEquals("hook は 18 個", 18, production.hooks.size)
         assertEquals("公開 callback（SETTER）は 2 つ", 2, production.hooks.count { it.wiring == HookWiring.SETTER })
         assertTrue(production.hooks.filter { it.wiring == HookWiring.SETTER }.all { it.kind == HookKind.WRITE })
     }

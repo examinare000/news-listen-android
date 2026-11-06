@@ -24,8 +24,22 @@ class FakeFileSystem : FileSystem {
 
     override fun delete(path: String): Boolean = files.remove(path) != null
 
+    /** 直下の通常ファイルだけ（サブディレクトリの中身は含まない）。 */
     override fun listFiles(dirPath: String): List<String> =
-        files.keys.filter { it.startsWith("$dirPath/") }
+        files.keys.filter { it.startsWith("$dirPath/") && !it.removePrefix("$dirPath/").contains('/') }
+
+    /** キーのパスから導いた直下のディレクトリ。 */
+    override fun listDirectories(dirPath: String): List<String> =
+        files.keys
+            .filter { it.startsWith("$dirPath/") }
+            .map { it.removePrefix("$dirPath/") }
+            .filter { it.contains('/') }
+            .map { "$dirPath/${it.substringBefore('/')}" }
+            .distinct()
+
+    override fun deleteRecursively(path: String) {
+        files.keys.removeAll { it == path || it.startsWith("$path/") }
+    }
 
     override fun fileSize(path: String): Long? = files[path]?.size?.toLong()
 

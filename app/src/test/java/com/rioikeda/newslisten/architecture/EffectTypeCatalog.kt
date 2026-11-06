@@ -106,8 +106,8 @@ data class EffectTypeCatalog(
                 PortRow(
                     port = "FileSystem",
                     interfaces = setOf("$NETWORK.FileSystem"),
-                    writes = setOf("write", "delete", "ensureDirectory"),
-                    sequenceReads = setOf("exists", "listFiles", "fileSize"),
+                    writes = setOf("write", "delete", "deleteRecursively", "ensureDirectory"),
+                    sequenceReads = setOf("exists", "listFiles", "listDirectories", "fileSize"),
                     propertyReads = emptySet(),
                 ),
                 PortRow(
@@ -149,6 +149,8 @@ data class EffectTypeCatalog(
                 HookRow("ApiListeningStreakStore#fetchListeningStreak", HookKind.READ, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("SettingsViewModel#isAdminProvider", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("PodcastViewModel#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
+                HookRow("OfflineLibrary#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
+                HookRow("AuthViewModel#onSubjectResolved", HookKind.WRITE, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("VocabularyTestViewModel#shuffle", HookKind.READ, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("FcmTokenRegistrar#tokenProvider", HookKind.READ, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("FcmTokenRegistrar#permissionChecker", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),

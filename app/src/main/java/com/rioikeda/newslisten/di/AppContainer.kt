@@ -35,6 +35,7 @@ import com.rioikeda.newslisten.passkey.PasskeyLoginViewModel
 import com.rioikeda.newslisten.passkey.PasskeyProvider
 import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
 import com.rioikeda.newslisten.podcast.ExoPlayerController
+import com.rioikeda.newslisten.podcast.OfflineLibrary
 import com.rioikeda.newslisten.podcast.PodcastViewModel
 import com.rioikeda.newslisten.preferences.DataStorePreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
@@ -119,6 +120,20 @@ class AppContainer(context: Context) {
      * PodcastViewModel.play() の resolvePlaybackSource 判定に isOnline を供給する。
      */
     private val networkMonitor: ConnectivityNetworkMonitor = ConnectivityNetworkMonitor(appContext).apply { start() }
+
+    /**
+     * 音声キャッシュの主体固定・起動時回収・ダウンロードの cancel を所有する capsule（android-dec-02）。
+     * `_authViewModel` のラムダがこの値を読むので `by lazy` にする。`_authViewModel` は構築時にこの値を評価しないため、
+     * 初期化は `offlineLibrary` → `_authViewModel` の一方向で、循環しない。
+     */
+    private val offlineLibrary: OfflineLibrary by lazy {
+        OfflineLibrary(
+            cacheManager = audioCacheManager,
+            podcastApi = PodcastApiAdapter(apiClient),
+            currentSubject = _authViewModel::currentSubjectId,
+            dispatcher = Dispatchers.Default.limitedParallelism(1),
+        )
+    }
 
     /**
      * FCM トークン取得の suspend ラッパ（フェーズ9・プッシュ通知）。
@@ -249,17 +264,15 @@ class AppContainer(context: Context) {
      *
      * onSubjectLeave（android-slice-auth-01・SG-R18 で onLogoutCleanup から改名）: フェーズ8-D・
      * shared-playback-spec.md §6.3（共有端末対応）。logout 時に再生を止め（位置は送らない。shared-dec-09）、
-     * 音声キャッシュを全削除し、FCM トークンを解除する。共有端末に他人の音声データが残らないようにする。
-     * auth 層に AudioCacheManager を直接依存させないため、後始末を関数として注入する
+     * 主体の音声キャッシュを削除し、FCM トークンを解除する。共有端末に他人の音声データが残らないようにする。
+     * auth 層に音声キャッシュの実体を直接依存させないため、後始末を関数として注入する
      * （詳細は AuthViewModel の onSubjectLeave コメント参照）。呼出元は logout 経路のみ
      * （失効経路からは呼ばない。order:12）。
      *
-     * 2レビュー統合指摘（logout×ダウンロード競合）の修正: 直接 `audioCacheManager.removeAll()` を
-     * 呼ぶのではなく `_podcastViewModel.cancelDownloadsAndClearCache()` を呼ぶ。PodcastViewModel の
-     * download() は AudioCacheManager と同じ limitedParallelism(1) dispatcher 上で進行中 Job を
-     * 追跡しており、cancelDownloadsAndClearCache() がそれを cancelAndJoin してから removeAll() する
-     * ことで、fetchPodcast の suspend 境界中の download と logout のキャッシュ削除が競合し
-     * ファイルが残留する事態を防ぐ。
+     * 後始末のうち音声キャッシュの分は、離れる主体 1 人分だけを対象にする（端末全体を消さない。ADR-104 決定 2）。
+     * 主体は呼出時の `currentSubjectId()` で読み、進行中のダウンロードの cancel（join しない）→ 主体のディレクトリの
+     * 削除の順に呼ぶ。cancel が間に合わず完了した書込は離脱主体のディレクトリに入り、次回起動の回収
+     * （`onSubjectResolved`）が消す（shared-leave-06）。
      */
     private val _authViewModel: AuthViewModel by lazy {
         AuthViewModel(
@@ -267,8 +280,8 @@ class AppContainer(context: Context) {
             sessionStore = sessionStore,
             dispatcher = Dispatchers.Default,
             preferencesStore = preferencesStore,
-            // 再生の停止（shared-leave-01）→ cancelDownloadsAndClearCache（既存・フェーズ8-D）→ FCM トークン解除
-            // （フェーズ9）の順に行う合成ラムダ。onSubjectLeave は単一のフック点のため、複数の後始末はここで束ねる。
+            // 再生の停止（shared-leave-01）→ ダウンロードの cancel → 主体のキャッシュ削除（フェーズ8-D・ADR-104）→
+            // FCM トークン解除（フェーズ9）の順に行う合成ラムダ。onSubjectLeave は単一のフック点のため、複数の後始末はここで束ねる。
             // 各操作を独立した try/catch で保護し、前段の失敗が後段をスキップさせないようにする。
             onSubjectLeave = {
                 try {
@@ -279,11 +292,18 @@ class AppContainer(context: Context) {
                     // 再生の停止失敗はログアウト継続
                 }
                 try {
-                    _podcastViewModel.cancelDownloadsAndClearCache()
+                    _authViewModel.currentSubjectId()?.let { offlineLibrary.cancelDownloads(it) }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    // キャッシュクリア失敗はログアウト継続
+                    // ダウンロードの cancel 失敗はログアウト継続
+                }
+                try {
+                    _authViewModel.currentSubjectId()?.let { offlineLibrary.removeSubject(it) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // キャッシュ削除の失敗はログアウト継続（残った分は次回起動の回収が消す）
                 }
                 try {
                     fcmTokenRegistrar.onLogout()
@@ -294,6 +314,8 @@ class AppContainer(context: Context) {
                 }
             },
             onAuthenticated = { fcmTokenRegistrar.onAuthenticated() },
+            // Unknown からの確定につき 1 回の起動時回収（shared-dec-05）。形式の判断は Subject の生成に任せる。
+            onSubjectResolved = { s -> offlineLibrary.reclaim(s?.userId) },
         )
     }
 
@@ -355,11 +377,12 @@ class AppContainer(context: Context) {
             podcastApi = PodcastApiAdapter(apiClient),
             apiClient = apiClient,
             playerController = _playerController,
-            cacheManager = audioCacheManager,
+            offlineLibrary = offlineLibrary,
             networkMonitor = networkMonitor,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
             listeningStreakStore = _listeningStreakStore,
             preferencesStore = preferencesStore,
+            currentSubject = _authViewModel::currentSubjectId,
         )
     }
 

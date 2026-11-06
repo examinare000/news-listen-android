@@ -10,8 +10,6 @@ import com.rioikeda.newslisten.model.QuizAnswerRequest
 import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
-import com.rioikeda.newslisten.network.AudioCacheException
-import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.NetworkMonitoring
 import com.rioikeda.newslisten.network.PodcastApi
 import com.rioikeda.newslisten.preferences.PreferencesStore
@@ -19,7 +17,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,7 +42,7 @@ class PodcastViewModel(
     private val podcastApi: PodcastApi,
     private val apiClient: ApiClient,
     private val playerController: PlayerController,
-    private val cacheManager: AudioCacheManager,
+    private val offlineLibrary: OfflineLibrary,
     private val networkMonitor: NetworkMonitoring,
     private val dispatcher: CoroutineDispatcher,
     private val preferencesStore: PreferencesStore,
@@ -71,7 +68,7 @@ class PodcastViewModel(
     private var completionRecordedSerial: Long? = null
 
     // 開始を確定した時点の再生元と主体。NothingPlaying へ戻るときに null にする。
-    // sessionSubject は保持だけで、invalidate には渡さない（invalidate は id 1 引数のまま。主体別の扱いは android-slice-playback-04 以降）。
+    // sessionSubject は再生開始時に固定した主体で、無効化（offlineLibrary.invalidate）に渡す。
     private var sessionSource: PlaybackSource? = null
     private var sessionSubject: String? = null
 
@@ -112,32 +109,17 @@ class PodcastViewModel(
     /** 何が再生中かの読み取り用の値。NothingPlaying と Errored では null。 */
     val nowPlaying: StateFlow<NowPlaying?> = _nowPlaying.asStateFlow()
 
-    private val _downloadingIds = MutableStateFlow<Set<String>>(emptySet())
+    /** ダウンロード中 Podcast ID の集合（進捗率は持たない。フェーズ8-B・ADR-027）。実体は [OfflineLibrary]。 */
+    val downloadingIds: StateFlow<Set<String>> = offlineLibrary.downloadingIds
 
-    /** ダウンロード中 Podcast ID の集合（進捗率は持たない。フェーズ8-B・ADR-027）。 */
-    val downloadingIds: StateFlow<Set<String>> = _downloadingIds.asStateFlow()
-
-    private val _downloadedIds = MutableStateFlow<Set<String>>(emptySet())
-
-    /** ダウンロード済み（キャッシュ済み）Podcast ID の集合。 */
-    val downloadedIds: StateFlow<Set<String>> = _downloadedIds.asStateFlow()
+    /** ダウンロード済み（キャッシュ済み）Podcast ID の集合。実体は [OfflineLibrary]。 */
+    val downloadedIds: StateFlow<Set<String>> = offlineLibrary.downloadedIds
 
     private val _registeredVocabularyKeys = MutableStateFlow<Set<String>>(emptySet())
     val registeredVocabularyKeys: StateFlow<Set<String>> = _registeredVocabularyKeys.asStateFlow()
 
     private val _savingVocabularyKeys = MutableStateFlow<Set<String>>(emptySet())
     val savingVocabularyKeys: StateFlow<Set<String>> = _savingVocabularyKeys.asStateFlow()
-
-    /**
-     * 進行中ダウンロードの Job 追跡（[cancelDownloadsAndClearCache] からの明示的キャンセル用）。
-     *
-     * WHY: [download] は fetchPodcast という suspend 境界を挟むため、logout 時の
-     * cancelDownloadsAndClearCache（別コルーチンから呼ばれる）と無同期だと、
-     * 削除後にファイル書き込みが発生し downloadedIds が残留し得る（spec §6.3 違反）。
-     * 読み書きは常に [dispatcher]（limitedParallelism(1)）上でのみ行われるため、
-     * 追加の同期プリミティブなしで安全に共有できる（[_downloadingIds] 等の StateFlow と同じ規律）。
-     */
-    private val downloadJobs: MutableMap<String, Job> = mutableMapOf()
 
     private val _queue = MutableStateFlow(PlaybackQueue<Episode>())
 
@@ -161,7 +143,7 @@ class PodcastViewModel(
         _errorMessage.value = null
         try {
             _podcasts.value = podcastApi.fetchPodcasts()
-            syncDownloadedState()
+            offlineLibrary.syncDownloadedState(_podcasts.value)
         } catch (e: ApiException) {
             _errorMessage.value = e.message
         }
@@ -201,90 +183,29 @@ class PodcastViewModel(
         "$podcastId::${term.trim().lowercase()}"
 
     /**
-     * ローカルキャッシュから、ダウンロード済み ID を同期する。
-     * 正本: PodcastViewModel.swift:112-115（syncDownloadedState）。
-     */
-    private fun syncDownloadedState() {
-        _downloadedIds.value = _podcasts.value.filter { cacheManager.isCached(it.id) }.map { it.id }.toSet()
-    }
-
-    /**
-     * 指定 Podcast の音声をダウンロード・キャッシュし、[downloadedIds] に追加する。
-     * ダウンロード中の重複を防ぐため、既に downloading/downloaded 中なら何もしない
-     * （正本: PodcastViewModel.swift:141-163 の二重起動防止と同じガード）。
+     * 指定 Podcast の音声をダウンロードする。実体は [OfflineLibrary.download] で、完了まで suspend する。
      *
-     * 実処理は [scope]（[dispatcher] 上）で起動した Job として [downloadJobs] に登録し、
-     * 呼び出し元には従来どおり完了まで suspend する契約を維持するため join する。
-     * こうして [cancelDownloadsAndClearCache] が外部（logout 経路）から個々のダウンロードを
-     * 明示的にキャンセルできるようにする（Job 参照を保持しない限りキャンセル不能なため）。
-     *
-     * @param podcast ダウンロード対象の Podcast。
+     * 中継と失敗の文言の写しは [scope] の上で行う。呼び手（画面の scope）はタブ移動で cancel されるが、
+     * cancel は [join] を止めるだけで、中継の戻りの後に [errorMessage] へ写す処理は完走する。
      */
     suspend fun download(podcast: Episode) {
-        val job = withContext(dispatcher) {
-            if (_downloadingIds.value.contains(podcast.id) || _downloadedIds.value.contains(podcast.id)) {
-                return@withContext null
-            }
-            _downloadingIds.value = _downloadingIds.value + podcast.id
-            scope.launch { performDownload(podcast) }.also { downloadJobs[podcast.id] = it }
-        }
-        job?.join()
+        scope.launch {
+            offlineLibrary.download(podcast)
+            relayDownloadError()
+        }.join()
     }
 
-    /** [download] の実処理本体。[scope] 上の Job として起動され、[dispatcher] に確定して実行される。 */
-    private suspend fun performDownload(podcast: Episode) {
-        try {
-            // 署名付き URL を新たに取得（ダウンロード時点での最新 URL を確保）。
-            val fresh = podcastApi.fetchPodcast(podcast.id)
-            if (fresh !is Episode.Playable) {
-                _errorMessage.value = playabilityError(fresh)
-                return
-            }
-            val audioData = podcastApi.downloadAudio(fresh.audioUrl)
-            cacheManager.cache(podcast.id, audioData)
-            _downloadedIds.value = _downloadedIds.value + podcast.id
-        } catch (e: ApiException) {
-            _errorMessage.value = e.message
-        } catch (e: AudioCacheException) {
-            _errorMessage.value = e.message
-        } finally {
-            _downloadingIds.value = _downloadingIds.value - podcast.id
-            downloadJobs.remove(podcast.id)
-        }
+    /** キャッシュからダウンロード済み Podcast を削除する。実体は [OfflineLibrary.removeDownload]。 */
+    suspend fun removeDownload(id: String) {
+        scope.launch {
+            offlineLibrary.removeDownload(id)
+            relayDownloadError()
+        }.join()
     }
 
-    /**
-     * logout 時のクリーンアップ本体（spec §6.3・共有端末対応）。
-     *
-     * 進行中のダウンロードをすべて [Job.cancelAndJoin] で確実に中断・完了待機してから
-     * キャッシュを全削除する。こうすることで、fetchPodcast の suspend 境界中に logout が
-     * 割り込んでも、中断済みの download が後から cache() を呼んでファイルを復活させる
-     * ことがない（[downloadJobs] の doc 参照）。
-     *
-     * ダウンロード中でなく既にキャッシュ済みの分も含め、[downloadedIds]/[downloadingIds] を
-     * 空にする（logout 後に前ユーザーのダウンロード状態が UI に残らないようにする副次的な修正）。
-     */
-    suspend fun cancelDownloadsAndClearCache(): Unit = withContext(dispatcher) {
-        val inFlightJobs = downloadJobs.values.toList()
-        inFlightJobs.forEach { it.cancelAndJoin() }
-        cacheManager.removeAll()
-        _downloadedIds.value = emptySet()
-        _downloadingIds.value = emptySet()
-    }
-
-    /**
-     * キャッシュからダウンロード済み Podcast を削除する。
-     * 正本: PodcastViewModel.swift:165-174（removeDownload）。
-     *
-     * @param id 削除対象の Podcast ID。
-     */
-    suspend fun removeDownload(id: String): Unit = withContext(dispatcher) {
-        try {
-            cacheManager.remove(id)
-            _downloadedIds.value = _downloadedIds.value - id
-        } catch (e: AudioCacheException) {
-            _errorMessage.value = e.message
-        }
+    /** 中継の戻りの後に読む（常駐の collect は作らない）。成功では `null` を写さず、既存の通知を消さない。 */
+    private fun relayDownloadError() {
+        offlineLibrary.lastError.value?.let { _errorMessage.value = it }
     }
 
     /**
@@ -322,17 +243,21 @@ class PodcastViewModel(
                 rejectStart(episode, trigger, SessionErrorReason.NotPlayable, playabilityError(episode))
                 return@withLock
             }
-            val source = resolvePlaybackSource(hasCached = cacheManager.isCached(episode.id), isOnline = networkMonitor.isOnline.value)
+            val source = resolvePlaybackSource(hasCached = offlineLibrary.isCached(subject, episode.id), isOnline = networkMonitor.isOnline.value)
             val playable: Episode.Playable
             val url: String
             when (source) {
                 PlaybackSource.CACHED -> {
                     // fetchPodcast を経由しないため、一覧の値をそのまま採用する（transcript を含む表示用情報を持つ）。
-                    // requireNotNull: CACHED と判定された直後なので cachedFileUri は必ず非 null。
-                    playable = episode
-                    url = requireNotNull(cacheManager.cachedFileUri(episode.id)) {
-                        "CACHED と判定されたのに cachedFileUri が null: id=${episode.id}"
+                    // 判定と取得の間に別の dispatcher の削除（removeDownload・removeSubject）が入ると null になりうる。
+                    // 例外にせず、開始の失敗として表に出す。
+                    val cachedUri = offlineLibrary.cachedFileUri(subject, episode.id)
+                    if (cachedUri == null) {
+                        rejectStart(episode, trigger, SessionErrorReason.SourceUnavailable, "ダウンロード済みの音声が削除されたため再生できません")
+                        return@withLock
                     }
+                    playable = episode
+                    url = cachedUri
                 }
                 PlaybackSource.NETWORK -> {
                     val fresh = try {
@@ -477,11 +402,7 @@ class PodcastViewModel(
         stopPositionSync()
         val unplayableCache = reason is PlaybackFailureReason.Source || reason is PlaybackFailureReason.Decode
         if (sessionSource == PlaybackSource.CACHED && unplayableCache) {
-            try {
-                cacheManager.invalidate(episode.id)
-            } catch (_: AudioCacheException) {
-                // WHY 握る: 不正な id は消せないが、失敗した再生の状態遷移と以後の購読を止めない。
-            }
+            offlineLibrary.invalidate(sessionSubject, episode.id)
         }
         applySession(_session.value.fail(SessionEpisodeRef.Loaded(episode), SessionErrorReason.Player(reason)))
     }

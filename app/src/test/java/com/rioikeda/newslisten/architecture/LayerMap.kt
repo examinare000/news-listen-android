@@ -55,6 +55,7 @@ object LayerMap {
         "feed/PendingArticleAction.kt",
         "engagement/ListeningStreakStore.kt",
         "notification/FcmTokenRegistrar.kt",
+        "podcast/OfflineLibrary.kt",
     )
 
     private val port = listOf(

@@ -113,4 +113,49 @@ class JavaFileSystemTest {
 
         assertTrue(dir.exists())
     }
+
+    @Test
+    fun listFilesは通常ファイルだけを返しディレクトリを含まない() {
+        val dir = File(tempDir, "audio")
+        fileSystem.ensureDirectory(File(dir, "u1").path)
+        fileSystem.write(File(dir, "flat.mp3").path, byteArrayOf(1))
+        fileSystem.write(File(dir, "u1/nested.mp3").path, byteArrayOf(1))
+
+        val result = fileSystem.listFiles(dir.path)
+
+        assertEquals(listOf(File(dir, "flat.mp3").path), result)
+    }
+
+    @Test
+    fun listDirectoriesは直下のディレクトリだけを返す() {
+        val dir = File(tempDir, "audio")
+        writeWithParents(File(dir, "u1/a.mp3"))
+        writeWithParents(File(dir, "u2/deep/b.mp3"))
+        writeWithParents(File(dir, "flat.mp3"))
+
+        val result = fileSystem.listDirectories(dir.path)
+
+        assertEquals(setOf(File(dir, "u1").path, File(dir, "u2").path), result.toSet())
+        assertEquals(emptyList<String>(), fileSystem.listDirectories(File(tempDir, "missing-dir").path))
+    }
+
+    @Test
+    fun deleteRecursivelyはディレクトリを中身ごと削除する() {
+        val dir = File(tempDir, "audio/u1")
+        writeWithParents(File(dir, "a.mp3"))
+        writeWithParents(File(dir, "sub/b.mp3"))
+        writeWithParents(File(tempDir, "audio/u2/c.mp3"))
+
+        fileSystem.deleteRecursively(dir.path)
+        fileSystem.deleteRecursively(File(tempDir, "never-existed").path)
+
+        assertFalse(dir.exists())
+        assertTrue(File(tempDir, "audio/u2/c.mp3").exists())
+    }
+
+    /** [FileSystem.write] は親ディレクトリを作らないので、入れ子の配置は先に作る。 */
+    private fun writeWithParents(file: File) {
+        fileSystem.ensureDirectory(file.parentFile.path)
+        fileSystem.write(file.path, byteArrayOf(1))
+    }
 }

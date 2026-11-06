@@ -44,16 +44,14 @@ class AuthViewModel(
      * android-slice-auth-01（SG-R18）で `onLogoutCleanup` から改名（挙動不変。呼出元は logout 経路のみ）。
      *
      * spec §6.3 は共有端末対応として「logout 時にユーザー固有キャッシュ（音声）を完全削除する」ことを
-     * 全プラットフォーム共通の方針として定めるが、実体（AudioCacheManager）は podcast/network 層に属し、
+     * 全プラットフォーム共通の方針として定めるが、実体（音声キャッシュ）は podcast 層（OfflineLibrary）に属し、
      * auth 層から直接依存させると層の依存方向が逆転する（auth → podcast）。そのため呼び出し元
-     * （AppContainer）が `{ podcastViewModel.cancelDownloadsAndClearCache() }` を注入する形にし、
+     * （AppContainer）が OfflineLibrary の cancelDownloads と removeSubject を束ねた関数を注入する形にし、
      * auth 層は「ログアウト時に何かクリーンアップが要る」という事実のみを知る設計にした。
      *
-     * suspend である理由（2レビュー統合指摘・logout×ダウンロード競合の修正）: PodcastViewModel の
-     * download() は fetchPodcast という suspend 境界を挟むため、単純な `() -> Unit`（同期・fire-and-forget
-     * 相当）では進行中のダウンロードを待たずに戻ってしまい、キャッシュ削除後にダウンロードが完了して
-     * ファイルが復活する競合が起こり得た。cancelDownloadsAndClearCache() が進行中の Job を
-     * cancelAndJoin してからキャッシュを削除するため、ここも suspend にしてその完了を待つ。
+     * suspend である理由: OfflineLibrary の cancelDownloads が dispatcher 上で Job を cancel する suspend 関数のため。
+     * cancel の完了は待たない。cancel が間に合わず完了した書込は離脱主体のディレクトリに入り、
+     * 次回起動の回収が消す（shared-leave-06）。
      *
      * 注記: iOS (AppState.swift:171-178) の logout() は現時点でキャッシュ削除を呼び出しておらず、
      * spec §6.3 の表が言う「ビルトイン」実装とは実際には未配線（反証済み）。ADR-053 の
@@ -73,9 +71,19 @@ class AuthViewModel(
      * 内の me 成功パスと login 成功パス）で呼び出す。
      */
     private val onAuthenticated: suspend () -> Unit = {},
+    /**
+     * 認証状態が `Unknown` から `Authenticated` / `Unauthenticated` に確定した直後に 1 回だけ呼ぶ（起動時回収。
+     * shared-leave-08・09、android-dec-48）。引数は確定後の主体（`Unauthenticated` なら null）。一時障害で
+     * `Unknown` のままの間、確定の後の login・再実行では呼ばない。[sessionLock] の外で呼ぶ。
+     */
+    private val onSubjectResolved: (Subject?) -> Unit = {},
 ) {
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unknown)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    /** 認証済みなら、現在の主体の id（形式が不正・欠落なら null）。未認証・`Unknown` も null。 */
+    fun currentSubjectId(): String? =
+        (authState.value as? AuthState.Authenticated)?.let { Subject.from(it.user).userId }
 
     /**
      * 直近の refreshAuth 失敗（一時障害のみ。android-contract-12・android-slice-auth-01）。
@@ -184,28 +192,37 @@ class AuthViewModel(
         val token = sessionStore.load()
         if (token == null) {
             // トークン無しの経路も、lock の中で load()==null を確かめてから書く（CI-S0-5）。
+            var wasUnknown = false
             applyIfCurrent(null) {
+                wasUnknown = _authState.value is AuthState.Unknown
                 _authState.value = AuthState.Unauthenticated
             }
+            if (wasUnknown) onSubjectResolved(null)
             return@withContext
         }
         try {
             val user = apiClient.me()
+            var wasUnknown = false
             val applied = applyIfCurrent(token) {
+                wasUnknown = _authState.value is AuthState.Unknown
                 _authState.value = AuthState.Authenticated(user)
                 _lastFailure.value = null
             }
             if (applied) {
+                if (wasUnknown) onSubjectResolved(Subject.from(user))
                 // 認証確立後、サーバーの preferences を同期する（失敗時は既存のローカル値を保持）。
                 syncPreferences()
                 onAuthenticated()
             }
         } catch (e: ApiException.Unauthorized) {
+            var wasUnknown = false
             applyIfCurrent(token) {
+                wasUnknown = _authState.value is AuthState.Unknown
                 sessionStore.clear()
                 _authState.value = AuthState.Unauthenticated
                 _lastFailure.value = null
             }
+            if (wasUnknown) onSubjectResolved(null)
         } catch (e: ApiException) {
             // 一時障害: authState には触れない（Unknown へ落として再ログイン画面を出してしまわないため）。
             // 画面回転等で Authenticated 中に再実行された一時障害、または並行する refreshAuth が
@@ -232,13 +249,16 @@ class AuthViewModel(
      * [onSubjectLeave] は呼ばない（order:12。失効経路は後始末を呼ばない、既存の slice）。
      */
     fun onUnauthorized(attachedToken: String) {
-        synchronized(sessionLock) {
+        val wasUnknown = synchronized(sessionLock) {
             if (logoutsInProgress > 0) return
             if (sessionStore.load() != attachedToken) return
+            val unknown = _authState.value is AuthState.Unknown
             sessionStore.clear()
             _authState.value = AuthState.Unauthenticated
             _lastFailure.value = null
+            unknown
         }
+        if (wasUnknown) onSubjectResolved(null)
     }
 
     /**
@@ -293,9 +313,11 @@ class AuthViewModel(
             val response = apiClient.login(trimmedUsername, password)
             // save → loginErrorMessage=null → Authenticated → lastFailure=null を1つの区間に
             // まとめる（CI-S0-5・T6-6）。onAuthenticated() は lock の外で呼ぶ。
+            var wasUnknown = false
             val saved = synchronized(sessionLock) {
                 if (sessionStore.save(response.token)) {
                     _loginErrorMessage.value = null
+                    wasUnknown = _authState.value is AuthState.Unknown
                     _authState.value = AuthState.Authenticated(response.user)
                     _lastFailure.value = null
                     true
@@ -308,6 +330,7 @@ class AuthViewModel(
                 _loginErrorMessage.value = SESSION_SAVE_ERROR_MESSAGE
                 return@withContext
             }
+            if (wasUnknown) onSubjectResolved(Subject.from(response.user))
             onAuthenticated()
         } catch (e: ApiException.Unauthorized) {
             _loginErrorMessage.value = "ユーザーIDまたはパスワードが正しくありません"
@@ -370,9 +393,11 @@ class AuthViewModel(
     suspend fun completePasskeyLogin(response: LoginResponse): Unit = withContext(dispatcher) {
         // login と同じく、save → loginErrorMessage=null → Authenticated → lastFailure=null を
         // 1つの区間にまとめる（CI-S0-5・T6-6）。onAuthenticated() は lock の外で呼ぶ。
+        var wasUnknown = false
         val saved = synchronized(sessionLock) {
             if (sessionStore.save(response.token)) {
                 _loginErrorMessage.value = null
+                wasUnknown = _authState.value is AuthState.Unknown
                 _authState.value = AuthState.Authenticated(response.user)
                 _lastFailure.value = null
                 true
@@ -384,6 +409,7 @@ class AuthViewModel(
             _loginErrorMessage.value = SESSION_SAVE_ERROR_MESSAGE
             return@withContext
         }
+        if (wasUnknown) onSubjectResolved(Subject.from(response.user))
         onAuthenticated()
     }
 

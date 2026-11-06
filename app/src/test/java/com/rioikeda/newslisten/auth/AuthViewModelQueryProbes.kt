@@ -4,6 +4,7 @@ import com.rioikeda.newslisten.architecture.ProbeData
 import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.RecordingDefaults
+import com.rioikeda.newslisten.architecture.CallSpec
 import com.rioikeda.newslisten.architecture.queryProbeSet
 
 /**
@@ -17,6 +18,7 @@ internal fun probeAuthViewModel(env: ProbeEnvironment): AuthViewModel = AuthView
     preferencesStore = env.preferencesStore,
     onSubjectLeave = env.hooks.suspendWrite("AuthViewModel#onSubjectLeave"),
     onAuthenticated = env.hooks.suspendWrite("AuthViewModel#onAuthenticated"),
+    onSubjectResolved = env.hooks.write1<Subject?>("AuthViewModel#onSubjectResolved"),
 )
 
 /** `AuthViewModel` の query は state の getter だけ。warm-up で認証の遷移（ログイン・再認証・再試行）を済ませた状態を観測する。 */
@@ -38,6 +40,7 @@ internal val authViewModelQueryProbes: QueryProbeSet = run {
             ProbeData.readSuccess(canned, warmUp),
             ProbeData.readFailure(canned = tokenCanned, warmUp = warmUp),
         ),
+        calls = listOf(CallSpec("AuthViewModel#currentSubjectId")),
         assemble = ::probeAuthViewModel,
     )
 }
