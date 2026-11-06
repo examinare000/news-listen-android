@@ -49,7 +49,7 @@ import com.rioikeda.newslisten.designsystem.DSFeedback
  * - 読み込み中 / 空 / 一覧 の3状態を出し分ける。
  * - 行タップで viewModel.playNow(podcast) を呼ぶ。
  * - 長押しで次に再生 / キューに追加メニューを表示する。
- * - currentPodcast が存在するときのみ AudioPlayerSection を表示する。
+ * - nowPlaying が存在するときのみ AudioPlayerSection を表示する。
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -57,7 +57,7 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
     val podcasts by viewModel.podcasts.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
-    val currentPodcast by viewModel.currentPodcast.collectAsState()
+    val nowPlaying by viewModel.nowPlaying.collectAsState()
     val queue by viewModel.queue.collectAsState()
     val downloadingIds by viewModel.downloadingIds.collectAsState()
     val downloadedIds by viewModel.downloadedIds.collectAsState()
@@ -156,7 +156,7 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
                             ) {
                                 PodcastRowView(
                                     podcast = podcast,
-                                    isPlaying = currentPodcast?.id == podcast.id,
+                                    isNowPlaying = nowPlaying?.episodeId == podcast.id,
                                     downloadingIds = downloadingIds,
                                     downloadedIds = downloadedIds,
                                     onDownloadTap = {
@@ -200,7 +200,7 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
         }
 
         // プレイヤー表示エリア（再生中のときのみ）
-        if (currentPodcast != null) {
+        if (nowPlaying != null) {
             AudioPlayerSection(viewModel = viewModel, feedback = feedback)
         }
     }

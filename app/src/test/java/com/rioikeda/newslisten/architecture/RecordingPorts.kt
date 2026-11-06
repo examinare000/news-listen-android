@@ -592,12 +592,6 @@ class RecordingPlayerController(
     override val playbackSpeed: StateFlow<Float> = MutableStateFlow(core.property("getPlaybackSpeed", 1.0f))
     override val state: StateFlow<PlaybackState> = MutableStateFlow(core.property<PlaybackState>("getState", PlaybackState.Idle))
 
-    override var onPlaybackCompleted: (() -> Unit)? = null
-        set(value) {
-            core.write("setOnPlaybackCompleted")
-            field = value
-        }
-
     override fun prepare(url: String, metadata: PlaybackMetadata) = core.write("prepare")
 
     override fun play() = core.write("play")

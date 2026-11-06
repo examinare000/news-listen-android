@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
  * 変更を強いられないため。
  *
  * 正本: ios/NewsListenApp/NewsListenApp/Podcast/PodcastViewModel.swift の `AVPlayer` 操作
- * （play/pause/seek/setSpeed/stopPlayback）に相当する操作を抽出したもの。
+ * （play/pause/seek/setSpeed/stop）に相当する操作を抽出したもの。
  *
  * WHY [stop] と [release] を分離する理由: Media3 の `ExoPlayer.release()` は「以後
  * 再利用不可」という契約を持つ。一方 [ExoPlayerController] はアプリ生存期間中は
@@ -36,13 +36,6 @@ interface PlayerController {
 
     /** 再生状態（6 状態は排他）。再生失敗も [PlaybackState.Failed] として現れる。 */
     val state: StateFlow<PlaybackState>
-
-    /**
-     * 再生が最後まで完了したときに呼ばれるコールバック。呼び出し元（[PodcastViewModel]）が
-     * 次の再生開始時に上書きする。SharedFlow ではなくコールバックを選んだのは、
-     * 実装（ExoPlayer リスナー等）からの発火が非 suspend コンテキストになりやすいため。
-     */
-    var onPlaybackCompleted: (() -> Unit)?
 
     /**
      * 指定 URL の音声を再生準備する。

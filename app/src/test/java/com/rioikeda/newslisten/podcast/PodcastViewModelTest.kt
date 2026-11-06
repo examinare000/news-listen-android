@@ -143,16 +143,16 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(listPodcast)
+        viewModel.playNow(listPodcast)
 
         assertEquals(listOf("p1"), apiClient.fetchPodcastCalls)
         assertEquals(listOf("https://example.com/p1-fresh.mp3"), player.prepareCalls)
         assertEquals(listOf(freshPodcast.toPlaybackMetadata()), player.metadataCalls)
         assertEquals(1, player.playCallCount)
-        assertEquals(freshPodcast, viewModel.currentPodcast.value)
+        assertEquals(freshPodcast.id, viewModel.nowPlaying.value?.episodeId)
         assertNull(viewModel.errorMessage.value)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -162,7 +162,7 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(podcast())
+        viewModel.playNow(podcast())
 
         assertEquals(exception.message, viewModel.errorMessage.value)
         assertTrue(player.prepareCalls.isEmpty())
@@ -176,7 +176,7 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(podcast(status = "processing"))
+        viewModel.playNow(podcast(status = "processing"))
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertTrue(player.prepareCalls.isEmpty())
@@ -189,7 +189,7 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(podcast(status = "failed", errorMessage = "TTS生成に失敗しました"))
+        viewModel.playNow(podcast(status = "failed", errorMessage = "TTS生成に失敗しました"))
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertEquals("TTS生成に失敗しました", viewModel.errorMessage.value)
@@ -201,7 +201,7 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(podcast(status = "partial_failed", errorMessage = null))
+        viewModel.playNow(podcast(status = "partial_failed", errorMessage = null))
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertEquals("生成に失敗しました", viewModel.errorMessage.value)
@@ -214,7 +214,7 @@ class PodcastViewModelTest {
         val p1 = podcast(id = "p1")
         // fetchPodcast/fetchPodcasts は未スタブのままにし、呼ばれたら即座にテスト失敗させる
         // （CACHED 経路は fetch 系に一切触れない独立経路であることの検証）。
-        // updatePlaybackPosition は stopPlayback() の最終同期で呼ばれるためスタブしておく。
+        // updatePlaybackPosition は切り替えの停止の最終同期で呼ばれるためスタブしておく。
         val apiClient = FakePodcastApiClient(onUpdatePlaybackPosition = { _, _ -> p1 })
         val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
         cacheManager.cache("p1", byteArrayOf(1, 2, 3))
@@ -222,16 +222,16 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player, cacheManager, networkMonitor)
 
-        viewModel.play(p1)
+        viewModel.playNow(p1)
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertEquals(listOf("file:///cache/audio/p1.mp3"), player.prepareCalls)
         assertEquals(listOf(p1.toPlaybackMetadata()), player.metadataCalls)
         assertEquals(1, player.playCallCount)
-        assertEquals(p1, viewModel.currentPodcast.value)
+        assertEquals(p1.id, viewModel.nowPlaying.value?.episodeId)
         assertNull(viewModel.errorMessage.value)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -245,13 +245,13 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player, cacheManager, networkMonitor)
 
-        viewModel.play(p1)
+        viewModel.playNow(p1)
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertEquals(listOf("file:///cache/audio/p1.mp3"), player.prepareCalls)
-        assertEquals(p1, viewModel.currentPodcast.value)
+        assertEquals(p1.id, viewModel.nowPlaying.value?.episodeId)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -262,7 +262,7 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player, cacheManager, networkMonitor)
 
-        viewModel.play(podcast(id = "p1"))
+        viewModel.playNow(podcast(id = "p1"))
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertTrue(player.prepareCalls.isEmpty())
@@ -285,7 +285,7 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player, cacheManager, networkMonitor)
 
-        viewModel.play(p1)
+        viewModel.playNow(p1)
         emitPlaying(player)
         player.setPosition(12.5)
         advanceTimeBy(15_000)
@@ -293,7 +293,7 @@ class PodcastViewModelTest {
 
         assertNull(viewModel.errorMessage.value)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // --- 位置同期（15秒毎。ストリーク起点。iOS PodcastViewModel.swift:580-603 忠実写像） ---
@@ -308,7 +308,7 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(podcast(id = "p1"))
+        viewModel.playNow(podcast(id = "p1"))
         emitPlaying(player)
         player.setPosition(12.5)
         advanceTimeBy(30_000)
@@ -316,7 +316,7 @@ class PodcastViewModelTest {
 
         assertEquals(listOf("p1" to 12.5, "p1" to 12.5), apiClient.updatePlaybackPositionCalls)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -330,7 +330,7 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(podcast(id = "p1"))
+        viewModel.playNow(podcast(id = "p1"))
         emitPlaying(player)
         viewModel.togglePlayPause() // 一時停止
         emit(player, PlaybackState.Paused(position = 7.0, duration = 300.0))
@@ -344,35 +344,7 @@ class PodcastViewModelTest {
         assertFalse(player.isPlaying.value)
         assertEquals(listOf("p1" to 7.0), apiClient.updatePlaybackPositionCalls)
 
-        viewModel.stopPlayback()
-    }
-
-    // --- stopPlayback: 最終同期 + タイマー停止（iOS stopPlayback():355 転記） ---
-
-    @Test
-    fun stopPlaybackは最終同期をしてタイマーを止め以後PATCHが飛ばない() = runTest {
-        val fresh = podcast(id = "p1")
-        val apiClient = FakePodcastApiClient(
-            onFetchPodcast = { fresh },
-            onUpdatePlaybackPosition = { _, _ -> fresh },
-        )
-        val player = FakePlayerController()
-        val viewModel = newViewModel(apiClient, player)
-
-        viewModel.play(podcast(id = "p1"))
-        emitPlaying(player)
-        player.setPosition(42.0)
-
-        viewModel.stopPlayback()
-
-        assertEquals(listOf("p1" to 42.0), apiClient.updatePlaybackPositionCalls)
-        assertEquals(1, player.stopCallCount)
-        assertNull(viewModel.currentPodcast.value)
-
-        // タイマー停止後は時間を進めても追加の PATCH が飛ばない。
-        advanceTimeBy(30_000)
-        runCurrent()
-        assertEquals(listOf("p1" to 42.0), apiClient.updatePlaybackPositionCalls)
+        viewModel.stopForSubjectLeave()
     }
 
     // --- スキップ（PlaybackConstants: 戻る15秒 / 進む30秒） ---
@@ -386,7 +358,7 @@ class PodcastViewModelTest {
         )
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(podcast(id = "p1"))
+        viewModel.playNow(podcast(id = "p1"))
 
         player.setPosition(50.0)
         viewModel.skipBackward()
@@ -396,7 +368,7 @@ class PodcastViewModelTest {
         viewModel.skipBackward()
         assertEquals(listOf(35.0, 0.0), player.seekCalls)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -408,7 +380,7 @@ class PodcastViewModelTest {
         )
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(podcast(id = "p1"))
+        viewModel.playNow(podcast(id = "p1"))
 
         player.setPosition(50.0)
         viewModel.skipForward()
@@ -419,7 +391,7 @@ class PodcastViewModelTest {
         viewModel.skipForward()
         assertEquals(listOf(80.0, 100.0), player.seekCalls)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // --- 速度8段階の伝播 ---
@@ -433,14 +405,14 @@ class PodcastViewModelTest {
         )
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(podcast(id = "p1"))
+        viewModel.playNow(podcast(id = "p1"))
 
         PlaybackConstants.speeds.forEach { viewModel.setSpeed(it) }
 
         // 先頭の 1 件は、開始の確定時に player へ設定した既定速度（InMemoryPreferencesStore の既定 1.0）。
         assertEquals(listOf(1.0f) + PlaybackConstants.speeds.map { it.toFloat() }, player.speedCalls)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // --- togglePlayPause ---
@@ -454,7 +426,7 @@ class PodcastViewModelTest {
         )
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(podcast(id = "p1"))
+        viewModel.playNow(podcast(id = "p1"))
         assertTrue(player.isPlaying.value)
 
         viewModel.togglePlayPause()
@@ -465,7 +437,7 @@ class PodcastViewModelTest {
         assertTrue(player.isPlaying.value)
         assertEquals(2, player.playCallCount)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // --- 再生完了で停止 ---
@@ -478,11 +450,11 @@ class PodcastViewModelTest {
         val apiClient = FakePodcastApiClient(
             onFetchPodcast = { fresh },
             onUpdatePlaybackPosition = { _, _ -> fresh },
-            onMarkCompleted = { currentIdWhenMarked = viewModel.currentPodcast.value?.id },
+            onMarkCompleted = { currentIdWhenMarked = viewModel.nowPlaying.value?.episodeId },
         )
         val player = FakePlayerController()
         viewModel = newViewModel(apiClient, player)
-        viewModel.play(podcast(id = "p1"))
+        viewModel.playNow(podcast(id = "p1"))
         player.setPosition(99.0)
 
         emit(player, PlaybackState.Ended(300.0))
@@ -490,7 +462,7 @@ class PodcastViewModelTest {
         assertEquals(listOf("p1"), apiClient.markCompletedCalls)
         assertEquals("p1", currentIdWhenMarked)
         assertEquals(1, player.stopCallCount)
-        assertEquals(fresh, viewModel.currentPodcast.value)
+        assertEquals(fresh.id, viewModel.nowPlaying.value?.episodeId)
         // 完聴で送る位置は Ended が運ぶ総時間（shared-session-07）。
         assertEquals(listOf("p1" to 300.0), apiClient.updatePlaybackPositionCalls)
 
@@ -521,10 +493,10 @@ class PodcastViewModelTest {
 
         emit(player, PlaybackState.Ended(300.0))
 
-        assertEquals(p2, viewModel.currentPodcast.value)
+        assertEquals(p2.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(1, streakStore.refreshCallCount)
         assertEquals(2, player.playCallCount)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // --- PlayerController の release()/stop() 契約
@@ -541,17 +513,17 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(podcast(id = "pA"))
-        viewModel.stopPlayback()
+        viewModel.playNow(podcast(id = "pA"))
+        viewModel.stopForSubjectLeave()
         // ここで PlayerController が release() 済みだと Fake が AssertionError を投げる
         // （実機 ExoPlayer の「release 後は再利用不可」契約をテストで顕在化させる）。
-        viewModel.play(podcast(id = "pB"))
+        viewModel.playNow(podcast(id = "pB"))
 
         assertEquals(2, player.prepareCalls.size)
         assertEquals(2, player.playCallCount)
-        assertEquals(podcastB, viewModel.currentPodcast.value)
+        assertEquals(podcastB.id, viewModel.nowPlaying.value?.episodeId)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -565,16 +537,16 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(podcast(id = "pA"))
+        viewModel.playNow(podcast(id = "pA"))
         emitPlaying(player)
         player.setPosition(20.0)
 
-        // stopPlayback() を挟まず直接 B へ切り替える（play() 冒頭の内部停止処理を経由）。
-        viewModel.play(podcast(id = "pB"))
+        // stopForSubjectLeave() を挟まず直接 B へ切り替える（play() 冒頭の内部停止処理を経由）。
+        viewModel.playNow(podcast(id = "pB"))
         emit(player, PlaybackState.Loading)
         emitPlaying(player)
 
-        assertEquals(podcastB, viewModel.currentPodcast.value)
+        assertEquals(podcastB.id, viewModel.nowPlaying.value?.episodeId)
         // 切り替え時に A の最終位置が一度だけ同期される。
         assertEquals(listOf("pA" to 20.0), apiClient.updatePlaybackPositionCalls)
 
@@ -586,7 +558,7 @@ class PodcastViewModelTest {
         // 以後は B の同期のみが継続し、A の同期は再開しない。
         assertEquals(listOf("pB" to 5.0), apiClient.updatePlaybackPositionCalls)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // --- play() の suspend 境界競合（孤児タイマー防止） ---
@@ -606,8 +578,8 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        launch { viewModel.play(podcast(id = "pA")) }
-        launch { viewModel.play(podcast(id = "pB")) }
+        launch { viewModel.playNow(podcast(id = "pA")) }
+        launch { viewModel.playNow(podcast(id = "pB")) }
         // WHY advanceUntilIdle() を使わない: startPositionSync の while(isActive) ループは
         // 永久に次の delay(15000) を積み続けるため、advanceUntilIdle() は終了しない
         // （既存テストが advanceTimeBy + runCurrent の有界な組み合わせを使っているのと同じ理由）。
@@ -615,7 +587,7 @@ class PodcastViewModelTest {
         advanceTimeBy(2_000)
         runCurrent()
 
-        assertEquals(podcastB, viewModel.currentPodcast.value)
+        assertEquals(podcastB.id, viewModel.nowPlaying.value?.episodeId)
         emitPlaying(player) // Starting の B が Active になって周期の timer を張る
 
         apiClient.updatePlaybackPositionCalls.clear()
@@ -626,7 +598,7 @@ class PodcastViewModelTest {
         // A 側の同期タイマーが孤児化して生き残っていれば "pA" への PATCH も混ざって観測される。
         assertEquals(listOf("pB" to 3.0), apiClient.updatePlaybackPositionCalls)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // --- 再生キュー統合（フェーズ6 T1: PlaybackQueue<Episode> + 自動次遷移） ---
@@ -648,11 +620,11 @@ class PodcastViewModelTest {
 
         viewModel.playNow(p1)
 
-        assertEquals(p1, viewModel.currentPodcast.value)
+        assertEquals(p1.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(listOf(p1), viewModel.queue.value.items)
         assertEquals(p1, viewModel.queue.value.current)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -668,11 +640,11 @@ class PodcastViewModelTest {
 
         viewModel.playNow(p2)
 
-        assertEquals(p2, viewModel.currentPodcast.value)
+        assertEquals(p2.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(listOf(p1, p2), viewModel.queue.value.items)
         assertEquals(p2, viewModel.queue.value.current)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -688,10 +660,10 @@ class PodcastViewModelTest {
 
         assertEquals(listOf(p1, p2), viewModel.queue.value.items)
         assertEquals(p2, viewModel.queue.value.current)
-        assertEquals(p2, viewModel.currentPodcast.value)
+        assertEquals(p2.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(2, player.playCallCount)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -703,10 +675,10 @@ class PodcastViewModelTest {
 
         viewModel.playNext(p1)
 
-        assertEquals(p1, viewModel.currentPodcast.value)
+        assertEquals(p1.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(listOf(p1), viewModel.queue.value.items)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -720,11 +692,11 @@ class PodcastViewModelTest {
         viewModel.playNow(p1)
         viewModel.playNext(p2)
 
-        assertEquals(p1, viewModel.currentPodcast.value)
+        assertEquals(p1.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(listOf(p1, p2), viewModel.queue.value.items)
         assertEquals(1, player.playCallCount)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -736,10 +708,10 @@ class PodcastViewModelTest {
 
         viewModel.addToQueue(p1)
 
-        assertEquals(p1, viewModel.currentPodcast.value)
+        assertEquals(p1.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(listOf(p1), viewModel.queue.value.items)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -753,11 +725,11 @@ class PodcastViewModelTest {
         viewModel.playNow(p1)
         viewModel.addToQueue(p2)
 
-        assertEquals(p1, viewModel.currentPodcast.value)
+        assertEquals(p1.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(listOf(p1, p2), viewModel.queue.value.items)
         assertEquals(1, player.playCallCount)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -774,7 +746,7 @@ class PodcastViewModelTest {
         emit(player, PlaybackState.Ended(300.0))
 
         assertEquals(listOf("p1", "p2"), apiClient.fetchPodcastCalls)
-        assertEquals(p2, viewModel.currentPodcast.value)
+        assertEquals(p2.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(p2, viewModel.queue.value.current)
         assertEquals(2, player.playCallCount)
 
@@ -786,7 +758,7 @@ class PodcastViewModelTest {
         runCurrent()
         assertEquals(listOf("p2" to 3.0), apiClient.updatePlaybackPositionCalls)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -800,15 +772,15 @@ class PodcastViewModelTest {
 
         emit(player, PlaybackState.Ended(300.0))
 
-        assertEquals(p1, viewModel.currentPodcast.value)
+        assertEquals(p1.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(1, player.stopCallCount)
     }
 
     // --- 自動遷移×再生ゲートの整合性（review指摘: advance後のnextがgateされる場合に
-    //     queueだけ進んでcurrentPodcastが旧曲のまま詰まる不整合を防ぐ） ---
+    //     queueだけ進んでnowPlayingが旧曲のまま詰まる不整合を防ぐ） ---
 
     @Test
-    fun 自動遷移先がprocessingの場合エラー設定して停止しqueueとcurrentPodcastが整合する() = runTest {
+    fun 自動遷移先がprocessingの場合エラー設定して停止しqueueとnowPlayingが整合する() = runTest {
         val p1 = podcast(id = "p1")
         val p2 = podcast(id = "p2", status = "processing")
         val apiClient = queueApiClient(p1, p2)
@@ -821,12 +793,12 @@ class PodcastViewModelTest {
         emit(player, PlaybackState.Ended(300.0))
 
         assertEquals("生成中のため再生できません", viewModel.errorMessage.value)
-        assertNull(viewModel.currentPodcast.value)
+        assertNull(viewModel.nowPlaying.value)
         assertEquals(p2, viewModel.queue.value.current)
         assertEquals(1, player.stopCallCount)
         assertTrue(apiClient.fetchPodcastCalls.none { it == "p2" })
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -843,16 +815,16 @@ class PodcastViewModelTest {
         viewModel.removeFromQueue(p2.id)
 
         assertEquals(listOf(p1), viewModel.queue.value.items)
-        assertEquals(p1, viewModel.currentPodcast.value)
+        assertEquals(p1.id, viewModel.nowPlaying.value?.episodeId)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
     fun removeFromQueueで現在再生中のidを渡してもキューモデルの更新のみで実際の再生は継続する() = runTest {
         // iOS 準拠（PodcastViewModel.swift:313-315）: removeFromQueue は queue.remove(id:) を
         // 呼ぶだけの純粋なキュー操作で、実際の再生（AVPlayer/PlayerController）には触れない。
-        // キューモデル上は次の要素が currentIndex に昇格するが、currentPodcast/実再生は不変。
+        // キューモデル上は次の要素が currentIndex に昇格するが、nowPlaying/実再生は不変。
         val p1 = podcast(id = "p1")
         val p2 = podcast(id = "p2")
         val apiClient = queueApiClient(p1, p2)
@@ -866,10 +838,10 @@ class PodcastViewModelTest {
 
         assertEquals(listOf(p2), viewModel.queue.value.items)
         assertEquals(p2, viewModel.queue.value.current)
-        assertEquals(p1, viewModel.currentPodcast.value)
+        assertEquals(p1.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(0, player.stopCallCount)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -889,7 +861,7 @@ class PodcastViewModelTest {
 
         assertEquals(listOf(p2, p3), viewModel.queue.value.upNext)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // --- ダウンロード・音声キャッシュ（フェーズ8-B。正本: ADR-027 / iOS PodcastViewModel.swift:141-174） ---
@@ -1137,7 +1109,7 @@ class PodcastViewModelTest {
     }
 
     @Test
-    fun submitQuizAnswersの送信前にcurrentPodcastが変わっても指定podcastIdで送信する() = runTest {
+    fun submitQuizAnswersの送信前にnowPlayingが変わっても指定podcastIdで送信する() = runTest {
         val p1 = podcast(id = "p1")
         val p2 = podcast(id = "p2")
         val quizResponse = QuizAnswerResponse(
@@ -1165,15 +1137,15 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(p1)
-        viewModel.play(p2)
+        viewModel.playNow(p1)
+        viewModel.playNow(p2)
 
         val response = viewModel.submitQuizAnswers("p1", listOf(0))
 
         assertEquals("p1", submittedId)
-        assertEquals(p2, viewModel.currentPodcast.value)
+        assertEquals(p2.id, viewModel.nowPlaying.value?.episodeId)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -1243,7 +1215,7 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(podcast(status = "completed", errorMessage = "X"))
+        viewModel.playNow(podcast(status = "completed", errorMessage = "X"))
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertTrue(player.prepareCalls.isEmpty())
@@ -1256,7 +1228,7 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(podcast(status = "completed", audioUrl = ""))
+        viewModel.playNow(podcast(status = "completed", audioUrl = ""))
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertTrue(player.prepareCalls.isEmpty())
@@ -1269,7 +1241,7 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(podcast(status = "weird"))
+        viewModel.playNow(podcast(status = "weird"))
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertTrue(player.prepareCalls.isEmpty())
@@ -1281,7 +1253,7 @@ class PodcastViewModelTest {
         val apiClient = FakePodcastApiClient()
         val viewModel = newViewModel(apiClient, FakePlayerController())
 
-        viewModel.play(podcast(status = "failed", errorMessage = ""))
+        viewModel.playNow(podcast(status = "failed", errorMessage = ""))
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertEquals("生成に失敗しました", viewModel.errorMessage.value)
@@ -1298,14 +1270,14 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
 
-        viewModel.play(listed)
+        viewModel.playNow(listed)
 
         assertEquals(listOf("p1"), apiClient.fetchPodcastCalls)
         assertEquals(listOf("https://example.com/p1-fresh.mp3"), player.prepareCalls)
         assertEquals(1, player.playCallCount)
         assertNull(viewModel.errorMessage.value)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // --- 取り直した値が再生不可でも、前の再生を壊さない（android-deriv-17・android-dec-21） ---
@@ -1319,20 +1291,20 @@ class PodcastViewModelTest {
         )
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(pA)
+        viewModel.playNow(pA)
         emitPlaying(player)
 
-        viewModel.play(podcast(id = "pX", status = "failed", errorMessage = "boom"))
+        viewModel.playNow(podcast(id = "pX", status = "failed", errorMessage = "boom"))
         apiClient.updatePlaybackPositionCalls.clear()
         player.setPosition(5.0)
         advanceTimeBy(15_000)
         runCurrent()
 
         assertEquals(listOf("pA" to 5.0), apiClient.updatePlaybackPositionCalls)
-        assertEquals(pA, viewModel.currentPodcast.value)
+        assertEquals(pA.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals("boom", viewModel.errorMessage.value)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -1344,15 +1316,15 @@ class PodcastViewModelTest {
         )
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(pA)
+        viewModel.playNow(pA)
 
-        viewModel.play(podcast(id = "pB"))
+        viewModel.playNow(podcast(id = "pB"))
 
         assertEquals(0, player.stopCallCount)
-        assertEquals(pA, viewModel.currentPodcast.value)
+        assertEquals(pA.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals("生成中のため再生できません", viewModel.errorMessage.value)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -1364,15 +1336,15 @@ class PodcastViewModelTest {
         )
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(pA)
+        viewModel.playNow(pA)
 
-        viewModel.play(podcast(id = "pB"))
+        viewModel.playNow(podcast(id = "pB"))
 
         assertEquals(0, player.stopCallCount)
-        assertEquals(pA, viewModel.currentPodcast.value)
+        assertEquals(pA.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals("E", viewModel.errorMessage.value)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -1384,9 +1356,9 @@ class PodcastViewModelTest {
         )
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(pA)
+        viewModel.playNow(pA)
         emitPlaying(player)
-        viewModel.play(podcast(id = "pB"))
+        viewModel.playNow(podcast(id = "pB"))
 
         apiClient.updatePlaybackPositionCalls.clear()
         player.setPosition(8.0)
@@ -1395,7 +1367,7 @@ class PodcastViewModelTest {
 
         assertEquals(listOf("pA" to 8.0), apiClient.updatePlaybackPositionCalls)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -1416,10 +1388,10 @@ class PodcastViewModelTest {
         )
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(pA)
+        viewModel.playNow(pA)
         emitPlaying(player)
 
-        launch { viewModel.play(podcast(id = "pB")) }
+        launch { viewModel.playNow(podcast(id = "pB")) }
         runCurrent()
 
         // 観測 1: pB の fetch の途中。前の再生はまだ止まっていない。
@@ -1434,9 +1406,9 @@ class PodcastViewModelTest {
         assertEquals(1, player.stopCallCount)
         assertEquals("https://example.com/pB-fresh.mp3", player.prepareCalls.last())
         assertEquals(1, apiClient.updatePlaybackPositionCalls.count { it.first == "pA" })
-        assertEquals(pBFresh, viewModel.currentPodcast.value)
+        assertEquals(pBFresh.id, viewModel.nowPlaying.value?.episodeId)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -1449,19 +1421,19 @@ class PodcastViewModelTest {
         )
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(pA)
+        viewModel.playNow(pA)
 
-        viewModel.play(podcast(id = "pB"))
+        viewModel.playNow(podcast(id = "pB"))
 
         assertEquals(0, player.stopCallCount)
-        assertEquals(pA, viewModel.currentPodcast.value)
+        assertEquals(pA.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(exception.message, viewModel.errorMessage.value)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
-    fun `android-deriv-17 自動前進先の取り直し値がGeneratingなら止めてcurrentPodcastをnullにする`() = runTest {
+    fun `android-deriv-17 自動前進先の取り直し値がGeneratingなら止めてnowPlayingをnullにする`() = runTest {
         val pA = podcast(id = "pA")
         val pB = podcast(id = "pB")
         val apiClient = FakePodcastApiClient(
@@ -1475,7 +1447,7 @@ class PodcastViewModelTest {
 
         emit(player, PlaybackState.Ended(300.0))
 
-        assertNull(viewModel.currentPodcast.value)
+        assertNull(viewModel.nowPlaying.value)
         assertEquals("生成中のため再生できません", viewModel.errorMessage.value)
         assertEquals(1, player.stopCallCount)
     }
@@ -1495,7 +1467,7 @@ class PodcastViewModelTest {
 
         emit(player, PlaybackState.Ended(300.0))
 
-        assertNull(viewModel.currentPodcast.value)
+        assertNull(viewModel.nowPlaying.value)
         assertEquals("E", viewModel.errorMessage.value)
         assertEquals(1, player.stopCallCount)
     }
@@ -1532,19 +1504,19 @@ class PodcastViewModelTest {
         val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player, cacheManager)
-        viewModel.play(pA)
+        viewModel.playNow(pA)
         emitPlaying(player)
         cacheManager.cache("pB", byteArrayOf(1))
 
-        viewModel.play(pB)
+        viewModel.playNow(pB)
 
         assertEquals(1, player.stopCallCount)
         assertEquals(1, apiClient.updatePlaybackPositionCalls.count { it.first == "pA" })
         assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
         assertEquals("file:///cache/audio/pB.mp3", player.prepareCalls.last())
-        assertEquals(pB, viewModel.currentPodcast.value)
+        assertEquals(pB.id, viewModel.nowPlaying.value?.episodeId)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -1558,18 +1530,18 @@ class PodcastViewModelTest {
         val networkMonitor = StubNetworkMonitor(initialIsOnline = true)
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player, networkMonitor = networkMonitor)
-        viewModel.play(pA)
+        viewModel.playNow(pA)
         networkMonitor.setOnline(false)
 
-        viewModel.play(pB)
+        viewModel.playNow(pB)
 
         assertEquals(0, player.stopCallCount)
         assertEquals(0, apiClient.updatePlaybackPositionCalls.count { it.first == "pA" })
         assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
-        assertEquals(pA, viewModel.currentPodcast.value)
+        assertEquals(pA.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals("オフラインのため再生できません", viewModel.errorMessage.value)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // --- play が playMutex を保持している間に届いた前の再生の完了通知では、キューを前進しない（android-dec-27） ---
@@ -1617,11 +1589,11 @@ class PodcastViewModelTest {
 
         assertEquals(listOf("pA"), apiClient.markCompletedCalls)
         assertEquals(pB, viewModel.queue.value.current)
-        assertEquals(pBFresh, viewModel.currentPodcast.value)
+        assertEquals(pBFresh.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals("https://example.com/pB-fresh.mp3", player.prepareCalls.last())
         assertTrue(apiClient.fetchPodcastCalls.none { it == "pC" })
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // --- 現在再生中の正本は session（android-slice-playback-03） ---
@@ -1667,7 +1639,7 @@ class PodcastViewModelTest {
         assertEquals(listOf(1.5f, 2.0f, 1.5f), player.speedCalls)
         assertEquals(listOf(120.0, 40.0), player.seekCalls)
         assertEquals(1.5, preferences.defaultPlaybackSpeed.value, 0.0)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -1683,7 +1655,7 @@ class PodcastViewModelTest {
 
         viewModel.playNow(episodes[3])
         assertEquals(listOf(297.5), player.seekCalls)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // 完聴後の自動前進の開始前の失敗（shared-session-01・02・03・12）
@@ -1712,7 +1684,6 @@ class PodcastViewModelTest {
         assertEquals(exception.message, viewModel.errorMessage.value)
         assertEquals(listOf("pA"), apiClient.markCompletedCalls)
         assertNull(viewModel.nowPlaying.value)
-        assertNull(viewModel.currentPodcast.value)
         assertTrue(apiClient.fetchPodcastCalls.none { it == "pC" })
         assertSharedInv01(viewModel)
 
@@ -1730,7 +1701,7 @@ class PodcastViewModelTest {
         assertEquals(playable(pB).audioUrl, player.prepareCalls.last())
         assertNull(viewModel.errorMessage.value)
         assertSharedInv01(viewModel)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -1751,7 +1722,7 @@ class PodcastViewModelTest {
         assertEquals("オフラインのため再生できません", viewModel.errorMessage.value)
         assertEquals(pB, viewModel.queue.value.current)
         assertSharedInv01(viewModel)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -1812,7 +1783,7 @@ class PodcastViewModelTest {
         assertEquals(expectedMessage, viewModel.errorMessage.value)
         if (!expectFetchOfB) assertEquals(fetchesBefore, apiClient.fetchPodcastCalls)
         assertSharedInv01(viewModel)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -1849,7 +1820,7 @@ class PodcastViewModelTest {
         val exception = ApiException.NetworkError(RuntimeException("offline"))
         assertManualStartRejectedKeepsState(
             podcast(id = "pB"), exception.message, expectFetchOfB = true,
-            fetchB = { throw exception }, start = { viewModel, episode -> viewModel.play(episode) },
+            fetchB = { throw exception }, start = { viewModel, episode -> viewModel.playNow(episode) },
         )
     }
 
@@ -1903,7 +1874,7 @@ class PodcastViewModelTest {
         assertEquals(pB, viewModel.queue.value.current)
         assertTrue(apiClient.fetchPodcastCalls.none { it == "pC" })
         assertSharedInv01(viewModel)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // player の失敗と CACHED 経路の invalidate（android-contract-11 の Coordinator 部分）
@@ -1932,7 +1903,7 @@ class PodcastViewModelTest {
             assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
             assertEquals(playable(pA).audioUrl, player.prepareCalls.last())
             assertTrue(viewModel.session.value is Starting)
-            viewModel.stopPlayback()
+            viewModel.stopForSubjectLeave()
         }
     }
 
@@ -1950,7 +1921,7 @@ class PodcastViewModelTest {
 
             assertTrue("$reason", cacheManager.isCached("pA"))
             assertEquals(erroredLoaded(pA, reason), viewModel.session.value)
-            viewModel.stopPlayback()
+            viewModel.stopForSubjectLeave()
         }
     }
 
@@ -1967,7 +1938,7 @@ class PodcastViewModelTest {
 
         assertTrue(cacheManager.isCached("pA"))
         assertEquals(erroredLoaded(pA, PlaybackFailureReason.Source), viewModel.session.value)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -1985,7 +1956,7 @@ class PodcastViewModelTest {
         viewModel.retry() // 購読が生きていれば、この後の事象が session に届く
         emitPlaying(player)
         assertEquals(Active(playable(badId), 1.0), viewModel.session.value)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -2003,7 +1974,7 @@ class PodcastViewModelTest {
         assertEquals(2, subjectCalls)
 
         viewModel.playNow(pB)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
         assertEquals(3, subjectCalls)
     }
 
@@ -2028,60 +1999,17 @@ class PodcastViewModelTest {
         assertEquals(Active(playable(pA), 1.0), viewModel.session.value)
         assertEquals(listOf("pA" to 3.0), apiClient.updatePlaybackPositionCalls)
 
-        viewModel.stopPlayback() // Active からの停止直前の位置は positionSeconds（Fake では 0.0）
-        assertEquals(listOf("pA" to 3.0, "pA" to 0.0), apiClient.updatePlaybackPositionCalls)
+        viewModel.stopForSubjectLeave()
+        assertEquals(listOf("pA" to 3.0), apiClient.updatePlaybackPositionCalls)
         emit(player, PlaybackState.Failed(PlaybackFailureReason.Network)) // NothingPlaying への Failed
         assertTrue(viewModel.session.value is NothingPlaying)
     }
 
-    // stopPlayback（shared-session-11・android-dec-04）
+    // stopForSubjectLeave（shared-session-11・android-dec-45）
 
     @Test
-    fun `android-test-26 shared-session-11 Activeからstopしたらplayerを止め最終同期しNothingPlayingになりキューは保持する`() = runTest {
-        val (pA, pB) = listOf("pA", "pB").map { podcast(id = it) }
-        val apiClient = queueApiClient(pA, pB)
-        val player = FakePlayerController()
-        val viewModel = newViewModel(apiClient, player)
-        viewModel.playNow(pA)
-        viewModel.addToQueue(pB)
-        emitPlaying(player)
-        player.setPosition(42.0)
-
-        viewModel.stopPlayback()
-        viewModel.stopPlayback() // 2 回目は何も起きない
-
-        assertTrue(viewModel.session.value is NothingPlaying)
-        assertEquals(1, player.stopCallCount)
-        assertEquals(listOf("pA" to 42.0), apiClient.updatePlaybackPositionCalls)
-        assertEquals(listOf(pA, pB), viewModel.queue.value.items)
-        assertEquals(pA, viewModel.queue.value.current)
-        assertNull(viewModel.currentPodcast.value)
-        assertNull(viewModel.nowPlaying.value)
-        assertSharedInv01(viewModel)
-        advanceTimeBy(30_000)
-        runCurrent()
-        assertEquals(listOf("pA" to 42.0), apiClient.updatePlaybackPositionCalls)
-    }
-
-    @Test
-    fun `android-test-26 shared-session-11 NothingPlayingからstopしてもAPIもplayerも呼ばれない`() = runTest {
-        val apiClient = FakePodcastApiClient()
-        val player = FakePlayerController()
-        val viewModel = newViewModel(apiClient, player)
-
-        viewModel.stopPlayback()
-
-        assertTrue(viewModel.session.value is NothingPlaying)
-        assertEquals(0, player.stopCallCount)
-        assertTrue(apiClient.updatePlaybackPositionCalls.isEmpty())
-        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
-        assertTrue(apiClient.markCompletedCalls.isEmpty())
-        assertTrue(player.prepareCalls.isEmpty())
-    }
-
-    @Test
-    fun `android-test-26 shared-session-11 ErroredのIdOnlyからstopしたら位置は送らずplayerを止めてNothingPlayingになる`() = runTest {
-        // 自動前進の開始前の失敗の後。現行は currentPodcast が null なので位置を送らない。
+    fun `android-test-26 shared-session-11 ErroredのIdOnlyからstopForSubjectLeaveしたら位置は送らずplayerを止めNothingPlayingになりキューは空になる`() = runTest {
+        // 自動前進の開始前の失敗の後（session は Errored の IdOnly）。stopForSubjectLeave は session に依らず位置を送らない（shared-dec-09）。
         val (pA, pB) = listOf("pA", "pB").map { podcast(id = it) }
         val exception = ApiException.NetworkError(RuntimeException("offline"))
         val apiClient = FakePodcastApiClient(
@@ -2097,20 +2025,21 @@ class PodcastViewModelTest {
         val updatesBefore = apiClient.updatePlaybackPositionCalls.toList()
         val stopsBefore = player.stopCallCount
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
         advanceTimeBy(30_000)
         runCurrent()
 
         assertTrue(viewModel.session.value is NothingPlaying)
         assertEquals(updatesBefore, apiClient.updatePlaybackPositionCalls)
         assertEquals(stopsBefore + 1, player.stopCallCount)
-        assertEquals(pB, viewModel.queue.value.current)
+        assertNull(viewModel.queue.value.current)
+        assertTrue(viewModel.queue.value.items.isEmpty())
         assertSharedInv01(viewModel)
     }
 
     @Test
-    fun `android-test-26 shared-session-11 ErroredのLoadedからstopしたら位置は送らずタイマーも止まる`() = runTest {
-        // player の失敗の後（Errored の Loaded）。Active からの停止だけが位置を送る（android-dec-36）。
+    fun `android-test-26 shared-session-11 ErroredのLoadedからstopForSubjectLeaveしたら位置は送らずタイマーも止まりキューは空になる`() = runTest {
+        // player の失敗の後（session は Errored の Loaded）。stopForSubjectLeave は session に依らず位置を送らない（shared-dec-09）。
         // Failed で timer が止まることも、30 秒進めても送られないことで確かめる。
         val pA = podcast(id = "pA")
         val apiClient = queueApiClient(pA)
@@ -2123,13 +2052,15 @@ class PodcastViewModelTest {
         player.setPosition(33.0)
         val stopsBefore = player.stopCallCount
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
         advanceTimeBy(30_000) // Failed で止めないと timer が孤児になる
         runCurrent()
 
         assertTrue(viewModel.session.value is NothingPlaying)
         assertTrue(apiClient.updatePlaybackPositionCalls.isEmpty())
         assertEquals(stopsBefore + 1, player.stopCallCount)
+        assertTrue(viewModel.queue.value.items.isEmpty())
+        assertNull(viewModel.queue.value.current)
         assertSharedInv01(viewModel)
     }
 
@@ -2177,7 +2108,7 @@ class PodcastViewModelTest {
         emitPlaying(player)
         emit(player, PlaybackState.Ended(300.0)) // 末尾: Active から Completed を経て Stopped
         assertEquals(Stopped(playable(pB)), viewModel.session.value)
-        assertEquals(playable(pB), viewModel.currentPodcast.value)
+        assertEquals(playable(pB).id, viewModel.nowPlaying.value?.episodeId)
         assertSharedInv01(viewModel)
 
         viewModel.playNow(pA) // Stopped から Starting
@@ -2187,7 +2118,7 @@ class PodcastViewModelTest {
         markGate.complete(Unit)
         runCurrent()
         assertEquals(listOf("pA", "pB"), apiClient.markCompletedCalls)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -2207,7 +2138,7 @@ class PodcastViewModelTest {
         assertEquals(starting(pC), viewModel.session.value)
         assertEquals(pC, viewModel.queue.value.current)
         assertSharedInv01(viewModel)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -2233,7 +2164,7 @@ class PodcastViewModelTest {
         assertEquals(starting(pB), viewModel.session.value)
         assertEquals(pB, viewModel.queue.value.current)
         assertSharedInv01(viewModel)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -2256,7 +2187,7 @@ class PodcastViewModelTest {
         assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
         assertEquals(1, player.prepareCalls.size)
         assertEquals(0, player.stopCallCount)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // 旧経路の完聴は player の事象を注入しなくても進む（android-dec-31）
@@ -2276,7 +2207,7 @@ class PodcastViewModelTest {
         assertEquals(starting(pB), viewModel.session.value)
         assertEquals(pB, viewModel.queue.value.current)
         assertSharedInv01(viewModel)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -2290,7 +2221,7 @@ class PodcastViewModelTest {
         emit(player, PlaybackState.Ended(300.0))
 
         assertEquals(Stopped(playable(pA)), viewModel.session.value)
-        assertEquals(pA, viewModel.currentPodcast.value)
+        assertEquals(pA.id, viewModel.nowPlaying.value?.episodeId)
         assertEquals(listOf("pA"), apiClient.markCompletedCalls)
         assertSharedInv01(viewModel)
     }
@@ -2302,7 +2233,7 @@ class PodcastViewModelTest {
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
         viewModel.playNow(pA)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
         val callsBefore = listOf(apiClient.markCompletedCalls.toList(), apiClient.fetchPodcastCalls.toList())
 
         emit(player, PlaybackState.Ended(300.0))
@@ -2345,13 +2276,13 @@ class PodcastViewModelTest {
 
         assertSharedInv01(viewModel)
         assertEquals(pA, viewModel.queue.value.current)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
-    // nowPlaying・currentPodcast は session の派生（android-temp-05）
+    // nowPlaying は session の派生
 
     @Test
-    fun `android-temp-05 nowPlayingはEpisodePlayableの7fieldをそのまま同じ参照で持つ`() = runTest {
+    fun `nowPlayingはEpisodePlayableの7fieldをそのまま同じ参照で持つ`() = runTest {
         val pA = playableWithContent("pA")
         val viewModel = newViewModel(queueApiClient(pA), FakePlayerController())
 
@@ -2366,37 +2297,7 @@ class PodcastViewModelTest {
         assertSame(pA.glossary, nowPlaying.vocabulary)
         assertSame(pA.quiz, nowPlaying.quiz)
         assertEquals(pA.difficultyCode, nowPlaying.difficulty)
-        assertEquals(pA, viewModel.currentPodcast.value)
-        viewModel.stopPlayback()
-    }
-
-    @Test
-    fun `android-temp-05 nowPlayingとcurrentPodcastは状態ごとに同じ非null条件で同期して書き換わる`() = runTest {
-        val pA = playableWithContent("pA")
-        val player = FakePlayerController()
-        val viewModel = newViewModel(queueApiClient(pA), player)
-        fun assertDerived(expected: Episode.Playable?) {
-            assertEquals(expected, viewModel.currentPodcast.value)
-            assertEquals(expected?.id, viewModel.nowPlaying.value?.episodeId)
-        }
-        assertDerived(null)
-
-        viewModel.playNow(pA)
-        assertDerived(pA) // Starting
-        emitPlaying(player)
-        assertDerived(pA) // Active
-        emit(player, PlaybackState.Failed(PlaybackFailureReason.Network))
-        assertTrue(viewModel.session.value is Errored)
-        assertDerived(null)
-
-        viewModel.retry()
-        emitPlaying(player)
-        emit(player, PlaybackState.Ended(300.0))
-        assertTrue(viewModel.session.value is Stopped)
-        assertDerived(pA)
-
-        viewModel.stopPlayback()
-        assertDerived(null)
+        viewModel.stopForSubjectLeave()
     }
 
     // --- 連続した開始の切り替え（android-contract-22。baseline: 実装前の現行挙動で green） ---
@@ -2426,7 +2327,7 @@ class PodcastViewModelTest {
 
         assertEquals(listOf("pB" to 5.0), apiClient.updatePlaybackPositionCalls)
 
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // --- 完聴の順序・位置同期の送信条件・主体の離脱（android-slice-playback-04） ---
@@ -2462,7 +2363,7 @@ class PodcastViewModelTest {
         val apiClient = gatedApiClient(listOf(p1), markGate = markGate)
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(p1)
+        viewModel.playNow(p1)
         emitPlaying(player)
 
         emit(player, PlaybackState.Ended(300.0))
@@ -2481,7 +2382,7 @@ class PodcastViewModelTest {
         val apiClient = gatedApiClient(listOf(p1))
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(p1)
+        viewModel.playNow(p1)
         emitPlaying(player)
         emit(player, PlaybackState.Ended(300.0))
         val sessionBefore = viewModel.session.value
@@ -2501,7 +2402,7 @@ class PodcastViewModelTest {
         val apiClient = gatedApiClient(listOf(p1))
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(p1)
+        viewModel.playNow(p1)
         emitPlaying(player)
 
         emit(player, PlaybackState.Ended(null))
@@ -2516,7 +2417,7 @@ class PodcastViewModelTest {
         val apiClient = gatedApiClient(listOf(p1))
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(p1)
+        viewModel.playNow(p1)
         emitPlaying(player)
         player.setPosition(42.0)
 
@@ -2532,7 +2433,7 @@ class PodcastViewModelTest {
         val apiClient = gatedApiClient(listOf(p1))
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(p1)
+        viewModel.playNow(p1)
         emitPlaying(player)
 
         emit(player, PlaybackState.Ended(null))
@@ -2561,7 +2462,7 @@ class PodcastViewModelTest {
         assertSharedInv01(viewModel)
         markGate.complete(Unit)
         runCurrent()
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -2583,7 +2484,7 @@ class PodcastViewModelTest {
         runCurrent()
 
         assertEquals(listOf("pA" to 120.0), apiClient.updatePlaybackPositionCalls)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -2610,7 +2511,7 @@ class PodcastViewModelTest {
         assertEquals(listOf(pX), viewModel.queue.value.upNext)
         assertEquals(starting(pB), viewModel.session.value)
         assertSharedInv01(viewModel)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -2640,7 +2541,7 @@ class PodcastViewModelTest {
         fetchGate.complete(Unit)
         runCurrent()
         assertEquals(starting(pB), viewModel.session.value)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -2667,7 +2568,7 @@ class PodcastViewModelTest {
         fetchGate.complete(Unit)
         runCurrent()
         assertEquals(starting(pB), viewModel.session.value)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // 位置同期の送信条件（shared-session-05・android-contract-21 / android-test-21）
@@ -2692,13 +2593,13 @@ class PodcastViewModelTest {
 
         advanceTimeBy(30_000)
         runCurrent()
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
 
         assertEquals(updatesBefore, apiClient.updatePlaybackPositionCalls)
     }
 
     @Test
-    fun `android-test-21 shared-session-05 ErroredのLoadedとStoppedとNothingPlayingからstopしても送らない`() = runTest {
+    fun `android-test-21 shared-session-05 ErroredのLoadedとStoppedとNothingPlayingからstopForSubjectLeaveしても送らない`() = runTest {
         // verifies: android-contract-21 / android-test-21
         run { // Errored の Loaded
             val pA = podcast(id = "pA")
@@ -2712,7 +2613,7 @@ class PodcastViewModelTest {
             val updatesBefore = apiClient.updatePlaybackPositionCalls.toList()
             player.setPosition(50.0)
 
-            viewModel.stopPlayback()
+            viewModel.stopForSubjectLeave()
 
             assertEquals(updatesBefore, apiClient.updatePlaybackPositionCalls)
         }
@@ -2728,7 +2629,7 @@ class PodcastViewModelTest {
             val updatesBefore = apiClient.updatePlaybackPositionCalls.toList()
             player.setPosition(50.0)
 
-            viewModel.stopPlayback()
+            viewModel.stopForSubjectLeave()
 
             assertEquals(updatesBefore, apiClient.updatePlaybackPositionCalls)
         }
@@ -2738,7 +2639,7 @@ class PodcastViewModelTest {
             val viewModel = newViewModel(apiClient, player)
             player.setPosition(50.0)
 
-            viewModel.stopPlayback()
+            viewModel.stopForSubjectLeave()
 
             assertTrue(apiClient.updatePlaybackPositionCalls.isEmpty())
         }
@@ -2771,7 +2672,7 @@ class PodcastViewModelTest {
         val apiClient = gatedApiClient(listOf(p1))
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(p1)
+        viewModel.playNow(p1)
         emitPlaying(player)
         viewModel.togglePlayPause()
         emit(player, PlaybackState.Paused(position = 7.0, duration = 300.0))
@@ -2782,7 +2683,7 @@ class PodcastViewModelTest {
         runCurrent()
 
         assertEquals(listOf("p1" to 7.0, "p1" to 9.0), apiClient.updatePlaybackPositionCalls)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -2792,7 +2693,7 @@ class PodcastViewModelTest {
         val apiClient = gatedApiClient(listOf(p1))
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(p1) // Starting
+        viewModel.playNow(p1) // Starting
 
         emit(player, PlaybackState.Paused(position = 5.0, duration = 300.0))
         advanceTimeBy(15_000)
@@ -2809,14 +2710,14 @@ class PodcastViewModelTest {
         val apiClient = gatedApiClient(listOf(p1))
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(p1)
+        viewModel.playNow(p1)
         emitPlaying(player)
         emit(player, PlaybackState.Paused(position = 7.0, duration = 300.0))
 
         emit(player, PlaybackState.Paused(position = 8.0, duration = 300.0))
 
         assertEquals(listOf("p1" to 7.0), apiClient.updatePlaybackPositionCalls)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     @Test
@@ -2826,7 +2727,7 @@ class PodcastViewModelTest {
         val apiClient = gatedApiClient(listOf(p1))
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(p1)
+        viewModel.playNow(p1)
         emitPlaying(player)
         emit(player, PlaybackState.Loading)
 
@@ -2845,7 +2746,7 @@ class PodcastViewModelTest {
         val apiClient = gatedApiClient(listOf(p1))
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(p1)
+        viewModel.playNow(p1)
         emitPlaying(player)
 
         emit(player, PlaybackState.Loading)
@@ -2854,7 +2755,7 @@ class PodcastViewModelTest {
         runCurrent()
 
         assertEquals(listOf("p1" to 4.0), apiClient.updatePlaybackPositionCalls)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // 停止直前の位置は Active からだけ送る（android-deriv-16 の (a)(b) / android-test-23）
@@ -2866,12 +2767,12 @@ class PodcastViewModelTest {
         val apiClient = queueApiClient(pA, pB)
         val player = FakePlayerController()
         val viewModel = newViewModel(apiClient, player)
-        viewModel.play(pA) // Starting
+        viewModel.playNow(pA) // Starting
         player.setPosition(30.0)
 
         viewModel.playNow(pB)
         player.setPosition(30.0)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
 
         assertTrue(apiClient.updatePlaybackPositionCalls.isEmpty())
     }
@@ -2896,7 +2797,7 @@ class PodcastViewModelTest {
 
         assertEquals(starting(pC), viewModel.session.value)
         assertEquals(listOf("pA" to 300.0), apiClient.updatePlaybackPositionCalls)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // 手動の切り替えのキューの書込は、前の再生の最終同期より前（shared-session-04）
@@ -2924,7 +2825,7 @@ class PodcastViewModelTest {
         assertEquals(pB, viewModel.queue.value.current)
         assertEquals(starting(pB), viewModel.session.value)
         assertSharedInv01(viewModel)
-        viewModel.stopPlayback()
+        viewModel.stopForSubjectLeave()
     }
 
     // 主体の離脱での停止（shared-leave-01 / android-test-27）
@@ -2950,7 +2851,6 @@ class PodcastViewModelTest {
         assertEquals(stopsBefore + 1, player.stopCallCount)
         assertTrue(viewModel.session.value is NothingPlaying)
         assertNull(viewModel.nowPlaying.value)
-        assertNull(viewModel.currentPodcast.value)
         assertTrue(viewModel.queue.value.items.isEmpty())
         assertNull(viewModel.queue.value.current)
         assertEquals(updatesBefore, apiClient.updatePlaybackPositionCalls)

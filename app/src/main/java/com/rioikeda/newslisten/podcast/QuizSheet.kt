@@ -41,7 +41,6 @@ import com.rioikeda.newslisten.designsystem.DSFeedback
 import com.rioikeda.newslisten.designsystem.DSFeedbackVocabulary
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.success
-import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.launch
@@ -53,19 +52,19 @@ internal fun quizFeedbackVocabulary(correctRate: Double): DSFeedbackVocabulary =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuizSheet(
-    podcast: Episode.Playable,
+    nowPlaying: NowPlaying,
     feedback: DSFeedback,
     submit: suspend (podcastId: String, answers: List<Int>) -> QuizAnswerResponse,
     onDismiss: () -> Unit,
 ) {
-    val questions = podcast.quiz.orEmpty()
-    val selections = remember(podcast.id) {
+    val questions = nowPlaying.quiz.orEmpty()
+    val selections = remember(nowPlaying.episodeId) {
         mutableStateListOf<Int?>().apply { repeat(questions.size) { add(null) } }
     }
-    var grade by remember(podcast.id) { mutableStateOf<QuizAnswerResponse?>(null) }
-    var isSubmitting by remember(podcast.id) { mutableStateOf(false) }
-    var isUnavailable by remember(podcast.id) { mutableStateOf(false) }
-    var errorMessage by remember(podcast.id) { mutableStateOf<String?>(null) }
+    var grade by remember(nowPlaying.episodeId) { mutableStateOf<QuizAnswerResponse?>(null) }
+    var isSubmitting by remember(nowPlaying.episodeId) { mutableStateOf(false) }
+    var isUnavailable by remember(nowPlaying.episodeId) { mutableStateOf(false) }
+    var errorMessage by remember(nowPlaying.episodeId) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
 
@@ -188,7 +187,7 @@ fun QuizSheet(
                                     isSubmitting = true
                                     errorMessage = null
                                     try {
-                                        val response = submit(podcast.id, selections.filterNotNull())
+                                        val response = submit(nowPlaying.episodeId, selections.filterNotNull())
                                         grade = response
                                         feedback.play(quizFeedbackVocabulary(response.correctRate))
                                     } catch (e: ApiException.HttpError) {

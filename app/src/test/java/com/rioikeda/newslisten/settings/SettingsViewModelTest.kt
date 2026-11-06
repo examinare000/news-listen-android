@@ -8,6 +8,7 @@ import com.rioikeda.newslisten.model.RssSource
 import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
+import com.rioikeda.newslisten.podcast.PlaybackConstants
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import kotlinx.coroutines.CompletableDeferred
@@ -364,6 +365,33 @@ class SettingsViewModelTest {
         assertFalse(result)
         assertEquals(1.0, preferencesStore.defaultPlaybackSpeed.value, 0.0)
         assertTrue(viewModel.errorMessage.value != null)
+    }
+
+    @Test
+    fun `android-rule-playback-05 既定速度はPlaybackConstantsの8値すべてで同期に成功しPreferencesStoreがその値になる`() = runTest {
+        // verifies: android-rule-playback-05
+        for (speed in PlaybackConstants.speeds) {
+            val preferencesStore = InMemoryPreferencesStore()
+            val viewModel = newViewModel(
+                apiClient = FakeApiClient(
+                    onUpdatePreferences = { _, sent ->
+                        PreferencesResponse(
+                            defaultDifficulty = "toeic_600",
+                            defaultPlaybackSpeed = sent ?: 1.0,
+                            digestEnabled = false,
+                            digestArticleCount = 0,
+                        )
+                    },
+                ),
+                preferencesStore = preferencesStore,
+            )
+
+            val result = viewModel.syncDefaultPlaybackSpeed(speed)
+
+            assertTrue("speed=$speed", result)
+            assertEquals("speed=$speed", speed, preferencesStore.defaultPlaybackSpeed.value, 0.0)
+        }
+        assertEquals(8, PlaybackConstants.speeds.size)
     }
 
     @Test

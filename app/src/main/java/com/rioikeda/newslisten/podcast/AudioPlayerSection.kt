@@ -44,7 +44,6 @@ import androidx.compose.ui.unit.dp
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.DSFeedback
-import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.catalog.domain.EpisodeGlossaryEntry
 import com.rioikeda.newslisten.catalog.domain.EpisodeTranscriptSegment
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,7 +61,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
-    val currentPodcast by viewModel.currentPodcast.collectAsState()
+    val nowPlaying by viewModel.nowPlaying.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
     val currentTime by viewModel.positionSeconds.collectAsState()
     val duration by viewModel.durationSeconds.collectAsState()
@@ -72,9 +71,9 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
     val coroutineScope = rememberCoroutineScope()
 
     var isTranscriptExpanded by remember { mutableStateOf(false) }
-    var isVocabularyExpanded by remember(currentPodcast?.id) { mutableStateOf(false) }
+    var isVocabularyExpanded by remember(nowPlaying?.episodeId) { mutableStateOf(false) }
     // クイズシート用スナップショット: ボタン押下時の Podcast を保持し、送信ずっと表示
-    var quizPodcast: Episode.Playable? by remember { mutableStateOf(null as Episode.Playable?) }
+    var quizNowPlaying: NowPlaying? by remember { mutableStateOf(null as NowPlaying?) }
 
     Box(
         modifier = Modifier
@@ -98,7 +97,7 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                currentPodcast?.japaneseIntroText?.let { intro ->
+                nowPlaying?.japaneseIntroText?.let { intro ->
                     if (intro.isNotEmpty()) {
                         Text(
                             text = intro,
@@ -112,7 +111,7 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
             }
 
             // トランスクリプト折りたたみセクション
-            currentPodcast?.transcript?.let { segments ->
+            nowPlaying?.segments?.let { segments ->
                 if (segments.isNotEmpty()) {
                     TranscriptSection(
                         segments = segments,
@@ -122,8 +121,8 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
                 }
             }
 
-            currentPodcast?.glossary?.takeIf { !it.isNullOrEmpty() }?.let { entries ->
-                val podcastId = currentPodcast?.id ?: return@let
+            nowPlaying?.vocabulary?.takeIf { !it.isNullOrEmpty() }?.let { entries ->
+                val podcastId = nowPlaying?.episodeId ?: return@let
                 VocabularySection(
                     podcastId = podcastId,
                     entries = entries,
@@ -139,9 +138,9 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
                 )
             }
 
-            currentPodcast?.takeIf { !it.quiz.isNullOrEmpty() }?.let { podcast ->
+            nowPlaying?.takeIf { !it.quiz.isNullOrEmpty() }?.let { snapshot ->
                 Button(
-                    onClick = { quizPodcast = podcast },
+                    onClick = { quizNowPlaying = snapshot },
                     modifier = Modifier
                         .fillMaxWidth()
                         .semantics { contentDescription = "聴き終わったら試す" },
@@ -150,12 +149,12 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
                 }
             }
 
-            quizPodcast?.let { podcast ->
+            quizNowPlaying?.let { snapshot ->
                 QuizSheet(
-                    podcast = podcast,
+                    nowPlaying = snapshot,
                     feedback = feedback,
                     submit = viewModel::submitQuizAnswers,
-                    onDismiss = { quizPodcast = null },
+                    onDismiss = { quizNowPlaying = null },
                 )
             }
 

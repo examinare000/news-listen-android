@@ -68,8 +68,6 @@ class ExoPlayerController(private val context: Context) : PlayerController {
     private val _state = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
-    override var onPlaybackCompleted: (() -> Unit)? = null
-
     private var positionPollingRunnable: Runnable? = null
 
     init {
@@ -96,10 +94,8 @@ class ExoPlayerController(private val context: Context) : PlayerController {
                         Player.STATE_BUFFERING -> _state.value = PlaybackState.Loading
 
                         Player.STATE_ENDED -> {
-                            // 再生終了: コールバック発火（onPlaybackCompleted が非 suspend コンテキストなのでここで OK）
                             _isPlaying.value = false
                             _state.value = PlaybackState.Ended(currentDurationSeconds())
-                            onPlaybackCompleted?.invoke()
                         }
 
                         Player.STATE_IDLE -> {

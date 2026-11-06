@@ -157,14 +157,11 @@ class RecordingPortsTest {
         val sfx: List<Any>,
         val positions: List<Any>,
         val online: List<Any>,
-        val onPlaybackCompleted: Any?,
-        val callback: () -> Unit,
     )
 
-    /** 書込 6 操作を 2 回ずつ → callback の代入と seekTo → property の読み、の順に呼ぶ。 */
+    /** 書込 6 操作を 2 回ずつ → seekTo → property の読み、の順に呼ぶ。 */
     private fun exercise(scenario: ProbeScenario): Exercised {
         val env = ProbeEnvironment.create(scenario)
-        val callback: () -> Unit = {}
         val updated = mutableListOf<Any?>()
         val starred = mutableListOf<Any?>()
         val completed = mutableListOf<Any?>()
@@ -177,24 +174,22 @@ class RecordingPortsTest {
         repeat(2) { saved += env.sessionStore.save("t") }
         repeat(2) { deleted += env.fileSystem.delete("x") }
         repeat(2) { runBlocking { credentials += env.passkeyProvider.getCredential("{}") } }
-        env.playerController.onPlaybackCompleted = callback
         env.playerController.seekTo(30.0)
         val sfx = List(2) { env.preferencesStore.sfxEnabled }
         val positions = List(3) { env.playerController.positionSeconds }
         val online = List(2) { env.networkMonitor.isOnline }
         return Exercised(
             env, updated, starred, completed, saved, deleted, credentials, sfx, positions, online,
-            env.playerController.onPlaybackCompleted, callback,
         )
     }
 
     private fun assertWriteContract(r: Exercised) {
         val writes = r.env.recorder.writes
-        assertEquals("書込事象は 14 件（書込 6 操作 × 2 回 ＋ callback の代入 1 ＋ seekTo 1）: $writes", 14, writes.size)
+        assertEquals("書込事象は 13 件（書込 6 操作 × 2 回 ＋ seekTo 1）: $writes", 13, writes.size)
         assertTrue("印を立てていないのですべて BACKGROUND", writes.all { it.origin == Origin.BACKGROUND })
         assertEquals(
             listOf(
-                "ApiClient" to 6, "SessionStore" to 2, "FileSystem" to 2, "PasskeyProvider" to 2, "PlayerController" to 2,
+                "ApiClient" to 6, "SessionStore" to 2, "FileSystem" to 2, "PasskeyProvider" to 2, "PlayerController" to 1,
             ),
             writes.groupBy { it.port }.map { it.key to it.value.size },
         )
@@ -216,8 +211,7 @@ class RecordingPortsTest {
             r.env.playerController.positionSeconds.value,
             0.0,
         )
-        assertSame("setOnPlaybackCompleted が最後に代入した値を返す", r.callback, r.onPlaybackCompleted)
-        assertEquals("property の読みは書込事象を積まない", 14, r.env.recorder.writes.size)
+        assertEquals("property の読みは書込事象を積まない", 13, r.env.recorder.writes.size)
         assertEquals("書込と property の読みは ProbeFailure を積まない", emptyList<ProbeFailure>(), r.env.recorder.failures)
     }
 
@@ -240,7 +234,7 @@ class RecordingPortsTest {
         assertSame("scenario が注入したインスタンスそのもの", scenario.readFailure, injected)
         assertTrue("注入した例外は recorder に登録される", result.env.recorder.injected.any { it === injected })
         assertEquals("注入した例外は ProbeFailure にならない", emptyList<ProbeFailure>(), result.env.recorder.failures)
-        assertEquals("列の読みは書込事象を積まない", 14, result.env.recorder.writes.size)
+        assertEquals("列の読みは書込事象を積まない", 13, result.env.recorder.writes.size)
     }
 
     @Test

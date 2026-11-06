@@ -104,18 +104,13 @@ class PodcastViewModel(
 
     private val _session = MutableStateFlow<PlaybackSession>(PlaybackSession.NothingPlaying)
 
-    /** 現在再生中のものの正本。[nowPlaying]・[currentPodcast] はここからの派生で、[applySession] だけが書く。 */
+    /** 現在再生中のものの正本。[nowPlaying] はここからの派生で、[applySession] だけが書く。 */
     val session: StateFlow<PlaybackSession> = _session.asStateFlow()
 
     private val _nowPlaying = MutableStateFlow<NowPlaying?>(null)
 
     /** 何が再生中かの読み取り用の値。NothingPlaying と Errored では null。 */
     val nowPlaying: StateFlow<NowPlaying?> = _nowPlaying.asStateFlow()
-
-    private val _currentPodcast = MutableStateFlow<Episode.Playable?>(null)
-
-    /** 現在再生対象の Podcast（[nowPlaying] と同じ非 null 条件）。署名付き URL 再取得後の最新値。 */
-    val currentPodcast: StateFlow<Episode.Playable?> = _currentPodcast.asStateFlow()
 
     private val _downloadingIds = MutableStateFlow<Set<String>>(emptySet())
 
@@ -302,7 +297,7 @@ class PodcastViewModel(
      *
      * @param podcast 再生対象（一覧の要素）。
      */
-    suspend fun play(podcast: Episode): Unit = withContext(dispatcher) {
+    private suspend fun play(podcast: Episode): Unit = withContext(dispatcher) {
         startEpisode(podcast, StartTrigger.MANUAL, leaveGeneration)
     }
 
@@ -418,7 +413,7 @@ class PodcastViewModel(
             else -> _session.value.start(playable, resume, speed)
         }
 
-    /** [session] を置き、[nowPlaying]・[currentPodcast] を同期して派生させる（これらを書く唯一の場所）。 */
+    /** [session] を置き、[nowPlaying] を派生させる（これを書く唯一の場所）。 */
     private fun applySession(next: PlaybackSession) {
         _session.value = next
         val shown = when (next) {
@@ -432,7 +427,6 @@ class PodcastViewModel(
             sessionSource = null
             sessionSubject = null
         }
-        _currentPodcast.value = shown
         _nowPlaying.value = shown?.toNowPlaying()
     }
 
@@ -595,7 +589,7 @@ class PodcastViewModel(
      *
      * WHY 再生に影響させない: iOS の [QueueSheet] は待機列（upNext）のみ削除対象にでき、
      * 現在再生中の項目を削除する導線は存在しない。仮に現在再生中の id を渡しても、
-     * キューモデル上は次の要素が currentIndex に昇格するだけで、[currentPodcast]/実再生は
+     * キューモデル上は次の要素が currentIndex に昇格するだけで、[nowPlaying]/実再生は
      * 不変（iOS 忠実写像）。
      *
      * WHY suspend + withContext(dispatcher): [moveUpNext] と同じくロストアップデート防止のため
@@ -653,16 +647,6 @@ class PodcastViewModel(
     }
 
     /**
-     * 再生を停止する。最終同期 → タイマー停止 → PlayerController の stop → session を NothingPlaying へ（キューは保持）。
-     * 正本: PodcastViewModel.swift:353-376（stopPlayback）。何も再生していなければ何もしない。
-     */
-    suspend fun stopPlayback(): Unit = withContext(dispatcher) {
-        if (_session.value is PlaybackSession.NothingPlaying) return@withContext
-        settlePlayback()
-        applySession(_session.value.stop())
-    }
-
-    /**
      * 主体の離脱での停止（shared-leave-01）。世代を進め、timer を止め、player を止め、session とキューを空にする。
      * 位置は送らない（shared-dec-09）。[playMutex] は取らない: 遅い取得の後ろで離脱が待たされないよう、
      * 取得中の開始は世代の比較で捨てさせる（android-dec-42）。session を先に空にするのは、途中の状態でも
@@ -685,8 +669,8 @@ class PodcastViewModel(
      * 指定 Podcast の回答をサーバーへ送り、採点結果を返す。
      *
      * WHY podcastId を明示的に引数化: iOS PodcastViewModel.swift:411 と同形。シートが開かれた時点の
-     * Podcast を保持し、その後 currentPodcast が変わってもシート内では元の podcastId で一貫性を保つ。
-     * AudioPlayerSection は quizPodcast のスナップショット方式で実装する（要件1）。
+     * Podcast を保持し、その後 nowPlaying が変わってもシート内では元の podcastId で一貫性を保つ。
+     * AudioPlayerSection は quizNowPlaying のスナップショット方式で実装する（要件1）。
      */
     suspend fun submitQuizAnswers(podcastId: String, answers: List<Int>): QuizAnswerResponse = withContext(dispatcher) {
         apiClient.submitQuizAnswers(podcastId, QuizAnswerRequest(answers))
@@ -697,16 +681,12 @@ class PodcastViewModel(
      * 位置を送るのは Active のときだけ。Starting は player がまだ位置を報告していない。Completed・Stopped・Errored は
      * 再生が終わっているか失敗している。何も再生していない状態では何もしない。
      *
-     * WHY session で判定する: currentPodcast は Errored で null になるため、それで判定すると
+     * WHY session で判定する: nowPlaying は Errored で null になるため、それで判定すると
      * player の失敗の後にタイマーが止まらず孤児になる。
      * WHY release() ではなく stop(): [playerController] はアプリ生存期間中のシングルトンで、
      * release() は「以後再利用不可」の終端操作（[PlayerController] の doc 参照）。
-     *
-     * [keepCurrentPodcast] は改名前から残した宣言で、もう読まない（Stopped が代替し、呼出は 0 件）。
-     * シンボルの削除は android-slice-playback-05 の担当（order の禁止事項）。
      */
-    @Suppress("UNUSED_PARAMETER")
-    private suspend fun settlePlayback(keepCurrentPodcast: Boolean = false) {
+    private suspend fun settlePlayback() {
         val current = _session.value
         if (current is PlaybackSession.NothingPlaying) return
         if (current is PlaybackSession.Active) syncPosition(current.episode.id, playerController.positionSeconds.value)

@@ -48,8 +48,8 @@ class EffectTypeCatalogTest {
         assertTrue("markAchievementsSeen" in preferences.writes)
 
         val player = portRow(production, "PlayerController")
-        assertEquals(setOf("prepare", "play", "pause", "seekTo", "setSpeed", "stop", "release", "setOnPlaybackCompleted"), player.writes)
-        assertEquals(6, player.propertyReads.size)
+        assertEquals(setOf("prepare", "play", "pause", "seekTo", "setSpeed", "stop", "release"), player.writes)
+        assertEquals(5, player.propertyReads.size)
 
         assertEquals(setOf("save", "clear"), portRow(production, "SessionStore").writes)
         assertEquals(setOf("load"), portRow(production, "SessionStore").sequenceReads)

@@ -31,8 +31,6 @@ class FakePlayerController : PlayerController {
     private val _state = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
     override val state: StateFlow<PlaybackState> = _state
 
-    override var onPlaybackCompleted: (() -> Unit)? = null
-
     /** prepare に渡された URL の呼び出し履歴。 */
     val prepareCalls: MutableList<String> = mutableListOf()
 
@@ -137,10 +135,5 @@ class FakePlayerController : PlayerController {
     /** テストから総再生時間を直接設定する（スキップ時の上限クランプ検証用）。 */
     fun setDuration(seconds: Double?) {
         _durationSeconds.value = seconds
-    }
-
-    /** テストから再生完了を模擬する。 */
-    fun completePlayback() {
-        onPlaybackCompleted?.invoke()
     }
 }
