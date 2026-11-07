@@ -2,9 +2,8 @@ package com.rioikeda.newslisten.podcast
 
 import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.network.ApiException
-import com.rioikeda.newslisten.network.AudioCacheException
-import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.PodcastApi
+import com.rioikeda.newslisten.podcast.app.AudioStore
 import java.util.Collections
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -33,7 +32,7 @@ import kotlinx.coroutines.withContext
  * @param dispatcher 状態の書込と Job の追跡を行う dispatcher（単一並列を想定）。
  */
 class OfflineLibrary(
-    private val cacheManager: AudioCacheManager,
+    private val audioStore: AudioStore,
     private val podcastApi: PodcastApi,
     private val currentSubject: () -> String?,
     private val dispatcher: CoroutineDispatcher,
@@ -99,7 +98,10 @@ class OfflineLibrary(
                 return
             }
             val audioData = podcastApi.downloadAudio(fresh.audioUrl)
-            cacheManager.cache(subject, id, audioData)
+            if (!audioStore.save(subject, id, audioData)) {
+                _lastError.value = SAVE_FAILED_MESSAGE
+                return
+            }
             // 離脱後に完了した書込は離脱主体の置き場に入るだけで、現在の主体の画面へは出さない。
             if (subject == currentSubject()) {
                 _downloadedIds.update { readOnlyCopy(it + id) }
@@ -107,8 +109,6 @@ class OfflineLibrary(
             // 他の Job の失敗の文言を、成功した操作の中継が再び写さないようにする。
             _lastError.value = null
         } catch (e: ApiException) {
-            _lastError.value = e.message
-        } catch (e: AudioCacheException) {
             _lastError.value = e.message
         } finally {
             // 自分の登録だけを外す。cancel の後に同じ key で始まった新しい Job の登録を消さない。
@@ -134,12 +134,12 @@ class OfflineLibrary(
     suspend fun removeDownload(id: String): Unit = withContext(dispatcher) {
         _lastError.value = null
         val subject = currentSubject() ?: return@withContext
-        try {
-            cacheManager.remove(subject, id)
-            _downloadedIds.update { readOnlyCopy(it - id) }
-        } catch (e: AudioCacheException) {
-            _lastError.value = e.message
+        if (!audioStore.validateId(subject) || !audioStore.validateId(id)) {
+            _lastError.value = REMOVE_FAILED_MESSAGE
+            return@withContext
         }
+        audioStore.remove(subject, id)
+        _downloadedIds.update { readOnlyCopy(it - id) }
     }
 
     /**
@@ -155,32 +155,31 @@ class OfflineLibrary(
             return
         }
         _downloadedIds.update {
-            readOnlyCopy(podcasts.filter { podcast -> cacheManager.isCached(subject, podcast.id) }.map { it.id }.toSet())
+            readOnlyCopy(podcasts.filter { podcast -> audioStore.isCached(subject, podcast.id) }.map { it.id }.toSet())
         }
         publishDownloading(subject)
     }
 
     /** 主体が `null` なら false。 */
     fun isCached(subject: String?, id: String): Boolean =
-        subject != null && cacheManager.isCached(subject, id)
+        subject != null && audioStore.isCached(subject, id)
 
     /** 主体が `null` またはキャッシュが無ければ `null`。 */
     fun cachedFileUri(subject: String?, id: String): String? =
-        subject?.let { cacheManager.cachedFileUri(it, id) }
+        subject?.let { audioStore.cachedFileUri(it, id) }
 
-    /** 再生に失敗したキャッシュを無効化する。主体が `null` なら何もしない。失敗は再生の遷移を止めないよう握る。 */
+    /**
+     * 再生に失敗したキャッシュを無効化する。主体が `null`、または主体か id の形式が不正なら黙って何もしない。
+     * 無効化の失敗で、失敗した再生の遷移と以後の購読を止めない。
+     */
     fun invalidate(subject: String?, id: String) {
-        if (subject == null) return
-        try {
-            cacheManager.invalidate(subject, id)
-        } catch (_: AudioCacheException) {
-            // best-effort: 無効化に失敗しても、失敗した再生の遷移と以後の購読を止めない。
-        }
+        if (subject == null || !audioStore.validateId(subject) || !audioStore.validateId(id)) return
+        audioStore.invalidate(subject, id)
     }
 
-    fun removeSubject(subject: String) = cacheManager.removeSubject(subject)
+    fun removeSubject(subject: String) = audioStore.removeSubject(subject)
 
-    fun reclaim(currentSubject: String?) = cacheManager.reclaim(currentSubject)
+    fun reclaim(currentSubject: String?) = audioStore.reclaim(currentSubject)
 
     private fun publishDownloading(subject: String) {
         _downloadingIds.update {
@@ -191,7 +190,13 @@ class OfflineLibrary(
     private fun readOnlyCopy(ids: Set<String>): Set<String> =
         Collections.unmodifiableSet(LinkedHashSet(ids))
 
-    // PodcastViewModel の再生ゲートと同じ文言の暫定の複製（android-dec-47）。
+    private companion object {
+        // 固定の文言（android-dec-58）。技術的な英語の例外文を利用者に見せない。
+        const val SAVE_FAILED_MESSAGE = "音声を保存できませんでした"
+        const val REMOVE_FAILED_MESSAGE = "音声を削除できませんでした"
+    }
+
+    // PlaybackCoordinator の再生ゲートと同じ文言の暫定の複製（android-dec-47）。
     private fun playabilityError(episode: Episode): String? =
         when (episode) {
             is Episode.Playable -> null

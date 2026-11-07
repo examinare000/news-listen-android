@@ -54,7 +54,7 @@ class ExoPlayerController(private val context: Context) : PlayerController {
         .build()
 
     private val _isPlaying = MutableStateFlow(false)
-    override val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
     private val _positionSeconds = MutableStateFlow(0.0)
     override val positionSeconds: StateFlow<Double> = _positionSeconds.asStateFlow()
@@ -207,7 +207,8 @@ class ExoPlayerController(private val context: Context) : PlayerController {
         }
     }
 
-    override fun release() {
+    /** 具象の操作（port には無い）。以後は使えない。アプリプロセスの終了など、この controller の生存期間が終わる時にだけ呼ぶ。 */
+    fun release() {
         mainHandler.post {
             stopPositionPolling()
             exoPlayer.release()
@@ -264,4 +265,45 @@ class ExoPlayerController(private val context: Context) : PlayerController {
         }
         positionPollingRunnable = null
     }
+}
+
+// WHY 明示集合: 数値範囲での推測判定は、範囲内に将来追加される定数を暗黙に分類してしまうため。
+@Suppress("UnsafeOptInUsageError")
+private val SOURCE_ERROR_CODES = setOf(
+    PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+)
+
+@Suppress("UnsafeOptInUsageError")
+private val NETWORK_ERROR_CODES = setOf(
+    PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+    PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
+    PlaybackException.ERROR_CODE_IO_NO_PERMISSION,
+    PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED,
+    PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE,
+)
+
+@Suppress("UnsafeOptInUsageError")
+private val DECODE_ERROR_CODES = setOf(
+    PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+    PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED,
+    PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+    PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED,
+    PlaybackException.ERROR_CODE_DECODING_FAILED,
+    PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+    PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+    PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED,
+)
+
+/**
+ * Media3 の `PlaybackException.errorCode` を [PlaybackFailureReason] に分類する。
+ * `ERROR_CODE_DECODER_*` は接頭辞が `DECODING_*` と異なるため [PlaybackFailureReason.Unknown] になる。
+ */
+fun classifyPlaybackError(errorCode: Int): PlaybackFailureReason = when (errorCode) {
+    in SOURCE_ERROR_CODES -> PlaybackFailureReason.Source
+    in NETWORK_ERROR_CODES -> PlaybackFailureReason.Network
+    in DECODE_ERROR_CODES -> PlaybackFailureReason.Decode
+    else -> PlaybackFailureReason.Unknown(errorCode)
 }

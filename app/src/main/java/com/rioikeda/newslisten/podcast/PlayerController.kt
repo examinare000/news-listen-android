@@ -7,24 +7,18 @@ import kotlinx.coroutines.flow.StateFlow
  *
  * 実装は [ExoPlayerController]（Media3 ExoPlayer）。テストでは [FakePlayerController] に
  * 差し替える。観測可能な状態を StateFlow で公開するのは、実装の詳細（ポーリング方式や
- * リスナー方式）が変わっても Compose 側やこの interface の利用者（[PodcastViewModel]）が
+ * リスナー方式）が変わっても Compose 側やこの interface の利用者（再生の Coordinator）が
  * 変更を強いられないため。
  *
  * 正本: ios/NewsListenApp/NewsListenApp/Podcast/PodcastViewModel.swift の `AVPlayer` 操作
  * （play/pause/seek/setSpeed/stop）に相当する操作を抽出したもの。
  *
- * WHY [stop] と [release] を分離する理由: Media3 の `ExoPlayer.release()` は「以後
- * 再利用不可」という契約を持つ。一方 [ExoPlayerController] はアプリ生存期間中は
- * シングルトンとして DI される（[com.rioikeda.newslisten.di.AppContainer]）ため、
- * エピソード切替のたびに release() を呼ぶと2エピソード目以降の再生が一切できなくなる
- * （iOS は play() のたびに AVPlayer を新規生成するため release 概念自体が存在せず、
- * この制約の移植漏れが起きやすい）。エピソード切替・一時停止相当の「止めて再利用する」
- * 操作は必ず [stop] を使うこと。
+ * WHY port に終端の解放を置かない理由: 実装はアプリ生存期間中はシングルトンとして DI される
+ * （[com.rioikeda.newslisten.di.AppContainer]）ため、エピソード切替のたびに解放すると
+ * 2エピソード目以降の再生が一切できなくなる。エピソード切替・一時停止相当の「止めて再利用する」
+ * 操作は必ず [stop] を使うこと。終端の解放は具象（[ExoPlayerController]）の操作に留める。
  */
 interface PlayerController {
-    /** 再生中かどうか。 */
-    val isPlaying: StateFlow<Boolean>
-
     /** 現在の再生位置（秒）。 */
     val positionSeconds: StateFlow<Double>
 
@@ -60,15 +54,7 @@ interface PlayerController {
 
     /**
      * 再生を停止し、再利用可能な状態へリセットする（メディア・位置・再生状態をクリア）。
-     * [release] と異なり、この呼び出し後も [prepare]/[play] で別のメディアを再生できる。
-     * エピソード切替・[PodcastViewModel] の停止操作はこちらを使う。
+     * この呼び出し後も [prepare]/[play] で別のメディアを再生できる。エピソード切替・停止操作はこちらを使う。
      */
     fun stop()
-
-    /**
-     * 再生を停止し、保持しているリソースを終端的に解放する。以後 [prepare]/[play] は
-     * 呼べない（実装は使用を検出したら異常終了させてよい）。[PlayerController] 自体の
-     * 生存期間が終わる時（アプリプロセス終了等）にのみ呼ぶ。
-     */
-    fun release()
 }
