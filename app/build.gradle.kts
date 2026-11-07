@@ -137,3 +137,7 @@ dependencies {
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
 }
+
+kotlin {
+    jvmToolchain(17)
+}
