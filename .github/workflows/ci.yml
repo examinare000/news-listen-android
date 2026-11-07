@@ -31,8 +31,21 @@ jobs:
         # 実配信には Firebase コンソールで取得した実ファイルへの差し替えが別途必要。
         run: cp app/google-services.json.example app/google-services.json
 
-      - name: Build and test
-        run: ./gradlew build --stacktrace
+      - name: Unit tests (debug)
+        if: ${{ !cancelled() }}
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Lint (debug)
+        if: ${{ !cancelled() }}
+        run: ./gradlew lintDebug --stacktrace
+
+      - name: Assemble (debug)
+        if: ${{ !cancelled() }}
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Assemble (release)
+        if: ${{ !cancelled() }}
+        run: ./gradlew assembleRelease --stacktrace
 
   secret-scan:
     runs-on: ubuntu-latest
