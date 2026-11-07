@@ -17,6 +17,7 @@ import com.rioikeda.newslisten.passkey.passkeyCredentialsViewModelQueryProbes
 import com.rioikeda.newslisten.passkey.passkeyLoginViewModelQueryProbes
 import com.rioikeda.newslisten.passkey.passkeyRegistrationViewModelQueryProbes
 import com.rioikeda.newslisten.podcast.offlineLibraryQueryProbes
+import com.rioikeda.newslisten.podcast.playbackCoordinatorQueryProbes
 import com.rioikeda.newslisten.podcast.podcastViewModelQueryProbes
 import com.rioikeda.newslisten.settings.settingsViewModelQueryProbes
 import com.rioikeda.newslisten.vocabulary.vocabularyTestViewModelQueryProbes
@@ -50,6 +51,7 @@ internal val registeredQueryProbeSets: List<QueryProbeSet> = listOf(
     apiListeningStreakStoreQueryProbes,
     offlineLibraryQueryProbes,
     subjectCleanupQueryProbes,
+    playbackCoordinatorQueryProbes,
 )
 
 internal fun productionCheckInput(probeSets: List<QueryProbeSet> = registeredQueryProbeSets): CheckInput = CheckInput(
@@ -181,7 +183,7 @@ class QueryEffectCoverageTest {
             "PodcastViewModel", "AuthViewModel", "AccountViewModel", "SessionsViewModel",
             "PasskeyCredentialsViewModel", "PasskeyLoginViewModel", "PasskeyRegistrationViewModel",
             "FeedViewModel", "LearningViewModel", "VocabularyTestViewModel", "SettingsViewModel", "OnboardingViewModel",
-            "ApiListeningStreakStore", "OfflineLibrary", "SubjectCleanup",
+            "ApiListeningStreakStore", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator",
         )
 
         /** 登録 list の各 probe set を、本番の母集団・台帳・分類表で 1 回ずつ run した結果。 */
@@ -200,7 +202,7 @@ class QueryEffectCoverageTest {
     // ---- 本番の probe の網羅と配線 ----
 
     @Test(timeout = 600_000)
-    fun 登録listは12のViewModelとApiListeningStreakStoreとOfflineLibraryとSubjectCleanupを網羅し配線の違反なしで実行できる() {
+    fun 登録listは12のViewModelとApiListeningStreakStoreとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorを網羅し配線の違反なしで実行できる() {
         val registered = registeredQueryProbeSets.map { it.owner }
         assertEquals("登録された probe set の所有者", owners.sorted(), registered.sorted())
 
@@ -230,7 +232,7 @@ class QueryEffectCoverageTest {
 
     @Test(timeout = 600_000)
     fun 共有する委譲先のstoreは所有者ごとのグラフにちょうど1つあり_AccountViewModelはAuthViewModelを含む() {
-        listOf("SettingsViewModel", "PodcastViewModel").forEach { owner ->
+        listOf("SettingsViewModel", "PlaybackCoordinator").forEach { owner ->
             val traces = allTraces.filter { it.ownerType == owner }
             assertTrue("$owner の trace が無い", traces.isNotEmpty())
             traces.forEach { trace ->
@@ -261,7 +263,7 @@ class QueryEffectCoverageTest {
             Expected("FeedViewModel#onStarConfirmed", setOf("FeedViewModel"), HookKind.WRITE, HookShape.NO_ARG),
             Expected(
                 "ApiListeningStreakStore#onStreakIncreased",
-                setOf("SettingsViewModel", "PodcastViewModel"),
+                setOf("SettingsViewModel", "PlaybackCoordinator"),
                 HookKind.WRITE,
                 HookShape.NO_ARG,
             ),
@@ -321,7 +323,7 @@ class QueryEffectCoverageTest {
 
     @Test(timeout = 600_000)
     fun 組立のlambdaを新しい2つの環境で呼ぶとApiListeningStreakStoreは別のオブジェクトになる() {
-        listOf("SettingsViewModel", "PodcastViewModel").forEach { owner ->
+        listOf("SettingsViewModel", "PlaybackCoordinator").forEach { owner ->
             val set = registeredQueryProbeSets.single { it.owner == owner }
             val scenario = set.scenarios.first()
 

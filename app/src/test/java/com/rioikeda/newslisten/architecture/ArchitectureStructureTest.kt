@@ -177,8 +177,51 @@ class ArchitectureStructureTest {
         val targets = ArchitectureScanner.queriesCommandsInterfaces(mainSources)
         assumeTrue("*Queries・*Commands の interface が main に無い（android-slice-playapp-01 が足す）", targets.isNotEmpty())
 
-        val violations = ArchitectureScanner.queriesCommandsViolations(mainSources)
+        val violations = ArchitectureScanner.queriesCommandsViolations(mainSources, resultTypes = ArchitectureScanner.commandResultTypes)
         assertTrue("枠に反する関数: $violations", violations.isEmpty())
+    }
+
+    @Test
+    fun android_check_07_Commandsの戻り値が結果の型なら集合が空だと違反になり集合に入れると通る() {
+        // verifies: android-check-07 / android-dec-61 (f)。Unit 以外は今の実装でも違反なので、`String` で落ちる対照では集合の配線を確かめられない。
+        val sources = listOf(
+            sourceOf(
+                "fixture/ReceiptCommands.kt",
+                "interface ReceiptCommands {",
+                "    fun issue(): Receipt",
+                "}",
+            ),
+        )
+
+        val withEmptySet = ArchitectureScanner.queriesCommandsViolations(sources, resultTypes = emptySet())
+        val withReceipt = ArchitectureScanner.queriesCommandsViolations(sources, resultTypes = setOf("Receipt"))
+
+        assertEquals("集合が空なら Receipt は違反: $withEmptySet", 1, withEmptySet.size)
+        assertTrue("集合に Receipt を入れると違反が消える: $withReceipt", withReceipt.isEmpty())
+    }
+
+    @Test
+    fun android_check_07_CommandsのUnitは集合に依らず通りQueriesのUnitは違反になる() {
+        // verifies: android-check-07
+        val sources = listOf(
+            sourceOf(
+                "fixture/UnitCommands.kt",
+                "interface UnitCommands {",
+                "    fun act(): Unit",
+                "    fun actImplicit()",
+                "}",
+                "interface UnitQueries {",
+                "    fun read(): Unit",
+                "}",
+            ),
+        )
+
+        val withEmptySet = ArchitectureScanner.queriesCommandsViolations(sources, resultTypes = emptySet())
+        val withReceipt = ArchitectureScanner.queriesCommandsViolations(sources, resultTypes = setOf("Receipt"))
+
+        assertEquals("Unit の Commands は通り、Queries の Unit だけが違反: $withEmptySet", 1, withEmptySet.size)
+        assertTrue("違反は Queries の read: $withEmptySet", withEmptySet.single().endsWith("UnitQueries.read"))
+        assertEquals("集合を変えても結果は同じ: $withReceipt", withEmptySet, withReceipt)
     }
 
     @Test
@@ -1163,8 +1206,18 @@ object ArchitectureScanner {
         return Regex("""^\s*:\s*([^={]+)""").find(declarationText.substring(close + 1))?.groupValues?.get(1)?.trim() ?: "Unit"
     }
 
-    /** `*Queries` の関数は `Unit` を返さない。`*Commands` の関数は `Unit` を返す（receipt の型の集合は android-slice-playapp-01 が足す）。 */
-    fun queriesCommandsViolations(sources: List<SourceFile>): List<String> = sources.flatMap { source ->
+    /**
+     * 静的な検査に掛かる `*Commands` interface の戻り値の型のうち、`Unit` のほかに許すもの（receipt と失敗の型）。
+     * 掛かるのは `PlaybackCommands` だけで、13 操作はすべて `Unit` なので空。`Unit` でない結果を返す interface の
+     * `*Commands` を足す slice は、同じ PR でこの集合と Spec §5 の結果の列を直す。
+     */
+    val commandResultTypes: Set<String> = emptySet<String>()
+
+    /** `*Queries` の関数は `Unit` を返さない。`*Commands` の関数は `Unit` か [resultTypes] の型を返す。 */
+    fun queriesCommandsViolations(
+        sources: List<SourceFile>,
+        resultTypes: Set<String> = commandResultTypes,
+    ): List<String> = sources.flatMap { source ->
         val lines = lex(source.text)
         val ownerAt = mutableMapOf<Int, String?>()
         var owner: String? = null
@@ -1174,8 +1227,9 @@ object ArchitectureScanner {
         }
         declarations(lines).filter { functionDeclaration.containsMatchIn(it.text) }.mapNotNull { declaration ->
             val interfaceName = ownerAt[declaration.line] ?: return@mapNotNull null
-            val returnsUnit = returnTypeOf(declaration.text) == "Unit"
-            val violates = if (interfaceName.endsWith("Queries")) returnsUnit else !returnsUnit
+            val returnType = returnTypeOf(declaration.text)
+            val returnsUnit = returnType == "Unit"
+            val violates = if (interfaceName.endsWith("Queries")) returnsUnit else !(returnsUnit || returnType in resultTypes)
             if (violates) "${source.path}:${declaration.line} $interfaceName.${declaration.name}" else null
         }
     }

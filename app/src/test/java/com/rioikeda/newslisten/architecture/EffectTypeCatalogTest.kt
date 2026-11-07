@@ -19,11 +19,11 @@ class EffectTypeCatalogTest {
     // ---- 本番 ----
 
     @Test
-    fun 本番の分類表は9つのportと18のhookを持つ() {
+    fun 本番の分類表は10のportと18のhookを持つ() {
         assertEquals(
             setOf(
                 "ApiClient", "PodcastApi", "PreferencesStore", "SessionStore", "PlayerController",
-                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer",
+                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore",
             ),
             production.ports.map { it.port }.toSet(),
         )
@@ -49,8 +49,15 @@ class EffectTypeCatalogTest {
         assertTrue("clearSubjectScoped" in preferences.writes)
 
         val player = portRow(production, "PlayerController")
-        assertEquals(setOf("prepare", "play", "pause", "seekTo", "setSpeed", "stop", "release"), player.writes)
-        assertEquals(5, player.propertyReads.size)
+        assertEquals(setOf("prepare", "play", "pause", "seekTo", "setSpeed", "stop"), player.writes)
+        assertEquals(4, player.propertyReads.size)
+
+        // android-dec-58 (d): 保存庫の port。書込 5・列の読み 3・プロパティの読みは無い。
+        val audioStore = portRow(production, "AudioStore")
+        assertEquals(setOf("com.rioikeda.newslisten.podcast.app.AudioStore"), audioStore.interfaces)
+        assertEquals(setOf("save", "remove", "invalidate", "removeSubject", "reclaim"), audioStore.writes)
+        assertEquals(setOf("isCached", "cachedFileUri", "validateId"), audioStore.sequenceReads)
+        assertTrue(audioStore.propertyReads.isEmpty())
 
         assertEquals(setOf("save", "clear"), portRow(production, "SessionStore").writes)
         assertEquals(setOf("load"), portRow(production, "SessionStore").sequenceReads)

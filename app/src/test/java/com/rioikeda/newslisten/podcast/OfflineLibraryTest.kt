@@ -6,6 +6,7 @@ import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
+import com.rioikeda.newslisten.podcast.app.AudioStore
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -59,7 +60,7 @@ class OfflineLibraryTest {
 
     private fun TestScope.newLibrary(
         apiClient: FakePodcastApiClient,
-        cacheManager: AudioCacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
+        cacheManager: AudioStore = AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
         currentSubject: () -> String? = { "u1" },
     ): OfflineLibrary =
         OfflineLibrary(cacheManager, apiClient, currentSubject, StandardTestDispatcher(testScheduler))
@@ -208,6 +209,68 @@ class OfflineLibraryTest {
         assertEquals(emptySet<String>(), library.downloadingIds.value)
         assertEquals(emptySet<String>(), library.downloadedIds.value)
         assertNotNull(library.lastError.value)
+    }
+
+    @Test
+    fun `android-dec-58 保存の失敗はlastErrorに固定の文言を出しdownloadedIdsへ入れない`() = runTest {
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { p1 },
+            onDownloadAudio = { byteArrayOf(1) },
+        )
+        val fileSystem = FakeFileSystem().apply { writeException = IOException("disk full") }
+        val cacheManager = AudioCacheManager(fileSystem, baseDir = "/cache")
+        val library = newLibrary(apiClient, cacheManager)
+
+        library.download(p1)
+
+        // 旧は保存庫の英語の技術文言（"Failed to write cache for id=…"）がそのまま出ていた。
+        assertEquals("音声を保存できませんでした", library.lastError.value)
+        assertEquals(emptySet<String>(), library.downloadedIds.value)
+        assertEquals(emptySet<String>(), library.downloadingIds.value)
+        assertFalse(cacheManager.isCached("u1", "p1"))
+    }
+
+    @Test
+    fun `android-dec-58 保存の成功はlastErrorをnullのままdownloadedIdsへ入れる`() = runTest {
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { p1 },
+            onDownloadAudio = { byteArrayOf(1) },
+        )
+        val library = newLibrary(apiClient)
+
+        library.download(p1)
+
+        assertNull(library.lastError.value)
+        assertEquals(setOf("p1"), library.downloadedIds.value)
+    }
+
+    @Test
+    fun `android-dec-58 不正なidの削除はlastErrorに固定の文言を出しdownloadedIdsと保存済みの音声を変えない`() = runTest {
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { p1 },
+            onDownloadAudio = { byteArrayOf(1) },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val library = newLibrary(apiClient, cacheManager)
+        library.download(p1)
+
+        library.removeDownload("../evil")
+
+        assertEquals("音声を削除できませんでした", library.lastError.value)
+        assertEquals(setOf("p1"), library.downloadedIds.value)
+        assertTrue(cacheManager.isCached("u1", "p1"))
+    }
+
+    @Test
+    fun `android-dec-58 不正な主体の削除もlastErrorに固定の文言を出す`() = runTest {
+        val library = newLibrary(FakePodcastApiClient()) { "bad subject" }
+
+        library.removeDownload("p1")
+
+        assertEquals("音声を削除できませんでした", library.lastError.value)
     }
 
     @Test
@@ -619,6 +682,22 @@ class OfflineLibraryTest {
         val library = newLibrary(FakePodcastApiClient())
 
         library.invalidate("u1", "a.b")
+    }
+
+    @Test
+    fun `android-dec-58 invalidateは主体か_idが不正なら黙って何もせず保存済みの音声に触れない`() = runTest {
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        cacheManager.cache("u1", "p1", byteArrayOf(1))
+        val library = newLibrary(FakePodcastApiClient(), cacheManager)
+
+        library.invalidate("u1", "a.b")
+        library.invalidate("bad subject", "p1")
+        library.invalidate("u1", "")
+
+        assertTrue(cacheManager.isCached("u1", "p1"))
+        // 正の対照: 正しい主体と id なら無効化される。
+        library.invalidate("u1", "p1")
+        assertFalse(cacheManager.isCached("u1", "p1"))
     }
 
     @Test

@@ -22,9 +22,8 @@ object Allowlist {
         files.map { AllowEntry(ruleId, it, target, owner) }
 
     val entries: List<AllowEntry> =
-        // android-dep-01 (2)
+        // android-dep-01 (1)
         rule("android-dep-01", "model", "android-slice-account-01", "auth/AuthState.kt") +
-            rule("android-dep-01", "androidx", "android-slice-playapp-01", "podcast/PlaybackState.kt") +
 
             // android-dep-02 (22)
             rule("android-dep-02", "model", "android-slice-account-01", "auth/AuthState.kt", "auth/AuthViewModel.kt") +
@@ -60,15 +59,16 @@ object Allowlist {
             rule("android-dep-02", "androidx", "android-slice-periphery-02", "model/FeaturedCategory.kt") +
             rule("android-dep-02", "R", "android-slice-periphery-02", "model/FeaturedCategory.kt") +
 
-            // android-dep-03 (7): network 3 + model 4
+            // android-dep-03 (8): network 4 + model 4
             rule("android-dep-03", "network", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
             rule("android-dep-03", "network", "android-slice-periphery-02", "notification/FcmTokenRegistrar.kt") +
             rule("android-dep-03", "network", "android-slice-closure-01", "podcast/OfflineLibrary.kt") +
+            rule("android-dep-03", "network", "android-slice-closure-01", "podcast/app/PlaybackCoordinator.kt") +
             rule("android-dep-03", "model", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
             rule("android-dep-03", "model", "android-slice-periphery-01", "feed/PendingArticleAction.kt") +
             rule("android-dep-03", "model", "android-slice-learning-03", "network/LearningApi.kt", "network/VocabularyTestApi.kt") +
 
-            // android-dep-04 (65)
+            // android-dep-04 (47)
             rule("android-dep-04", "model", "android-slice-learning-01", "AppScaffold.kt", "learning/LearningScreen.kt") +
             rule("android-dep-04", "model", "android-slice-learning-02", "podcast/QuizSheet.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-01", "feed/FeedScreen.kt") +
@@ -102,26 +102,7 @@ object Allowlist {
             rule("android-dep-04", "network", "android-slice-periphery-02", "onboarding/OnboardingViewModel.kt", "settings/SettingsViewModel.kt") +
             rule("android-dep-04", "model", "android-slice-learning-02", "podcast/PodcastViewModel.kt") +
             rule("android-dep-04", "network", "android-slice-learning-02", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "NetworkMonitoring", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "PlayerController", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "PodcastApi", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:add", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:advance", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:jump", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:moveUpNext", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:playNext", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:remove", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            // android-slice-playback-03 が足す一時経路（android-temp-13）。PlaybackCoordinator の切り出し（android-slice-playapp-01）で消す。
-            rule("android-dep-04", "PreferencesStore", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:start", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:retry", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:playNow", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:playerStarted", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:playerEnded", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:fail", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:queueExhausted", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:stop", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "transition:failBeforeStart", "android-slice-playapp-01", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-04", "PodcastApi", "android-slice-playapp-02", "podcast/PodcastViewModel.kt") +
             rule("android-dep-04", "model", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
             rule("android-dep-04", "VocabularyTestApi", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
             rule("android-dep-04", "network", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
@@ -161,8 +142,5 @@ object Allowlist {
             rule("android-check-04", "correctRate >=", "android-slice-learning-02", "podcast/QuizSheet.kt") +
             rule("android-check-04", "limit == 0", "android-slice-periphery-02", "settings/SettingsScreen.kt") +
             rule("android-check-04", "moveUpNext(index", "android-slice-playapp-02", "podcast/QueueSheet.kt") +
-            rule("android-check-04", "role ==", "android-slice-account-01", "AppScaffold.kt", "di/AppContainer.kt") +
-
-            // android-check-08 (1)
-            rule("android-check-08", "androidx", "android-slice-playapp-01", "podcast/PlaybackStateTest.kt")
+            rule("android-check-04", "role ==", "android-slice-account-01", "AppScaffold.kt", "di/AppContainer.kt")
 }

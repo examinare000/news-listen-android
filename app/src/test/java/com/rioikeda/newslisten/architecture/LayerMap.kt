@@ -58,10 +58,12 @@ object LayerMap {
         "engagement/ListeningStreakStore.kt",
         "notification/FcmTokenRegistrar.kt",
         "podcast/OfflineLibrary.kt",
+        "podcast/app/PlaybackCoordinator.kt",
     )
 
     private val port = listOf(
         "podcast/PlayerController.kt",
+        "podcast/app/AudioStore.kt",
         "passkey/PasskeyProvider.kt",
         "preferences/PreferencesStore.kt",
         "network/PodcastApi.kt",

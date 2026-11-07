@@ -9,6 +9,7 @@ import com.rioikeda.newslisten.catalog.domain.EpisodeTranscriptSegment
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
+import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -62,19 +63,28 @@ class NowPlayingEncapsulationTest {
 
     private suspend fun TestScope.startPlaying(episode: Episode.Playable): PodcastViewModel {
         val apiClient = FakePodcastApiClient(onFetchPodcast = { episode }, onUpdatePlaybackPosition = { _, _ -> episode })
+        val offlineLibrary = OfflineLibrary(
+            AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
+            apiClient,
+            { null },
+            StandardTestDispatcher(testScheduler),
+        )
+        val dispatcher = StandardTestDispatcher(testScheduler)
         val viewModel = PodcastViewModel(
             podcastApi = apiClient,
             apiClient = apiClient.learning,
-            playerController = FakePlayerController(),
-            offlineLibrary = OfflineLibrary(
-                AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
-                apiClient,
-                { null },
-                StandardTestDispatcher(testScheduler),
+            coordinator = PlaybackCoordinator(
+                podcastApi = apiClient,
+                playerController = FakePlayerController(),
+                offlineLibrary = offlineLibrary,
+                networkMonitor = StubNetworkMonitor(initialIsOnline = true),
+                preferencesStore = InMemoryPreferencesStore(),
+                listeningStreakStore = null,
+                dispatcher = dispatcher,
+                currentSubject = { null },
             ),
-            networkMonitor = StubNetworkMonitor(initialIsOnline = true),
-            dispatcher = StandardTestDispatcher(testScheduler),
-            preferencesStore = InMemoryPreferencesStore(),
+            offlineLibrary = offlineLibrary,
+            dispatcher = dispatcher,
         )
         viewModel.playNow(episode)
         return viewModel
