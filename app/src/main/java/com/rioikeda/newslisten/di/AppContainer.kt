@@ -39,9 +39,11 @@ import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
 import com.rioikeda.newslisten.podcast.ExoPlayerController
 import com.rioikeda.newslisten.podcast.OfflineLibrary
 import com.rioikeda.newslisten.podcast.PodcastViewModel
+import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
 import com.rioikeda.newslisten.preferences.DataStorePreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import com.rioikeda.newslisten.settings.SettingsViewModel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -118,7 +120,7 @@ class AppContainer(context: Context) {
 
     /**
      * ネットワーク接続状態の監視（フェーズ8-C・shared-playback-spec.md §6.1）。
-     * PodcastViewModel.play() の resolvePlaybackSource 判定に isOnline を供給する。
+     * PlaybackCoordinator の resolvePlaybackSource 判定に isOnline を供給する。
      */
     private val networkMonitor: ConnectivityNetworkMonitor = ConnectivityNetworkMonitor(appContext).apply { start() }
 
@@ -129,7 +131,7 @@ class AppContainer(context: Context) {
      */
     private val offlineLibrary: OfflineLibrary by lazy {
         OfflineLibrary(
-            cacheManager = audioCacheManager,
+            audioStore = audioCacheManager,
             podcastApi = PodcastApiAdapter(apiClient),
             currentSubject = _authViewModel::currentSubjectId,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
@@ -339,12 +341,35 @@ class AppContainer(context: Context) {
     fun getPlayerController(): ExoPlayerController = _playerController
 
     /**
-     * PodcastViewModel（Podcast タブの状態とロジック）を生成して返す。
+     * 再生の状態変更を直列化する dispatcher。再生の use case と一覧の状態の書込が 1 つの直列化の範囲に入るよう、
+     * Coordinator と PodcastViewModel に同じ値を渡す（limitedParallelism は呼ぶたびに別の view を作る）。
+     */
+    private val podcastDispatcher: CoroutineDispatcher = Dispatchers.Default.limitedParallelism(1)
+
+    /**
+     * 再生の use case を持つ Coordinator。PodcastViewModel はこれへ中継する。
+     * `_authViewModel` のラムダを読むので `by lazy` にし、構築時に `_authViewModel` を評価しない。
+     */
+    private val _playbackCoordinator: PlaybackCoordinator by lazy {
+        PlaybackCoordinator(
+            podcastApi = PodcastApiAdapter(apiClient),
+            playerController = _playerController,
+            offlineLibrary = offlineLibrary,
+            networkMonitor = networkMonitor,
+            preferencesStore = preferencesStore,
+            listeningStreakStore = _listeningStreakStore,
+            dispatcher = podcastDispatcher,
+            currentSubject = _authViewModel::currentSubjectId,
+        )
+    }
+
+    /**
+     * PodcastViewModel（Podcast タブの画面の状態と中継）を生成して返す。
      *
      * Dispatcher: Dispatchers.Default.limitedParallelism(1) を使用し、状態変更を直列化する。
-     * WHY: PodcastViewModel の fetchPodcasts() や play() などの操作が複数スレッドで
-     * 競合すると、nowPlaying の読み取り→書き込み、PlayerController の状態の
-     * 同期ずれが生じ得る。iOS の @MainActor による直列実行を Kotlin で再現する。
+     * WHY: 一覧の取得（PodcastViewModel）と再生の開始（PlaybackCoordinator）が複数スレッドで
+     * 競合すると、読み取り→書き込みの同期ずれが生じ得る。同じ dispatcher を渡して 1 つの直列化の範囲に入れる。
+     * iOS の @MainActor による直列実行を Kotlin で再現する。
      *
      * by lazy でシングルトンキャッシュ化：画面回転時に PodcastViewModel インスタンスが
      * 同じままであることを保証し、fetchPodcasts() の loadingState や nowPlaying が
@@ -354,13 +379,9 @@ class AppContainer(context: Context) {
         PodcastViewModel(
             podcastApi = PodcastApiAdapter(apiClient),
             apiClient = apiClient,
-            playerController = _playerController,
+            coordinator = _playbackCoordinator,
             offlineLibrary = offlineLibrary,
-            networkMonitor = networkMonitor,
-            dispatcher = Dispatchers.Default.limitedParallelism(1),
-            listeningStreakStore = _listeningStreakStore,
-            preferencesStore = preferencesStore,
-            currentSubject = _authViewModel::currentSubjectId,
+            dispatcher = podcastDispatcher,
         )
     }
 

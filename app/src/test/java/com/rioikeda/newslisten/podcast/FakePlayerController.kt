@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * [PlayerController] のテスト専用フェイク。
  *
- * 呼び出し履歴を記録しつつ、テストから状態（isPlaying/positionSeconds/durationSeconds）を
+ * 呼び出し履歴を記録しつつ、テストから状態（state/positionSeconds/durationSeconds）を
  * 手動遷移できるようにする。[com.rioikeda.newslisten.podcast.ExoPlayerController]（実機）に
  * 先行して [PodcastViewModel] の TDD を進めるためのテストダブル。
  *
@@ -16,9 +16,6 @@ import kotlinx.coroutines.flow.StateFlow
  * 強制することで、契約違反をテスト失敗として顕在化させる。
  */
 class FakePlayerController : PlayerController {
-    private val _isPlaying = MutableStateFlow(false)
-    override val isPlaying: StateFlow<Boolean> = _isPlaying
-
     private val _positionSeconds = MutableStateFlow(0.0)
     override val positionSeconds: StateFlow<Double> = _positionSeconds
 
@@ -75,12 +72,10 @@ class FakePlayerController : PlayerController {
     override fun play() {
         checkNotReleased()
         playCallCount++
-        _isPlaying.value = true
     }
 
     override fun pause() {
         pauseCallCount++
-        _isPlaying.value = false
     }
 
     override fun seekTo(seconds: Double) {
@@ -95,15 +90,14 @@ class FakePlayerController : PlayerController {
 
     override fun stop() {
         stopCallCount++
-        _isPlaying.value = false
         _positionSeconds.value = 0.0
         _durationSeconds.value = null
     }
 
-    override fun release() {
+    /** 具象の操作（port には無い）。実機の `ExoPlayerController.release()` に対応する。 */
+    fun release() {
         releaseCallCount++
         released = true
-        _isPlaying.value = false
         _positionSeconds.value = 0.0
         _durationSeconds.value = null
     }
@@ -122,14 +116,9 @@ class FakePlayerController : PlayerController {
         _positionSeconds.value = seconds
     }
 
-    /** テストから [PlaybackState] を直接注入する。他の状態フロー（isPlaying 等）へは派生させない。 */
+    /** テストから [PlaybackState] を直接注入する。他の状態フロー（positionSeconds 等）へは派生させない。再生中かどうかは `state` から導く。 */
     fun setState(state: PlaybackState) {
         _state.value = state
-    }
-
-    /** テストから再生中フラグ（isPlaying）だけを設定する。[PlaybackState] の注入は [setState]。 */
-    fun setPlaying(playing: Boolean) {
-        _isPlaying.value = playing
     }
 
     /** テストから総再生時間を直接設定する（スキップ時の上限クランプ検証用）。 */

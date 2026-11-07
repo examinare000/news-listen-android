@@ -7,6 +7,7 @@ import com.rioikeda.newslisten.network.BaseFakeApiClient
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
+import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -42,19 +43,28 @@ class PodcastViewModelPortTest {
         // 何も stub しない基底を渡す。fetchPodcasts が誤って apiClient 経由で呼ばれたら error で fail する。
         val apiClient = object : BaseFakeApiClient() {}
 
+        val offlineLibrary = OfflineLibrary(
+            AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
+            podcastApi,
+            { null },
+            StandardTestDispatcher(testScheduler),
+        )
+        val dispatcher = StandardTestDispatcher(testScheduler)
         val viewModel = PodcastViewModel(
             podcastApi = podcastApi,
             apiClient = apiClient,
-            playerController = FakePlayerController(),
-            offlineLibrary = OfflineLibrary(
-                AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
-                podcastApi,
-                { null },
-                StandardTestDispatcher(testScheduler),
+            coordinator = PlaybackCoordinator(
+                podcastApi = podcastApi,
+                playerController = FakePlayerController(),
+                offlineLibrary = offlineLibrary,
+                networkMonitor = StubNetworkMonitor(initialIsOnline = true),
+                preferencesStore = InMemoryPreferencesStore(),
+                listeningStreakStore = null,
+                dispatcher = dispatcher,
+                currentSubject = { null },
             ),
-            networkMonitor = StubNetworkMonitor(initialIsOnline = true),
-            dispatcher = StandardTestDispatcher(testScheduler),
-            preferencesStore = InMemoryPreferencesStore(),
+            offlineLibrary = offlineLibrary,
+            dispatcher = dispatcher,
         )
 
         viewModel.fetchPodcasts()

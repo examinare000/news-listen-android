@@ -45,6 +45,7 @@ import com.rioikeda.newslisten.passkey.PasskeyProvider
 import com.rioikeda.newslisten.podcast.PlaybackMetadata
 import com.rioikeda.newslisten.podcast.PlaybackState
 import com.rioikeda.newslisten.podcast.PlayerController
+import com.rioikeda.newslisten.podcast.app.AudioStore
 import com.rioikeda.newslisten.preferences.ArticleOpenMode
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import com.rioikeda.newslisten.preferences.TimeFormat
@@ -587,7 +588,6 @@ class RecordingPlayerController(
 ) : PlayerController {
     private val core = PlayerFake(recorder, scenario)
 
-    override val isPlaying: StateFlow<Boolean> = MutableStateFlow(core.property("getIsPlaying", false))
     override val positionSeconds: StateFlow<Double> =
         MutableStateFlow(core.property("getPositionSeconds", RecordingDefaults.INITIAL_POSITION_SECONDS))
     override val durationSeconds: StateFlow<Double?> = MutableStateFlow(core.property<Double?>("getDurationSeconds", null))
@@ -605,8 +605,6 @@ class RecordingPlayerController(
     override fun setSpeed(speed: Float) = core.write("setSpeed")
 
     override fun stop() = core.write("stop")
-
-    override fun release() = core.write("release")
 }
 
 internal class FileFake(recorder: EffectRecorder, scenario: ProbeScenario) :
@@ -640,6 +638,40 @@ class RecordingFileSystem(
     override fun fileSize(path: String): Long? = core.read("fileSize")
 
     override fun ensureDirectory(dirPath: String) = core.write("ensureDirectory")
+}
+
+internal class AudioStoreFake(recorder: EffectRecorder, scenario: ProbeScenario) :
+    RecordingFake("AudioStore", recorder, scenario) {
+    fun write(op: String) = written(op)
+
+    fun <T> read(op: String): T = sequenced(op)
+}
+
+/** 保存庫の port の記録 fake。書込 5（save・remove・invalidate・removeSubject・reclaim）と列の読み 3 を持つ。 */
+class RecordingAudioStore(
+    val recorder: EffectRecorder,
+    val scenario: ProbeScenario,
+) : AudioStore {
+    private val core = AudioStoreFake(recorder, scenario)
+
+    override fun validateId(id: String): Boolean = core.read("validateId")
+
+    override fun save(subject: String, id: String, bytes: ByteArray): Boolean {
+        core.write("save")
+        return true
+    }
+
+    override fun isCached(subject: String, id: String): Boolean = core.read("isCached")
+
+    override fun cachedFileUri(subject: String, id: String): String? = core.read("cachedFileUri")
+
+    override fun remove(subject: String, id: String) = core.write("remove")
+
+    override fun invalidate(subject: String, id: String) = core.write("invalidate")
+
+    override fun removeSubject(subject: String) = core.write("removeSubject")
+
+    override fun reclaim(currentSubject: String?) = core.write("reclaim")
 }
 
 internal class NetworkFake(recorder: EffectRecorder, scenario: ProbeScenario) :
@@ -717,6 +749,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
     val sessionStore: RecordingSessionStore = RecordingSessionStore(recorder, scenario)
     val playerController: RecordingPlayerController = RecordingPlayerController(recorder, scenario)
     val fileSystem: RecordingFileSystem = RecordingFileSystem(recorder, scenario)
+    val audioStore: RecordingAudioStore = RecordingAudioStore(recorder, scenario)
     val networkMonitor: RecordingNetworkMonitor = RecordingNetworkMonitor(recorder, scenario)
     val passkeyProvider: RecordingPasskeyProvider = RecordingPasskeyProvider(recorder, scenario)
     val feedbackPlayer: RecordingFeedbackPlayer = RecordingFeedbackPlayer(recorder, scenario)
@@ -724,7 +757,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
     /** この実行単位の記録 fake の全部。配線の検査が「記録 fake であること」を照合する。 */
     val fakes: List<Any> = listOf(
         apiClient, podcastApi, preferencesStore, sessionStore, playerController,
-        fileSystem, networkMonitor, passkeyProvider, feedbackPlayer,
+        fileSystem, audioStore, networkMonitor, passkeyProvider, feedbackPlayer,
     )
 
     /** この実行単位の scheduler に載る dispatcher。所有者の dispatcher は必ずこれで作る。 */

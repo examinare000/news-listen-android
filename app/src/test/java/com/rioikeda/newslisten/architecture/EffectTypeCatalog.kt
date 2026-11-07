@@ -98,11 +98,18 @@ data class EffectTypeCatalog(
                 PortRow(
                     port = "PlayerController",
                     interfaces = setOf("com.rioikeda.newslisten.podcast.PlayerController"),
-                    writes = setOf("prepare", "play", "pause", "seekTo", "setSpeed", "stop", "release"),
+                    writes = setOf("prepare", "play", "pause", "seekTo", "setSpeed", "stop"),
                     sequenceReads = emptySet(),
                     propertyReads = setOf(
-                        "isPlaying", "getPositionSeconds", "getDurationSeconds", "getPlaybackSpeed", "getState",
+                        "getPositionSeconds", "getDurationSeconds", "getPlaybackSpeed", "getState",
                     ),
+                ),
+                PortRow(
+                    port = "AudioStore",
+                    interfaces = setOf("com.rioikeda.newslisten.podcast.app.AudioStore"),
+                    writes = setOf("save", "remove", "invalidate", "removeSubject", "reclaim"),
+                    sequenceReads = setOf("isCached", "cachedFileUri", "validateId"),
+                    propertyReads = emptySet(),
                 ),
                 PortRow(
                     port = "FileSystem",
@@ -149,7 +156,7 @@ data class EffectTypeCatalog(
                 ),
                 HookRow("ApiListeningStreakStore#fetchListeningStreak", HookKind.READ, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("SettingsViewModel#isAdminProvider", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
-                HookRow("PodcastViewModel#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
+                HookRow("PlaybackCoordinator#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("OfflineLibrary#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("AuthViewModel#onSubjectResolved", HookKind.WRITE, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("VocabularyTestViewModel#shuffle", HookKind.READ, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
@@ -162,7 +169,7 @@ data class EffectTypeCatalog(
             addedTypes = listOf(
                 ClassifiedTypeRow(
                     "$NETWORK.AudioCacheManager", TypeClass.PORT_BACKED,
-                    "FileSystem の上の実物（network/AudioCacheManager.kt）。probe は実物を記録 fake の上に組む",
+                    "AudioStore の実装。本番の AppContainer が組み、probe は RecordingAudioStore を使う",
                 ),
                 ClassifiedTypeRow(
                     "androidx.compose.runtime.Composer", TypeClass.PLATFORM,

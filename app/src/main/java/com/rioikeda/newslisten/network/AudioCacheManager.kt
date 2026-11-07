@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.network
 
+import com.rioikeda.newslisten.podcast.app.AudioStore
 import java.io.File
 import java.io.IOException
 
@@ -37,14 +38,23 @@ sealed class AudioCacheException(message: String, cause: Throwable? = null) : Ex
 class AudioCacheManager(
     private val fileSystem: FileSystem,
     baseDir: String,
-) {
+) : AudioStore {
     private val cacheDir: String = File(baseDir, "audio").path
 
     /**
      * ID が安全形式（英数字・ハイフン・アンダースコアのみ、かつ非空）かどうかを検証する。
      * 副作用のない純粋関数で、主体と Podcast ID の両方の検証に使う。
      */
-    fun validateId(id: String): Boolean = id.isNotEmpty() && id.all { it in VALID_ID_CHARS }
+    override fun validateId(id: String): Boolean = id.isNotEmpty() && id.all { it in VALID_ID_CHARS }
+
+    /** [cache] の失敗（形式の不正・書込の失敗）を `false` に写す。port から見える保存の入口。 */
+    override fun save(subject: String, id: String, bytes: ByteArray): Boolean =
+        try {
+            cache(subject, id, bytes)
+            true
+        } catch (_: AudioCacheException) {
+            false
+        }
 
     /**
      * 音声データを主体の置き場に保存する（既存ファイルは上書き）。
@@ -62,17 +72,17 @@ class AudioCacheManager(
     }
 
     /** その主体の置き場に指定 Podcast ID のキャッシュが存在するか。検証はせず、例外を投げない。 */
-    fun isCached(subject: String, id: String): Boolean = fileSystem.exists(filePath(subject, id))
+    override fun isCached(subject: String, id: String): Boolean = fileSystem.exists(filePath(subject, id))
 
     /** キャッシュ済みなら `file://` URI を返す。未キャッシュなら `null`。検証はせず、例外を投げない。 */
-    fun cachedFileUri(subject: String, id: String): String? =
+    override fun cachedFileUri(subject: String, id: String): String? =
         if (isCached(subject, id)) "file://${filePath(subject, id)}" else null
 
     /**
      * キャッシュを削除する（存在しない場合は no-op・冪等）。
      * @throws AudioCacheException.InvalidId subject または id が不正な場合。
      */
-    fun remove(subject: String, id: String) {
+    override fun remove(subject: String, id: String) {
         requireValid(subject, id)
         fileSystem.delete(filePath(subject, id))
     }
@@ -81,13 +91,13 @@ class AudioCacheManager(
      * 再生に失敗したキャッシュを無効化する。削除そのものは [remove] と同じで、意味だけを分ける。
      * @throws AudioCacheException.InvalidId subject または id が不正な場合（ファイルには触れない）。
      */
-    fun invalidate(subject: String, id: String) = remove(subject, id)
+    override fun invalidate(subject: String, id: String) = remove(subject, id)
 
     /**
      * 指定主体のディレクトリを中身ごと削除する（他の主体は残す。無くても例外にしない）。
      * @throws AudioCacheException.InvalidId subject が不正な場合（ファイルには触れない）。
      */
-    fun removeSubject(subject: String) {
+    override fun removeSubject(subject: String) {
         requireValidId(subject)
         fileSystem.deleteRecursively(subjectDir(subject))
     }
@@ -96,7 +106,7 @@ class AudioCacheManager(
      * 起動時回収。`audio/` 直下の通常ファイル（旧平置き）を全削除し、[currentSubject] 以外のディレクトリを削除する。
      * [currentSubject] が `null` または形式不正なら全ディレクトリを削除する（例外にしない。冪等）。
      */
-    fun reclaim(currentSubject: String?) {
+    override fun reclaim(currentSubject: String?) {
         fileSystem.listFiles(cacheDir).forEach { fileSystem.delete(it) }
         val keep = currentSubject?.takeIf { validateId(it) }
         fileSystem.listDirectories(cacheDir)

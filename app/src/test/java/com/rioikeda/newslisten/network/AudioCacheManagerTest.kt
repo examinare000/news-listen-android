@@ -88,6 +88,33 @@ class AudioCacheManagerTest {
         assertEquals(1, fileSystem.ensureDirectoryCalls.size)
     }
 
+    // --- save: AudioStore の書込。AudioCacheException を Boolean に写す（android-dec-58 (a)） ---
+
+    @Test
+    fun `android-dec-58 saveは正常ならtrueを返しファイルを残す`() {
+        assertTrue(manager.save("u1", "p1", byteArrayOf(1, 2)))
+
+        assertTrue(manager.isCached("u1", "p1"))
+    }
+
+    @Test
+    fun `android-dec-58 saveは書込失敗ならfalseを返しファイルを残さない`() {
+        fileSystem.writeException = IOException("disk full")
+
+        assertFalse(manager.save("u1", "p1", byteArrayOf(1)))
+
+        assertFalse(manager.isCached("u1", "p1"))
+    }
+
+    @Test
+    fun `android-dec-58 saveは不正なidか主体ならfalseを返しファイルに触れない`() {
+        assertFalse(manager.save("u1", "../evil", byteArrayOf(1)))
+        assertFalse(manager.save("bad subject", "p1", byteArrayOf(1)))
+
+        assertFalse(manager.isCached("u1", "p1"))
+        assertTrue(fileSystem.ensureDirectoryCalls.isEmpty())
+    }
+
     // --- cache: ファイル書き込みのIOExceptionはAudioCacheException.WriteFailedにラップする ---
 
     @Test

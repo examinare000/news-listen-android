@@ -5,7 +5,6 @@ import com.rioikeda.newslisten.architecture.ProbeData
 import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
-import com.rioikeda.newslisten.engagement.probeListeningStreakStore
 
 /**
  * `PodcastViewModel` の query。warm-up で再生を始め、15 秒周期の位置同期（内部 scope の timer）を張った状態で観測する。
@@ -17,14 +16,14 @@ internal val podcastViewModelQueryProbes: QueryProbeSet = run {
         "PodcastApi#fetchPodcast" to ProbeData.repeated(ProbeData.podcast),
         "ApiClient#fetchVocabulary" to ProbeData.repeated(ProbeData.vocabularyList),
         "ApiClient#fetchListeningStreak" to ProbeData.increasingStreaks(),
-        "FileSystem#exists" to ProbeData.repeated(false, 64),
+        "AudioStore#isCached" to ProbeData.repeated(false, 64),
     )
     val warmUp: suspend (Any, ProbeEnvironment) -> Unit = { owner, _ -> (owner as PodcastViewModel).playNow(ProbeData.podcast) }
     queryProbeSet(
         owner = "PodcastViewModel",
         scenarios = listOf(
             ProbeData.readSuccess(canned, warmUp),
-            ProbeData.readFailure(canned = mapOf("FileSystem#exists" to ProbeData.repeated(false, 64)), warmUp = warmUp),
+            ProbeData.readFailure(canned = mapOf("AudioStore#isCached" to ProbeData.repeated(false, 64)), warmUp = warmUp),
         ),
         calls = listOf(
             CallSpec("PodcastViewModel#fetchPodcasts"),
@@ -32,16 +31,13 @@ internal val podcastViewModelQueryProbes: QueryProbeSet = run {
             CallSpec("PodcastViewModel#isVocabularyRegistered") { listOf("podcast-1", "term") },
         ),
     ) { env ->
+        val offlineLibrary = probeOfflineLibrary(env)
         PodcastViewModel(
             podcastApi = env.podcastApi,
             apiClient = env.apiClient,
-            playerController = env.playerController,
-            offlineLibrary = probeOfflineLibrary(env),
-            networkMonitor = env.networkMonitor,
+            coordinator = probePlaybackCoordinator(env, offlineLibrary),
+            offlineLibrary = offlineLibrary,
             dispatcher = env.newDispatcher(),
-            listeningStreakStore = probeListeningStreakStore(env),
-            preferencesStore = env.preferencesStore,
-            currentSubject = env.hooks.read("PodcastViewModel#currentSubject") { null },
         )
     }
 }

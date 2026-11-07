@@ -105,6 +105,24 @@ class NoThrowingDefaultStructureTest {
     }
 
     @Test
+    fun AppContainerはPlaybackCoordinatorのpodcastApiへPodcastApiAdapterを渡す() {
+        // verifies: android-contract-18 / android-dec-60 (c)。ApiClient が PodcastApi を継承しない契約の対象は Coordinator にも及ぶ。
+        val root = resolveMainSourceRoot()
+        val file = root.walkTopDown().firstOrNull { it.name == "AppContainer.kt" }
+            ?: error("走査ルート $root に AppContainer.kt が見つからない")
+        val text = file.readText()
+
+        val callStart = text.indexOf("PlaybackCoordinator(")
+        check(callStart >= 0) { "${file.path} に PlaybackCoordinator( の呼び出しが見つからない（vacuous pass ガード）" }
+        val call = text.substring(callStart)
+        val podcastApiArg = Regex("""podcastApi\s*=\s*(\w+)\(""").find(call)
+        assertTrue(
+            "podcastApi = の引数が PodcastApiAdapter( で始まっていない（実際: ${podcastApiArg?.groupValues?.get(1)}）",
+            podcastApiArg?.groupValues?.get(1) == "PodcastApiAdapter",
+        )
+    }
+
+    @Test
     fun ApiClientは再生5操作のportであるPodcastApiを継承しない() {
         // verifies: android-contract-18
         val root = resolveMainSourceRoot()
