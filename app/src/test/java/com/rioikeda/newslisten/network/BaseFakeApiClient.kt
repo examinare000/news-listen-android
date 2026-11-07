@@ -34,14 +34,14 @@ import kotlinx.serialization.json.JsonObject
  * 派生 Fake が override していないメソッドが呼ばれたら即座に失敗させて検出できるようにする。
  *
  * 戻り値型はすべて明示する。式本体の戻り値型を省くと `Nothing` と推論され、
- * 派生 Fake に残す Unit の override（例: `logout() = onLogout()`）と衝突するため。
+ * 派生 Fake に残す Unit の override（例: `logout(token) = onLogout(token)`）と衝突するため。
  */
 abstract class BaseFakeApiClient : ApiClient {
     /** [error] メッセージに使う Fake 名。無名サブクラスでは `simpleName` が `null` になるため fallback する。 */
     private val fakeName: String get() = this::class.simpleName ?: this.javaClass.name
 
     override suspend fun login(username: String, password: String): LoginResponse = error("login is not stubbed in $fakeName")
-    override suspend fun logout(): Unit = error("logout is not stubbed in $fakeName")
+    override suspend fun logout(token: String): Unit = error("logout is not stubbed in $fakeName")
     override suspend fun me(): UserResponse = error("me is not stubbed in $fakeName")
     override suspend fun fetchFeed(filter: String): FeedResponse = error("fetchFeed is not stubbed in $fakeName")
     override suspend fun starArticle(id: String, request: StarRequest): ActionResponse = error("starArticle is not stubbed in $fakeName")

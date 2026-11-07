@@ -5,6 +5,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.Protocol
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
@@ -207,5 +208,29 @@ class AuthInterceptorTest {
         interceptor.intercept(chain)
 
         assertEquals(listOf("t1"), recorded)
+    }
+
+    @Test
+    fun `決定14 明示されたAuthorizationは上書きされず401でも失効通知を呼ばない`() {
+        // verifies: 決定14, android-dec-53
+        var providerCalls = 0
+        val recorded = mutableListOf<String>()
+        val interceptor = AuthInterceptor(
+            baseUrl, "secret-key",
+            onUnauthorized = { recorded.add(it) },
+        ) { providerCalls++; "new-session-token" }
+        val request = Request.Builder().url(baseUrl.resolve("auth/logout")!!)
+            .header("Authorization", "Bearer captured-token")
+            .post("".toRequestBody(null))
+            .build()
+        val chain = FakeChain(request, responseCode = 401)
+
+        interceptor.intercept(chain)
+
+        assertEquals("Bearer captured-token", chain.capturedRequest?.header("Authorization"))
+        assertEquals(1, chain.capturedRequest?.headers("Authorization")?.size)
+        assertEquals("secret-key", chain.capturedRequest?.header("X-API-Key"))
+        assertEquals(0, providerCalls)
+        assertTrue(recorded.isEmpty())
     }
 }

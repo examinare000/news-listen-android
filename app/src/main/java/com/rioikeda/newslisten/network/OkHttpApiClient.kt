@@ -63,6 +63,8 @@ private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
  *
  * `X-API-Key` / `Authorization` の付与は本クラスの責務ではなく、注入される
  * [okHttpClient] に組み込み済みの [AuthInterceptor] が担う（関心の分離）。
+ * 例外は [logout] で、呼出元が破棄前に捕捉したトークンを `Authorization` に明示して送る
+ * （トークン破棄の後に送るため。[AuthInterceptor] は明示されたヘッダを上書きしない）。
  *
  * @param baseUrl API のベース URL。
  * @param okHttpClient 実通信に使うクライアント（[AuthInterceptor] 等を組み込み済みのものを注入する）。
@@ -82,8 +84,9 @@ class OkHttpApiClient(
             LoginResponse.serializer(),
         )
 
-    override suspend fun logout() {
-        executeVoid(buildRequest(ApiEndpoint.Logout))
+    override suspend fun logout(token: String) {
+        val request = buildRequest(ApiEndpoint.Logout).newBuilder().header("Authorization", "Bearer $token").build()
+        executeVoid(request)
     }
 
     override suspend fun me(): UserResponse =

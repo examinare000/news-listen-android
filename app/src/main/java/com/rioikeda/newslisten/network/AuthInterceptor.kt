@@ -13,6 +13,10 @@ import okhttp3.Response
  * リクエスト URL の host が [apiBaseUrl] の host と一致する場合のみヘッダを付与する
  * 実行時判定に置き換える（署名付き外部 URL への誤付与を防ぐ）。
  *
+ * 要求が既に `Authorization` を明示しているときは、[tokenProvider] を呼ばず、上書きせず、失効通知もしない。
+ * トークン破棄の後に送る logout が、再ログインした新しいセッションのトークンで上書きされ、新しいセッションを
+ * 破棄してしまうのを防ぐ（android-dec-53）。`X-API-Key` の付与は従来どおり。
+ *
  * @param apiBaseUrl バックエンド API のベース URL。この host と一致するリクエストのみ対象。
  * @param apiKey `X-API-Key` ヘッダに付与する API キー（ゲートウェイ認証）。
  * @param onUnauthorized 失効通知（android-slice-auth-01・android-contract-13）。三点一致かつ `Authorization` ヘッダを
@@ -42,7 +46,7 @@ class AuthInterceptor(
         val builder = original.newBuilder().header("X-API-Key", apiKey)
         // 送信時点のトークンを固定して保持する。応答後に再評価すると、応答を待つ間に
         // 差し替わった新しいトークンを誤って失効通知してしまう（android-contract-13 no_reevaluation）。
-        val attachedToken = tokenProvider()
+        val attachedToken = if (original.header("Authorization") != null) null else tokenProvider()
         attachedToken?.let { token -> builder.header("Authorization", "Bearer $token") }
         val response = chain.proceed(builder.build())
         if (attachedToken != null && response.code == 401) {

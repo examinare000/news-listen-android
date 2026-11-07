@@ -327,6 +327,21 @@ class OkHttpApiClientTest {
         assertEquals("/notifications/device-tokens?token=fcm-token-abc&platform=android", recorded.path)
     }
 
+    @Test
+    fun `決定14 logoutはtokenをAuthorizationのBearerに付けPOST authLogoutを送る`() = runTest {
+        // verifies: 決定14
+        // 破棄後に送る想定で、tokenProvider は別のトークン（再ログイン後の新しいセッション）を返す。
+        token = "new-session-token"
+        server.enqueue(MockResponse().setResponseCode(200).setBody("""{"status":"ok"}"""))
+
+        client.logout("captured-token")
+
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/auth/logout", recorded.path)
+        assertEquals("Bearer captured-token", recorded.getHeader("Authorization"))
+    }
+
     // --- フェーズ10 P10 Task1: 設定機能（RSS ソース / おすすめサイト / プリファレンス / クォータ / ストリーク） ---
 
     @Test

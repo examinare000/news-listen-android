@@ -38,8 +38,11 @@ interface ApiClient : LearningApi, VocabularyTestApi {
     /** ログインしてセッショントークンとユーザー情報を取得する。 */
     suspend fun login(username: String, password: String): LoginResponse
 
-    /** ログアウトしてサーバ側セッションを破棄する。 */
-    suspend fun logout()
+    /**
+     * ログアウトしてサーバ側セッションを破棄する。[token] は呼出元が破棄前に捕捉したトークンで、
+     * 破棄後に送っても届くよう要求に明示する（決定 14）。
+     */
+    suspend fun logout(token: String)
 
     /** ログイン中ユーザー情報を取得する。 */
     suspend fun me(): UserResponse
