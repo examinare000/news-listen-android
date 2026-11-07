@@ -1,9 +1,11 @@
 package com.rioikeda.newslisten.preferences
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.rioikeda.newslisten.preferences.domain.PreferenceItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -145,5 +147,59 @@ class DataStorePreferencesStoreTest {
         assertEquals(2.0, secondStore.defaultPlaybackSpeed.value, 0.0)
         assertEquals(ArticleOpenMode.EXTERNAL, secondStore.articleOpenMode.value)
         assertEquals(TimeFormat.RELATIVE, secondStore.timeFormat.value)
+    }
+
+    private suspend fun DataStorePreferencesStore.writeAllEightNonDefault() {
+        setDefaultDifficulty("toeic_900")
+        setDefaultPlaybackSpeed(2.0)
+        setArticleOpenMode(ArticleOpenMode.EXTERNAL)
+        setTimeFormat(TimeFormat.RELATIVE)
+        setSfxEnabled(false)
+        setHapticsEnabled(false)
+        setWeeklyGoalEpisodes(9)
+        markAchievementsSeen(setOf("streak_7"))
+    }
+
+    @Test
+    fun `shared-dec-02 clearSubjectScopedは主体依存の4keyだけを消し端末設定の4keyを残す`() = runTest {
+        // verifies: shared-dec-02
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val file = File.createTempFile("prefs_clear_subject", ".preferences_pb").apply { deleteOnExit() }
+        val store = dispatcher.newStore(file)
+        advanceUntilIdle()
+        store.writeAllEightNonDefault()
+        advanceUntilIdle()
+
+        store.clearSubjectScoped()
+        store.clearSubjectScoped()
+        advanceUntilIdle()
+
+        assertEquals("toeic_600", store.defaultDifficulty.value)
+        assertEquals(1.0, store.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(3, store.weeklyGoalEpisodes.value)
+        assertEquals(emptySet<String>(), store.seenAchievementIds.value)
+        assertEquals(ArticleOpenMode.EXTERNAL, store.articleOpenMode.value)
+        assertEquals(TimeFormat.RELATIVE, store.timeFormat.value)
+        assertFalse(store.sfxEnabled.value)
+        assertFalse(store.hapticsEnabled.value)
+    }
+
+    @Test
+    fun `android-rule-prefs-04 PreferenceItemのkeyの集合は全8項目を保存したDataStoreのkeyの集合と一致する`() = runTest {
+        // verifies: android-rule-prefs-04
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val file = File.createTempFile("prefs_key_set", ".preferences_pb").apply { deleteOnExit() }
+        val job = Job()
+        val scope = CoroutineScope(job + dispatcher)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
+        val store = DataStorePreferencesStore(dataStore, scope)
+        advanceUntilIdle()
+        store.writeAllEightNonDefault()
+        advanceUntilIdle()
+
+        val keyNames = dataStore.data.first().asMap().keys.map { it.name }.toSet()
+
+        assertEquals(PreferenceItem.entries.map { it.key }.toSet(), keyNames)
+        job.cancel()
     }
 }

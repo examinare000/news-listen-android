@@ -58,4 +58,10 @@ interface PreferencesStore {
     suspend fun setWeeklyGoalEpisodes(episodes: Int)
 
     suspend fun markAchievementsSeen(ids: Set<String>)
+
+    /**
+     * 主体に属する設定（難易度・再生速度・週目標・表示済み実績ID）を既定値へ戻す。端末設定は変えない。
+     * 主体が離れるときの後始末が呼ぶ（shared-dec-02）。何度呼んでも同じ状態になる。
+     */
+    suspend fun clearSubjectScoped()
 }

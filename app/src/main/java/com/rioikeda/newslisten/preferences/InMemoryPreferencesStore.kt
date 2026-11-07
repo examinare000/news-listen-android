@@ -2,6 +2,7 @@ package com.rioikeda.newslisten.preferences
 
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.podcast.PlaybackConstants
+import com.rioikeda.newslisten.preferences.domain.PreferenceItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,7 +20,7 @@ class InMemoryPreferencesStore(
     initialTimeFormat: TimeFormat = TimeFormat.DEFAULT,
     initialSfxEnabled: Boolean = true,
     initialHapticsEnabled: Boolean = true,
-    initialWeeklyGoalEpisodes: Int = 3,
+    initialWeeklyGoalEpisodes: Int = DEFAULT_WEEKLY_GOAL_EPISODES,
     initialSeenAchievementIds: Set<String> = emptySet(),
 ) : PreferencesStore {
     private val _defaultDifficulty = MutableStateFlow(initialDefaultDifficulty)
@@ -79,7 +80,24 @@ class InMemoryPreferencesStore(
         _seenAchievementIds.value += ids
     }
 
+    override suspend fun clearSubjectScoped() {
+        PreferenceItem.entries.filter { it.subjectScoped }.forEach { item ->
+            when (item) {
+                PreferenceItem.DEFAULT_DIFFICULTY -> _defaultDifficulty.value = Difficulty.DEFAULT.code
+                PreferenceItem.DEFAULT_PLAYBACK_SPEED -> _defaultPlaybackSpeed.value = DEFAULT_PLAYBACK_SPEED
+                PreferenceItem.WEEKLY_GOAL_EPISODES -> _weeklyGoalEpisodes.value = DEFAULT_WEEKLY_GOAL_EPISODES
+                PreferenceItem.SEEN_ACHIEVEMENT_IDS -> _seenAchievementIds.value = emptySet()
+                PreferenceItem.ARTICLE_OPEN_MODE,
+                PreferenceItem.TIME_FORMAT,
+                PreferenceItem.SFX_ENABLED,
+                PreferenceItem.HAPTICS_ENABLED,
+                -> Unit
+            }
+        }
+    }
+
     private companion object {
         const val DEFAULT_PLAYBACK_SPEED = 1.0
+        const val DEFAULT_WEEKLY_GOAL_EPISODES = 3
     }
 }
