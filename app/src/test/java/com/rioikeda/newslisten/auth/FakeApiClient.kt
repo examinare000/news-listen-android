@@ -15,7 +15,7 @@ import com.rioikeda.newslisten.network.BaseFakeApiClient
 class FakeApiClient(
     private val onLogin: suspend (username: String, password: String) -> LoginResponse =
         { _, _ -> error("login is not stubbed") },
-    private val onLogout: suspend () -> Unit = {},
+    private val onLogout: suspend (token: String) -> Unit = {},
     private val onMe: suspend () -> UserResponse = { error("me is not stubbed") },
     private val onFetchPreferences: suspend () -> PreferencesResponse =
         { error("fetchPreferences is not stubbed") },
@@ -29,7 +29,7 @@ class FakeApiClient(
         return onLogin(username, password)
     }
 
-    override suspend fun logout() = onLogout()
+    override suspend fun logout(token: String) = onLogout(token)
 
     override suspend fun me(): UserResponse = onMe()
 

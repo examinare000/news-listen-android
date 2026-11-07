@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.podcast.PlaybackConstants
+import com.rioikeda.newslisten.preferences.domain.PreferenceItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -113,6 +114,15 @@ class DataStorePreferencesStore(
         dataStore.edit { preferences ->
             preferences[KEY_SEEN_ACHIEVEMENT_IDS] =
                 preferences[KEY_SEEN_ACHIEVEMENT_IDS].orEmpty() + ids
+        }
+    }
+
+    override suspend fun clearSubjectScoped() {
+        val subjectScopedNames = PreferenceItem.entries.filter { it.subjectScoped }.map { it.key }.toSet()
+        dataStore.edit { preferences ->
+            // 反復中に消さないよう、対象を先に選んでから消す。
+            val targets = preferences.asMap().keys.filter { it.name in subjectScopedNames }
+            targets.forEach { preferences.remove(it) }
         }
     }
 

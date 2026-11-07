@@ -363,7 +363,7 @@ class RecordingApiClient(
         return RecordingDefaults.loginResponse
     }
 
-    override suspend fun logout() = core.write("logout")
+    override suspend fun logout(token: String) = core.write("logout")
 
     override suspend fun starArticle(id: String, request: StarRequest): ActionResponse {
         core.write("starArticle")
@@ -547,6 +547,8 @@ class RecordingPreferencesStore(
     override suspend fun setWeeklyGoalEpisodes(episodes: Int) = core.write("setWeeklyGoalEpisodes")
 
     override suspend fun markAchievementsSeen(ids: Set<String>) = core.write("markAchievementsSeen")
+
+    override suspend fun clearSubjectScoped() = core.write("clearSubjectScoped")
 }
 
 internal class SessionFake(recorder: EffectRecorder, scenario: ProbeScenario) :

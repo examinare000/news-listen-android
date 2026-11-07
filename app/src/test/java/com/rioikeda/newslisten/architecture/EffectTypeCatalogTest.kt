@@ -43,9 +43,10 @@ class EffectTypeCatalogTest {
         assertTrue(api.sequenceReads.containsAll(listOf("fetchFeed", "fetchVocabularyTestSession", "fetchListeningStreak")))
 
         val preferences = portRow(production, "PreferencesStore")
-        assertEquals(8, preferences.writes.size)
+        assertEquals(9, preferences.writes.size)
         assertEquals(8, preferences.propertyReads.size)
         assertTrue("markAchievementsSeen" in preferences.writes)
+        assertTrue("clearSubjectScoped" in preferences.writes)
 
         val player = portRow(production, "PlayerController")
         assertEquals(setOf("prepare", "play", "pause", "seekTo", "setSpeed", "stop", "release"), player.writes)

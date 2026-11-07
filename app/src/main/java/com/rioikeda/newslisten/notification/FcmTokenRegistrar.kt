@@ -7,11 +7,11 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 
 /**
- * FCM デバイストークンの登録・解除ロジック（フェーズ9・プッシュ通知）。
+ * FCM デバイストークンの登録ロジック（フェーズ9・プッシュ通知）。
  *
- * 正本: backend/api/routers/notifications.py の POST/DELETE /notifications/device-tokens。
+ * 正本: backend/api/routers/notifications.py の POST /notifications/device-tokens。
  * backend は platform に応じた形式検証を行う（android は FCM トークン用バリデーション）。
- * 登録・解除の失敗は種別（422含む/通信不可等）を問わず握って続行する（ベストエフォート）。
+ * 登録の失敗は種別（422含む/通信不可等）を問わず握って続行する（ベストエフォート）。
  *
  * WHY 権限ゲート: Android は通知権限（POST_NOTIFICATIONS, API 33+）を OS レベルの
  * オプトインとして扱う。web は明示ボタンの opt-in、iOS は未配線（参照実装なし）——
@@ -39,17 +39,12 @@ class FcmTokenRegistrar(
         registerToken(token)
     }
 
-    /** ログアウト時に呼ぶ。トークンが取得できれば解除する（ベストエフォート）。 */
+    /**
+     * 主体の離脱時に呼ぶ。API は呼ばず、認証済みの印を落とすだけ（以後の [onNewToken] は登録しない）。
+     * サーバ側の登録は、セッション削除の連鎖で消える（ADR-104 決定 10、android-dec-01）。
+     */
     suspend fun onLogout(): Unit = withContext(dispatcher) {
         isAuthenticated = false
-        val token = fetchTokenOrNull() ?: return@withContext
-        try {
-            apiClient.unregisterDeviceToken(token)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: ApiException) {
-            // ベストエフォート: 通信失敗や一時的なサーバエラーでもログアウト自体を妨げない。
-        }
     }
 
     /** FCM トークン更新時に呼ぶ。認証済みかつ通知権限が許可済みのときのみ再登録する。 */

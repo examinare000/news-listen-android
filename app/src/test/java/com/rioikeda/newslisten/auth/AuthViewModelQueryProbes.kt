@@ -16,7 +16,7 @@ internal fun probeAuthViewModel(env: ProbeEnvironment): AuthViewModel = AuthView
     sessionStore = env.sessionStore,
     dispatcher = env.newDispatcher(),
     preferencesStore = env.preferencesStore,
-    onSubjectLeave = env.hooks.suspendWrite("AuthViewModel#onSubjectLeave"),
+    onSubjectLeave = env.hooks.write1<Subject>("AuthViewModel#onSubjectLeave"),
     onAuthenticated = env.hooks.suspendWrite("AuthViewModel#onAuthenticated"),
     onSubjectResolved = env.hooks.write1<Subject?>("AuthViewModel#onSubjectResolved"),
 )

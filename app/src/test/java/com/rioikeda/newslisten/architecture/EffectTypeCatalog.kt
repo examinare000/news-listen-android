@@ -80,6 +80,7 @@ data class EffectTypeCatalog(
                     writes = setOf(
                         "setDefaultDifficulty", "setDefaultPlaybackSpeed", "setArticleOpenMode", "setTimeFormat",
                         "setSfxEnabled", "setHapticsEnabled", "setWeeklyGoalEpisodes", "markAchievementsSeen",
+                        "clearSubjectScoped",
                     ),
                     sequenceReads = emptySet(),
                     propertyReads = setOf(
@@ -133,7 +134,7 @@ data class EffectTypeCatalog(
                 ),
             ),
             hooks = listOf(
-                HookRow("AuthViewModel#onSubjectLeave", HookKind.WRITE, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
+                HookRow("AuthViewModel#onSubjectLeave", HookKind.WRITE, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("AuthViewModel#onAuthenticated", HookKind.WRITE, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("PasskeyLoginViewModel#onLoginSuccess", HookKind.WRITE, HookShape.SUSPEND_ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow(

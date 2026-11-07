@@ -84,4 +84,31 @@ class InMemoryPreferencesStoreTest {
 
         assertEquals(TimeFormat.RELATIVE, store.timeFormat.value)
     }
+
+    @Test
+    fun `shared-dec-02 clearSubjectScopedは主体依存の4項目を既定値へ戻し端末設定の4項目を残す`() = runTest {
+        // verifies: shared-dec-02
+        val store = InMemoryPreferencesStore(
+            initialDefaultDifficulty = "toeic_900",
+            initialDefaultPlaybackSpeed = 2.0,
+            initialArticleOpenMode = ArticleOpenMode.EXTERNAL,
+            initialTimeFormat = TimeFormat.RELATIVE,
+            initialSfxEnabled = false,
+            initialHapticsEnabled = false,
+            initialWeeklyGoalEpisodes = 9,
+            initialSeenAchievementIds = setOf("streak_7"),
+        )
+
+        store.clearSubjectScoped()
+        store.clearSubjectScoped()
+
+        assertEquals("toeic_600", store.defaultDifficulty.value)
+        assertEquals(1.0, store.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(3, store.weeklyGoalEpisodes.value)
+        assertEquals(emptySet<String>(), store.seenAchievementIds.value)
+        assertEquals(ArticleOpenMode.EXTERNAL, store.articleOpenMode.value)
+        assertEquals(TimeFormat.RELATIVE, store.timeFormat.value)
+        assertFalse(store.sfxEnabled.value)
+        assertFalse(store.hapticsEnabled.value)
+    }
 }

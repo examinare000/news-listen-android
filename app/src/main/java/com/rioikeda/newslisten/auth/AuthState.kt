@@ -27,6 +27,13 @@ sealed class AuthState {
  * 形式の判断はここの生成関数 1 箇所に置く。
  */
 data class Subject(val userId: String?, val username: String) {
+    /**
+     * 同じ主体か。双方の [userId] が非 null なら [userId] の等しさ、どちらかが null なら [username] の等しさで判定する
+     * （欠落した id を持つ主体どうしでも、同一主体の更新を離脱と取り違えないため）。
+     */
+    fun isSameSubjectAs(other: Subject): Boolean =
+        if (userId != null && other.userId != null) userId == other.userId else username == other.username
+
     companion object {
         private val VALID_USER_ID = Regex("[A-Za-z0-9_-]+")
 
@@ -37,3 +44,12 @@ data class Subject(val userId: String?, val username: String) {
             )
     }
 }
+
+/**
+ * 主体離脱の後始末の 1 手順。[name] は失敗の観測（[CleanupIncomplete.parts]）に使う識別子。
+ * 手順列の組み立ては構成側（AppContainer）が持ち、実行は [SubjectCleanup] が担う。
+ */
+data class CleanupStep(val name: String, val run: suspend (Subject) -> Unit)
+
+/** 直近に完了した後始末で失敗した手順の名前。全手順が成功したときは持たない（`null`）。 */
+data class CleanupIncomplete(val parts: Set<String>)

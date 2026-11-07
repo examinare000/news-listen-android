@@ -12,6 +12,8 @@ import com.rioikeda.newslisten.account.AccountViewModel
 import com.rioikeda.newslisten.account.SessionsViewModel
 import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
+import com.rioikeda.newslisten.auth.CleanupStep
+import com.rioikeda.newslisten.auth.SubjectCleanup
 import com.rioikeda.newslisten.feed.FeedViewModel
 import com.rioikeda.newslisten.engagement.ApiListeningStreakStore
 import com.rioikeda.newslisten.engagement.ListeningStreakStore
@@ -40,7 +42,6 @@ import com.rioikeda.newslisten.podcast.PodcastViewModel
 import com.rioikeda.newslisten.preferences.DataStorePreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import com.rioikeda.newslisten.settings.SettingsViewModel
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -161,7 +162,7 @@ class AppContainer(context: Context) {
     }
 
     /**
-     * FCM デバイストークンの登録・解除ロジック（フェーズ9）。
+     * FCM デバイストークンの登録ロジック（フェーズ9）。
      *
      * permissionChecker: API 33 未満は POST_NOTIFICATIONS 権限自体が存在しないため常に許可扱い
      * （MainActivity のランタイム要求ガードと同じ判定基準）。
@@ -252,6 +253,23 @@ class AppContainer(context: Context) {
     internal fun getApiListeningStreakStore(): ApiListeningStreakStore = _listeningStreakStore
 
     /**
+     * 主体離脱の後始末の手順列（ADR-104）。呼出元の cancel で止まらないよう、`SupervisorJob` の長寿命 scope で動かす。
+     * 手順は実行時にラムダの中で各資産を読むので、構築時に `_podcastViewModel` などを評価しない。
+     */
+    private val subjectCleanup: SubjectCleanup by lazy {
+        SubjectCleanup(
+            steps = listOf(
+                CleanupStep("playback_stop") { _podcastViewModel.stopForSubjectLeave() },
+                CleanupStep("download_cancel") { s -> s.userId?.let { offlineLibrary.cancelDownloads(it) } },
+                CleanupStep("audio_cache") { s -> s.userId?.let { offlineLibrary.removeSubject(it) } },
+                CleanupStep("preferences") { preferencesStore.clearSubjectScoped() },
+                CleanupStep("fcm_local_reset") { fcmTokenRegistrar.onLogout() },
+            ),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+        )
+    }
+
+    /**
      * AuthViewModel（認証状態ゲーティング + ログイン）を生成して返す。
      *
      * Dispatcher: Dispatchers.Default は CPU バウンドタスク向き。IO タスクには Dispatchers.IO を
@@ -262,17 +280,9 @@ class AppContainer(context: Context) {
      * by lazy でシングルトンキャッシュ化：画面回転時に AuthViewModel インスタンスが同じ
      * ままであることを保証し、authState が Unknown にリセットされるのを防ぐ。
      *
-     * onSubjectLeave（android-slice-auth-01・SG-R18 で onLogoutCleanup から改名）: フェーズ8-D・
-     * shared-playback-spec.md §6.3（共有端末対応）。logout 時に再生を止め（位置は送らない。shared-dec-09）、
-     * 主体の音声キャッシュを削除し、FCM トークンを解除する。共有端末に他人の音声データが残らないようにする。
-     * auth 層に音声キャッシュの実体を直接依存させないため、後始末を関数として注入する
-     * （詳細は AuthViewModel の onSubjectLeave コメント参照）。呼出元は logout 経路のみ
-     * （失効経路からは呼ばない。order:12）。
-     *
-     * 後始末のうち音声キャッシュの分は、離れる主体 1 人分だけを対象にする（端末全体を消さない。ADR-104 決定 2）。
-     * 主体は呼出時の `currentSubjectId()` で読み、進行中のダウンロードの cancel（join しない）→ 主体のディレクトリの
-     * 削除の順に呼ぶ。cancel が間に合わず完了した書込は離脱主体のディレクトリに入り、次回起動の回収
-     * （`onSubjectResolved`）が消す（shared-leave-06）。
+     * onSubjectLeave（フェーズ8-D・shared-playback-spec.md §6.3・ADR-104）: 主体が離れたとき、離脱主体を引数に
+     * [subjectCleanup] を起動する（完了は待たない）。手順列は [subjectCleanup] が持ち、auth 層に各資産の実体を
+     * 直接依存させない。音声キャッシュは離れる主体 1 人分だけを対象にする（端末全体を消さない。ADR-104 決定 2）。
      */
     private val _authViewModel: AuthViewModel by lazy {
         AuthViewModel(
@@ -280,41 +290,9 @@ class AppContainer(context: Context) {
             sessionStore = sessionStore,
             dispatcher = Dispatchers.Default,
             preferencesStore = preferencesStore,
-            // 再生の停止（shared-leave-01）→ ダウンロードの cancel → 主体のキャッシュ削除（フェーズ8-D・ADR-104）→
-            // FCM トークン解除（フェーズ9）の順に行う合成ラムダ。onSubjectLeave は単一のフック点のため、複数の後始末はここで束ねる。
-            // 各操作を独立した try/catch で保護し、前段の失敗が後段をスキップさせないようにする。
-            onSubjectLeave = {
-                try {
-                    _podcastViewModel.stopForSubjectLeave()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    // 再生の停止失敗はログアウト継続
-                }
-                try {
-                    _authViewModel.currentSubjectId()?.let { offlineLibrary.cancelDownloads(it) }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    // ダウンロードの cancel 失敗はログアウト継続
-                }
-                try {
-                    _authViewModel.currentSubjectId()?.let { offlineLibrary.removeSubject(it) }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    // キャッシュ削除の失敗はログアウト継続（残った分は次回起動の回収が消す）
-                }
-                try {
-                    fcmTokenRegistrar.onLogout()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    // FCM トークン解除失敗はログアウト継続
-                }
-            },
+            onSubjectLeave = subjectCleanup::start,
             onAuthenticated = { fcmTokenRegistrar.onAuthenticated() },
-            // Unknown からの確定につき 1 回の起動時回収（shared-dec-05）。形式の判断は Subject の生成に任せる。
+            // Unknown からの確定（shared-dec-05）と遷移 ④ の B の確立（android-dec-48）の直後に回収する。形式の判断は Subject の生成に任せる。
             onSubjectResolved = { s -> offlineLibrary.reclaim(s?.userId) },
         )
     }

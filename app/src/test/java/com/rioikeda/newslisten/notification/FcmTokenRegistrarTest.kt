@@ -85,33 +85,17 @@ class FcmTokenRegistrarTest {
     // --- onLogout ---
 
     @Test
-    fun ログアウト時トークン取得できれば解除する() = runTest {
+    fun `android-dec-01 ログアウト時はトークンを取得せずAPIも呼ばない`() = runTest {
+        // verifies: android-dec-01
         val apiClient = FakeNotificationApiClient()
-        val registrar = newRegistrar(apiClient = apiClient, tokenProvider = { "fcm-token-abc" })
+        var tokenProviderCalls = 0
+        val registrar = newRegistrar(apiClient = apiClient, tokenProvider = { tokenProviderCalls++; "fcm-token-abc" })
 
         registrar.onLogout()
 
-        assertEquals(listOf("fcm-token-abc" to "android"), apiClient.unregisterCalls)
-    }
-
-    @Test
-    fun ログアウト時トークン取得できなければ解除を試みない() = runTest {
-        val apiClient = FakeNotificationApiClient()
-        val registrar = newRegistrar(apiClient = apiClient, tokenProvider = { null })
-
-        registrar.onLogout()
-
+        assertEquals(0, tokenProviderCalls)
         assertTrue(apiClient.unregisterCalls.isEmpty())
-    }
-
-    @Test
-    fun ログアウト時解除失敗は握って例外を投げない() = runTest {
-        val apiClient = FakeNotificationApiClient(
-            onUnregisterDeviceToken = { _, _ -> throw ApiException.NetworkError(RuntimeException("offline")) },
-        )
-        val registrar = newRegistrar(apiClient = apiClient)
-
-        registrar.onLogout()
+        assertTrue(apiClient.registerCalls.isEmpty())
     }
 
     // --- onNewToken ---
