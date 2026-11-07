@@ -54,6 +54,7 @@ class AuthViewModelTest {
         preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
         onSubjectLeave: suspend () -> Unit = {},
         onAuthenticated: () -> Unit = {},
+        onSubjectResolved: (Subject?) -> Unit = {},
     ): AuthViewModel =
         AuthViewModel(
             apiClient = apiClient,
@@ -62,7 +63,11 @@ class AuthViewModelTest {
             preferencesStore = preferencesStore,
             onSubjectLeave = onSubjectLeave,
             onAuthenticated = onAuthenticated,
+            onSubjectResolved = onSubjectResolved,
         )
+
+    private fun userWithId(userId: String?) =
+        UserResponse(username = "u", role = "member", displayName = "U", userId = userId)
 
     // --- refreshAuth（android-contract-12, android-test-12） ---
 
@@ -889,5 +894,231 @@ class AuthViewModelTest {
 
         assertEquals(AuthState.Authenticated(user), viewModel.authState.value)
         assertNull(viewModel.lastFailure.value)
+    }
+
+    // --- 起動時回収の発火（onSubjectResolved。shared-leave-08・09・10 / android-dec-48） ---
+
+    @Test
+    fun `shared-leave-08 Unknownの間はonSubjectResolvedを呼ばず再試行でmeが成功すると1回呼ぶ`() = runTest {
+        var meFails = true
+        val resolved = mutableListOf<Subject?>()
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(
+                onMe = { if (meFails) throw ApiException.NetworkError(RuntimeException("offline")) else userWithId("u-1") },
+                onFetchPreferences = { preferences },
+            ),
+            sessionStore = InMemorySessionStore(initialToken = "token-abc"),
+            onSubjectResolved = { resolved += it },
+        )
+
+        viewModel.refreshAuth()
+
+        assertEquals(AuthState.Unknown, viewModel.authState.value)
+        assertEquals(0, resolved.size)
+
+        meFails = false
+        viewModel.retryRefreshAuth()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.authState.value is AuthState.Authenticated)
+        assertEquals(listOf<Subject?>(Subject(userId = "u-1", username = "u")), resolved)
+    }
+
+    @Test
+    fun `shared-leave-09 Unknownからの確定につきonSubjectResolvedは1回で確定の後のloginと再実行では増えない`() = runTest {
+        val resolved = mutableListOf<Subject?>()
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(
+                onLogin = { _, _ -> LoginResponse(token = "new-token", user = userWithId("u-1")) },
+                onMe = { if (resolved.isEmpty()) throw ApiException.Unauthorized() else userWithId("u-1") },
+                onFetchPreferences = { preferences },
+            ),
+            sessionStore = InMemorySessionStore(initialToken = "token-abc"),
+            onSubjectResolved = { resolved += it },
+        )
+
+        viewModel.refreshAuth() // Unauthorized で Unauthenticated に確定する。
+
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+        assertEquals(listOf<Subject?>(null), resolved)
+
+        viewModel.login("u", "p")
+        assertTrue(viewModel.authState.value is AuthState.Authenticated)
+        assertEquals(1, resolved.size)
+
+        viewModel.refreshAuth()
+        assertEquals(1, resolved.size)
+    }
+
+    @Test
+    fun `shared-leave-09 Unknownを抜ける残りの書込経路はそれぞれ確定につき1回だけ呼ぶ`() = runTest {
+        // トークン無しの refreshAuth
+        run {
+            val resolved = mutableListOf<Subject?>()
+            val viewModel = newViewModel(
+                sessionStore = InMemorySessionStore(initialToken = null),
+                onSubjectResolved = { resolved += it },
+            )
+            viewModel.refreshAuth()
+            assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+            assertEquals(listOf<Subject?>(null), resolved)
+        }
+        // onUnauthorized（失効通知）
+        run {
+            val resolved = mutableListOf<Subject?>()
+            val viewModel = newViewModel(
+                sessionStore = InMemorySessionStore(initialToken = "t"),
+                onSubjectResolved = { resolved += it },
+            )
+            viewModel.onUnauthorized("t")
+            assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+            assertEquals(listOf<Subject?>(null), resolved)
+            viewModel.onUnauthorized("t")
+            assertEquals(1, resolved.size)
+        }
+        // login
+        run {
+            val resolved = mutableListOf<Subject?>()
+            val viewModel = newViewModel(
+                apiClient = FakeApiClient(onLogin = { _, _ -> LoginResponse(token = "tk", user = userWithId("u-2")) }),
+                onSubjectResolved = { resolved += it },
+            )
+            viewModel.login("u", "p")
+            assertEquals(listOf<Subject?>(Subject("u-2", "u")), resolved)
+        }
+        // completePasskeyLogin
+        run {
+            val resolved = mutableListOf<Subject?>()
+            val viewModel = newViewModel(onSubjectResolved = { resolved += it })
+            viewModel.completePasskeyLogin(LoginResponse(token = "tk", user = userWithId("u-3")))
+            assertEquals(listOf<Subject?>(Subject("u-3", "u")), resolved)
+            viewModel.completePasskeyLogin(LoginResponse(token = "tk2", user = userWithId("u-3")))
+            assertEquals(1, resolved.size)
+        }
+    }
+
+    @Test
+    fun `shared-leave-09 Authenticatedで失効通知を受けてもonSubjectResolvedを呼ばない`() = runTest {
+        val resolved = mutableListOf<Subject?>()
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(
+                onMe = { userWithId("u-1") },
+                onFetchPreferences = { preferences },
+            ),
+            sessionStore = InMemorySessionStore(initialToken = "t"),
+            onSubjectResolved = { resolved += it },
+        )
+        viewModel.refreshAuth()
+        assertEquals(listOf<Subject?>(Subject("u-1", "u")), resolved)
+
+        viewModel.onUnauthorized("t")
+
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+        assertEquals(listOf<Subject?>(Subject("u-1", "u")), resolved)
+    }
+
+    @Test
+    fun `shared-leave-09 Authenticatedの後の再実行がUnauthorizedでもonSubjectResolvedを呼ばない`() = runTest {
+        var meUnauthorized = false
+        val resolved = mutableListOf<Subject?>()
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(
+                onMe = { if (meUnauthorized) throw ApiException.Unauthorized() else userWithId("u-1") },
+                onFetchPreferences = { preferences },
+            ),
+            sessionStore = InMemorySessionStore(initialToken = "t"),
+            onSubjectResolved = { resolved += it },
+        )
+        viewModel.refreshAuth()
+        assertEquals(listOf<Subject?>(Subject("u-1", "u")), resolved)
+
+        meUnauthorized = true
+        viewModel.refreshAuth()
+
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+        assertEquals(listOf<Subject?>(Subject("u-1", "u")), resolved)
+    }
+
+    @Test
+    fun `shared-leave-09 Unauthenticatedでトークン無しの再実行をしてもonSubjectResolvedは増えない`() = runTest {
+        val resolved = mutableListOf<Subject?>()
+        val viewModel = newViewModel(
+            sessionStore = InMemorySessionStore(initialToken = null),
+            onSubjectResolved = { resolved += it },
+        )
+        viewModel.refreshAuth()
+        assertEquals(listOf<Subject?>(null), resolved)
+
+        viewModel.refreshAuth()
+
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+        assertEquals(listOf<Subject?>(null), resolved)
+    }
+
+    @Test
+    fun `shared-leave-08 me成功のonSubjectResolvedはpreferencesの同期より前に発火する`() = runTest {
+        val events = mutableListOf<String>()
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(
+                onMe = { userWithId("u-1") },
+                onFetchPreferences = {
+                    events += "fetchPreferences"
+                    preferences
+                },
+            ),
+            sessionStore = InMemorySessionStore(initialToken = "t"),
+            onSubjectResolved = { events += "resolved" },
+        )
+
+        viewModel.refreshAuth()
+
+        assertEquals(listOf("resolved", "fetchPreferences"), events)
+    }
+
+    @Test
+    fun `shared-leave-09 保存に失敗して確定しないloginではonSubjectResolvedを呼ばない`() = runTest {
+        val resolved = mutableListOf<Subject?>()
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onLogin = { _, _ -> LoginResponse(token = "tk", user = userWithId("u-1")) }),
+            sessionStore = InMemorySessionStore(saveFails = true),
+            onSubjectResolved = { resolved += it },
+        )
+
+        viewModel.login("u", "p")
+
+        assertEquals(AuthState.Unknown, viewModel.authState.value)
+        assertEquals(0, resolved.size)
+    }
+
+    @Test
+    fun `shared-leave-10 user_idが欠落や形式不正でもAuthenticatedになりcurrentSubjectIdはnullでSubjectのuserIdはnullで1回呼ぶ`() = runTest {
+        listOf<String?>(null, "", "bad id", "../evil").forEach { userId ->
+            val resolved = mutableListOf<Subject?>()
+            val viewModel = newViewModel(
+                apiClient = FakeApiClient(onLogin = { _, _ -> LoginResponse(token = "tk", user = userWithId(userId)) }),
+                onSubjectResolved = { resolved += it },
+            )
+
+            viewModel.login("u", "p")
+
+            assertTrue("userId=$userId", viewModel.authState.value is AuthState.Authenticated)
+            assertNull("userId=$userId", viewModel.currentSubjectId())
+            assertEquals("userId=$userId", listOf<Subject?>(Subject(userId = null, username = "u")), resolved)
+        }
+    }
+
+    @Test
+    fun `shared-leave-10 currentSubjectIdはAuthenticatedなら正しいuser_idを返しそれ以外はnullを返す`() = runTest {
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onLogin = { _, _ -> LoginResponse(token = "tk", user = userWithId("u-1_A")) }),
+        )
+        assertNull(viewModel.currentSubjectId()) // Unknown
+
+        viewModel.login("u", "p")
+        assertEquals("u-1_A", viewModel.currentSubjectId())
+
+        viewModel.logout()
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+        assertNull(viewModel.currentSubjectId())
     }
 }

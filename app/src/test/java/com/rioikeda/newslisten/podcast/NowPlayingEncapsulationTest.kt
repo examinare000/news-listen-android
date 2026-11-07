@@ -66,7 +66,12 @@ class NowPlayingEncapsulationTest {
             podcastApi = apiClient,
             apiClient = apiClient.learning,
             playerController = FakePlayerController(),
-            cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
+            offlineLibrary = OfflineLibrary(
+                AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
+                apiClient,
+                { null },
+                StandardTestDispatcher(testScheduler),
+            ),
             networkMonitor = StubNetworkMonitor(initialIsOnline = true),
             dispatcher = StandardTestDispatcher(testScheduler),
             preferencesStore = InMemoryPreferencesStore(),

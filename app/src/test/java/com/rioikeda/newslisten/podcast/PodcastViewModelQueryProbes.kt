@@ -6,7 +6,6 @@ import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.engagement.probeListeningStreakStore
-import com.rioikeda.newslisten.network.AudioCacheManager
 
 /**
  * `PodcastViewModel` の query。warm-up で再生を始め、15 秒周期の位置同期（内部 scope の timer）を張った状態で観測する。
@@ -37,7 +36,7 @@ internal val podcastViewModelQueryProbes: QueryProbeSet = run {
             podcastApi = env.podcastApi,
             apiClient = env.apiClient,
             playerController = env.playerController,
-            cacheManager = AudioCacheManager(env.fileSystem, "/probe-cache"),
+            offlineLibrary = probeOfflineLibrary(env),
             networkMonitor = env.networkMonitor,
             dispatcher = env.newDispatcher(),
             listeningStreakStore = probeListeningStreakStore(env),

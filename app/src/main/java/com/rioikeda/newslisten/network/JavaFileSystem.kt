@@ -18,7 +18,14 @@ class JavaFileSystem : FileSystem {
     override fun delete(path: String): Boolean = File(path).delete()
 
     override fun listFiles(dirPath: String): List<String> =
-        File(dirPath).listFiles()?.map { it.path } ?: emptyList()
+        File(dirPath).listFiles()?.filter { it.isFile }?.map { it.path } ?: emptyList()
+
+    override fun listDirectories(dirPath: String): List<String> =
+        File(dirPath).listFiles()?.filter { it.isDirectory }?.map { it.path } ?: emptyList()
+
+    override fun deleteRecursively(path: String) {
+        File(path).deleteRecursively()
+    }
 
     override fun fileSize(path: String): Long? =
         File(path).takeIf { it.exists() }?.length()

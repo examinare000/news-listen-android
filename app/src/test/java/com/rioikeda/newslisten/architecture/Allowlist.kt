@@ -60,9 +60,10 @@ object Allowlist {
             rule("android-dep-02", "androidx", "android-slice-periphery-02", "model/FeaturedCategory.kt") +
             rule("android-dep-02", "R", "android-slice-periphery-02", "model/FeaturedCategory.kt") +
 
-            // android-dep-03 (6): network 2 + model 4
+            // android-dep-03 (7): network 3 + model 4
             rule("android-dep-03", "network", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
             rule("android-dep-03", "network", "android-slice-periphery-02", "notification/FcmTokenRegistrar.kt") +
+            rule("android-dep-03", "network", "android-slice-closure-01", "podcast/OfflineLibrary.kt") +
             rule("android-dep-03", "model", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
             rule("android-dep-03", "model", "android-slice-periphery-01", "feed/PendingArticleAction.kt") +
             rule("android-dep-03", "model", "android-slice-learning-03", "network/LearningApi.kt", "network/VocabularyTestApi.kt") +
@@ -131,7 +132,7 @@ object Allowlist {
             // android-dep-07 (1)
             rule("android-dep-07", "公開の var", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
 
-            // android-dep-09 (8)
+            // android-dep-09 (9)
             rule(
                 "android-dep-09", "e.code", "android-slice-failure-01",
                 "account/AccountViewModel.kt",
@@ -143,6 +144,7 @@ object Allowlist {
             ) +
             rule("android-dep-09", "= e.message", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
             rule("android-dep-09", "= e.message", "android-slice-playapp-03", "podcast/PodcastViewModel.kt") +
+            rule("android-dep-09", "= e.message", "android-slice-playapp-03", "podcast/OfflineLibrary.kt") +
 
             // android-check-02 (5)
             rule("android-check-02", "fetchLearningDashboard", "android-slice-learning-01", "network/LearningApi.kt") +

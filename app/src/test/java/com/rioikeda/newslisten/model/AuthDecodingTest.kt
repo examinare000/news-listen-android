@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -40,5 +41,21 @@ class AuthDecodingTest {
         assertEquals("alice", response.user.username)
         assertEquals("user", response.user.role)
         assertEquals("Alice", response.user.displayName)
+    }
+
+    @Test
+    fun `shared-leave-10 user_idがあればuserIdに入り欠落でもdecodeが成功する`() {
+        val withId = NewsListenJson.decodeFromString(
+            UserResponse.serializer(),
+            """{"username":"alice","role":"user","display_name":"Alice","user_id":"u-1_A"}""",
+        )
+        val withoutId = NewsListenJson.decodeFromString(
+            UserResponse.serializer(),
+            """{"username":"alice","role":"user","display_name":"Alice"}""",
+        )
+
+        assertEquals("u-1_A", withId.userId)
+        assertNull(withoutId.userId)
+        assertEquals("alice", withoutId.username)
     }
 }

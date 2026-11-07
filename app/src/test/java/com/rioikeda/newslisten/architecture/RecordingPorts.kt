@@ -631,6 +631,10 @@ class RecordingFileSystem(
 
     override fun listFiles(dirPath: String): List<String> = core.read("listFiles")
 
+    override fun listDirectories(dirPath: String): List<String> = core.read("listDirectories")
+
+    override fun deleteRecursively(path: String) = core.write("deleteRecursively")
+
     override fun fileSize(path: String): Long? = core.read("fileSize")
 
     override fun ensureDirectory(dirPath: String) = core.write("ensureDirectory")

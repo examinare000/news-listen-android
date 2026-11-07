@@ -46,7 +46,12 @@ class PodcastViewModelPortTest {
             podcastApi = podcastApi,
             apiClient = apiClient,
             playerController = FakePlayerController(),
-            cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
+            offlineLibrary = OfflineLibrary(
+                AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
+                podcastApi,
+                { null },
+                StandardTestDispatcher(testScheduler),
+            ),
             networkMonitor = StubNetworkMonitor(initialIsOnline = true),
             dispatcher = StandardTestDispatcher(testScheduler),
             preferencesStore = InMemoryPreferencesStore(),
