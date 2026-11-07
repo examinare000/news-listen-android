@@ -9,6 +9,8 @@ import com.rioikeda.newslisten.network.InMemorySessionStore
 import com.rioikeda.newslisten.network.SessionStore
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -52,7 +54,7 @@ class AuthViewModelTest {
         apiClient: ApiClient = FakeApiClient(),
         sessionStore: SessionStore = InMemorySessionStore(),
         preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
-        onSubjectLeave: suspend () -> Unit = {},
+        onSubjectLeave: (Subject) -> Unit = {},
         onAuthenticated: () -> Unit = {},
         onSubjectResolved: (Subject?) -> Unit = {},
     ): AuthViewModel =
@@ -66,8 +68,60 @@ class AuthViewModelTest {
             onSubjectResolved = onSubjectResolved,
         )
 
-    private fun userWithId(userId: String?) =
-        UserResponse(username = "u", role = "member", displayName = "U", userId = userId)
+    private fun userWithId(userId: String?, username: String = "u") =
+        UserResponse(username = username, role = "member", displayName = "U", userId = userId)
+
+    /** 起点を `Authenticated` にする。`refreshAuth()` を先に呼ぶので、`onFetchPreferences` は stub する。 */
+    private suspend fun TestScope.authenticatedViewModel(
+        userId: String? = "u-1",
+        username: String = "u",
+        sessionStore: SessionStore = InMemorySessionStore(initialToken = "token-abc"),
+        onLogin: suspend (String, String) -> LoginResponse = { _, _ -> error("login is not stubbed") },
+        onLogout: suspend (String) -> Unit = {},
+        preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
+        onSubjectLeave: (Subject) -> Unit = {},
+        onAuthenticated: () -> Unit = {},
+        onSubjectResolved: (Subject?) -> Unit = {},
+    ): AuthViewModel {
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(
+                onLogin = onLogin,
+                onLogout = onLogout,
+                onMe = { userWithId(userId, username) },
+                onFetchPreferences = { preferences },
+            ),
+            sessionStore = sessionStore,
+            preferencesStore = preferencesStore,
+            onSubjectLeave = onSubjectLeave,
+            onAuthenticated = onAuthenticated,
+            onSubjectResolved = onSubjectResolved,
+        )
+        viewModel.refreshAuth()
+        return viewModel
+    }
+
+    private val cleanupStepNames =
+        listOf("playback_stop", "download_cancel", "audio_cache", "preferences", "fcm_local_reset")
+
+    /** 実物の [SubjectCleanup]。scope は runTest の scheduler に載せる（観測は `advanceUntilIdle()` の後）。 */
+    private fun TestScope.newCleanup(steps: List<CleanupStep>): SubjectCleanup =
+        SubjectCleanup(steps, CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)))
+
+    /** 5 手順の double。各手順は `pauseMillis` だけ待ってから `calls` へ（手順名, 離脱主体）を記録し、`failFirst` の名前は 1 回目だけ記録後に失敗する。 */
+    private fun recordingSteps(
+        calls: MutableList<Pair<String, Subject>>,
+        pauseMillis: Long = 0,
+        failFirst: Set<String> = emptySet(),
+    ): List<CleanupStep> {
+        val pendingFailures = failFirst.toMutableSet()
+        return cleanupStepNames.map { name ->
+            CleanupStep(name) { subject ->
+                if (pauseMillis > 0) delay(pauseMillis)
+                calls += name to subject
+                if (pendingFailures.remove(name)) throw RuntimeException("$name failed")
+            }
+        }
+    }
 
     // --- refreshAuth（android-contract-12, android-test-12） ---
 
@@ -108,11 +162,11 @@ class AuthViewModelTest {
         assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
         assertNull(sessionStore.load())
         assertNull(viewModel.lastFailure.value)
-        assertFalse("失効経路は後始末を呼ばない（order:12）", subjectLeaveCalled)
+        assertFalse("Unknown からの失効は離脱でなく起動時回収が拾うので後始末を呼ばない", subjectLeaveCalled)
     }
 
     @Test
-    fun network_トークンありでmeがNetworkErrorならUnknownのままトークンを保持しlastFailureを立てる() = runTest {
+    fun `shared-leave-03 network_トークンありでmeがNetworkErrorならUnknownのままトークンを保持しlastFailureを立てる`() = runTest {
         // verifies: android-contract-12（既存 :95 の反転。一時障害でトークンを破棄しない仕様変更）
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
         val viewModel = newViewModel(
@@ -128,7 +182,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun http500_トークンありでmeがHttpError500ならUnknownのままトークンを保持しlastFailureを立てる() = runTest {
+    fun `shared-leave-03 http500_トークンありでmeがHttpError500ならUnknownのままトークンを保持しlastFailureを立てる`() = runTest {
         // verifies: android-contract-12
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
         val viewModel = newViewModel(
@@ -146,7 +200,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun decoding_トークンありでmeがDecodingErrorならUnknownのままトークンを保持しlastFailureを立てる() = runTest {
+    fun `shared-leave-03 decoding_トークンありでmeがDecodingErrorならUnknownのままトークンを保持しlastFailureを立てる`() = runTest {
         // verifies: android-contract-12
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
         val viewModel = newViewModel(
@@ -280,7 +334,7 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun unauthorized_loginがUnauthorizedを受けたらユーザーIDまたはパスワードが正しくありませんと表示する() = runTest {
+    fun `shared-leave-05 unauthorized_loginがUnauthorizedを受けたらユーザーIDまたはパスワードが正しくありませんと表示する`() = runTest {
         // verifies: android-contract-23（既存 :179 の置換。leakage guard: AuthViewModel は HttpError.code を比較しない）
         val sessionStore = InMemorySessionStore(initialToken = null)
         var subjectLeaveCalled = false
@@ -375,7 +429,7 @@ class AuthViewModelTest {
     // --- logout ---
 
     @Test
-    fun logoutはAPI失敗でもトークンを破棄しUnauthenticatedになる() = runTest {
+    fun `logoutはAPI失敗でもトークンを破棄しUnauthenticatedになる`() = runTest {
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
         val viewModel = newViewModel(
             apiClient = FakeApiClient(onLogout = { throw ApiException.NetworkError(RuntimeException("offline")) }),
@@ -383,39 +437,46 @@ class AuthViewModelTest {
         )
 
         viewModel.logout()
+        advanceUntilIdle()
 
         assertNull(sessionStore.load())
         assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
     }
 
-    // --- logout: キャッシュクリーンアップ（spec §6.3 共有端末対応、フェーズ8-D。SG-R18 で onSubjectLeave に改名） ---
+    // --- logout: 離脱の導出と後始末（ADR-104 決定 1・14。離脱は直前が Authenticated の遷移だけで起動する） ---
 
     @Test
-    fun logoutでonSubjectLeaveが呼ばれる() = runTest {
-        var subjectLeaveCalled = false
-        val viewModel = newViewModel(onSubjectLeave = { subjectLeaveCalled = true })
+    fun `shared-leave-01 android-test-14 logoutはAuthenticatedの離脱主体でonSubjectLeaveを1回呼ぶ`() = runTest {
+        // verifies: android-contract-14
+        val left = mutableListOf<Subject>()
+        val viewModel = authenticatedViewModel(userId = "u-1", onSubjectLeave = { left += it })
 
         viewModel.logout()
+        advanceUntilIdle()
 
-        assertTrue(subjectLeaveCalled)
+        assertEquals(listOf(Subject("u-1", "u")), left)
     }
 
     @Test
-    fun logoutはonSubjectLeaveが例外を投げてもトークンを破棄しUnauthenticatedになる() = runTest {
+    fun `logoutはonSubjectLeaveが同期で例外を投げてもトークンを破棄しUnauthenticatedになりapiClientのlogoutを送る`() = runTest {
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
-        val viewModel = newViewModel(
+        val sent = mutableListOf<String>()
+        val viewModel = authenticatedViewModel(
             sessionStore = sessionStore,
+            onLogout = { sent += it },
             onSubjectLeave = { throw RuntimeException("cache cleanup failed") },
         )
 
         viewModel.logout()
+        advanceUntilIdle()
 
         assertNull(sessionStore.load())
         assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+        assertEquals(listOf("token-abc"), sent)
     }
 
     @Test
-    fun loginではonSubjectLeaveは呼ばれない() = runTest {
+    fun `Unknownからのloginでは主体の離脱を起動しない`() = runTest {
         var subjectLeaveCalled = false
         val loginResponse = LoginResponse(token = "new-token", user = user)
         val viewModel = newViewModel(
@@ -564,7 +625,7 @@ class AuthViewModelTest {
         assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
         assertNull(sessionStore.load())
         assertNull(viewModel.lastFailure.value)
-        assertFalse("失効経路は後始末を呼ばない（order:12）", subjectLeaveCalled)
+        assertFalse("Unknown からの失効は離脱でなく起動時回収が拾うので後始末を呼ばない", subjectLeaveCalled)
     }
 
     @Test
@@ -647,136 +708,152 @@ class AuthViewModelTest {
         assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
     }
 
-    // --- logout 実行中の失効通知の抑止（CI-S0-10, T-S0-10。SG-S0-7 = (a)、order:95-99 で user が確定） ---
+    // --- logout 実行中の失効通知の抑止（CI-S0-10, T-S0-10。SG-S0-7 = (a)） ---
 
     @Test
-    fun notice_during_logout_後始末の実行中に届いた失効通知は完了まで無視される() = runTest {
+    fun `notice_during_logout_トークン破棄の後に届いた失効通知は無視され後始末は1回だけ起動される`() = runTest {
         // verifies: CI-S0-10
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
         var recordedState: AuthState? = null
-        var recordedToken: String? = null
+        var recordedToken: String? = "unset"
+        var leaveCount = 0
         lateinit var viewModel: AuthViewModel
-        viewModel = newViewModel(
-            apiClient = FakeApiClient(onMe = { user }, onFetchPreferences = { preferences }),
+        viewModel = authenticatedViewModel(
             sessionStore = sessionStore,
             onSubjectLeave = {
+                leaveCount++
                 viewModel.onUnauthorized("token-abc")
                 recordedState = viewModel.authState.value
                 recordedToken = sessionStore.load()
             },
         )
-        viewModel.refreshAuth()
 
         viewModel.logout()
+        advanceUntilIdle()
 
-        assertEquals(AuthState.Authenticated(user), recordedState)
-        assertEquals("token-abc", recordedToken)
+        assertEquals(AuthState.Unauthenticated, recordedState)
+        assertNull(recordedToken)
+        assertEquals(1, leaveCount)
         assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
         assertNull(sessionStore.load())
     }
 
     @Test
-    fun notice_during_server_logout_apiClient_logoutの実行中に届いた失効通知も無視される() = runTest {
+    fun `notice_during_server_logout_apiClient_logoutの実行中に届いた失効通知も無視される`() = runTest {
         // verifies: CI-S0-10（server がセッションを削除した直後に並行要求が 401 を受ける経路 B の入口を塞ぐ）
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
         var recordedState: AuthState? = null
-        var recordedToken: String? = null
+        var recordedToken: String? = "unset"
+        var leaveCount = 0
         lateinit var viewModel: AuthViewModel
-        viewModel = newViewModel(
-            apiClient = FakeApiClient(
-                onMe = { user },
-                onFetchPreferences = { preferences },
-                onLogout = {
-                    viewModel.onUnauthorized("token-abc")
-                    recordedState = viewModel.authState.value
-                    recordedToken = sessionStore.load()
-                },
-            ),
+        viewModel = authenticatedViewModel(
             sessionStore = sessionStore,
+            onLogout = {
+                viewModel.onUnauthorized("token-abc")
+                recordedState = viewModel.authState.value
+                recordedToken = sessionStore.load()
+            },
+            onSubjectLeave = { leaveCount++ },
         )
-        viewModel.refreshAuth()
 
         viewModel.logout()
+        advanceUntilIdle()
 
-        assertEquals(AuthState.Authenticated(user), recordedState)
-        assertEquals("token-abc", recordedToken)
+        assertEquals(AuthState.Unauthenticated, recordedState)
+        assertNull(recordedToken)
         assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
         assertNull(sessionStore.load())
+        assertEquals(1, leaveCount)
     }
 
     @Test
-    fun order_pin_後始末の完了前は遷移せず完了後にUnauthenticatedになる() = runTest {
-        // verifies: CI-S0-10（order:57「後始末の完了後に遷移」の現行順序を維持することの固定）
+    fun `notice_during_logout_トークン破棄の前に届いた失効通知はガードで無視され捕捉トークンで送る`() = runTest {
+        // verifies: CI-S0-10（logoutsInProgress > 0 の抑止を単独で固定する。照合だけでは、破棄前の通知がトークンの一致で通ってしまう）
+        val backing = InMemorySessionStore(initialToken = "token-abc")
+        var armed = false
+        var notified = false
+        lateinit var viewModel: AuthViewModel
+        // load() の中から 1 回だけ現在のトークンで失効通知を呼ぶ。通知の後に値を読んで返す
+        // （先に読むと、ガードが無くても通知がトークン破棄の前に処理されず、検査にならない）。
+        val store = object : SessionStore {
+            override fun load(): String? {
+                if (armed && !notified) {
+                    notified = true
+                    viewModel.onUnauthorized(backing.load() ?: "none")
+                }
+                return backing.load()
+            }
+
+            override fun save(token: String): Boolean = backing.save(token)
+
+            override fun clear() = backing.clear()
+        }
+        val sent = mutableListOf<String>()
+        var leaveCount = 0
+        viewModel = authenticatedViewModel(
+            sessionStore = store,
+            onLogout = { sent += it },
+            onSubjectLeave = { leaveCount++ },
+        )
+        armed = true
+
+        viewModel.logout()
+        advanceUntilIdle()
+
+        assertEquals(1, leaveCount)
+        assertEquals(listOf("token-abc"), sent)
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+    }
+
+    @Test
+    fun `shared-leave-01 order_pin_トークン破棄とUnauthenticatedが後始末の起動より先に観測される`() = runTest {
+        // verifies: CI-S0-10, android-contract-14（離脱は トークン破棄 → 未認証 → 後始末の起動 の順）
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
         var recordedState: AuthState? = null
-        var recordedToken: String? = null
+        var recordedToken: String? = "unset"
         lateinit var viewModel: AuthViewModel
-        viewModel = newViewModel(
-            apiClient = FakeApiClient(onMe = { user }, onFetchPreferences = { preferences }),
+        viewModel = authenticatedViewModel(
             sessionStore = sessionStore,
             onSubjectLeave = {
-                delay(1_000)
                 recordedState = viewModel.authState.value
                 recordedToken = sessionStore.load()
             },
         )
-        viewModel.refreshAuth()
 
-        launch { viewModel.logout() }
-        runCurrent()
-
-        assertEquals(AuthState.Authenticated(user), viewModel.authState.value)
-        assertEquals("token-abc", sessionStore.load())
-
+        viewModel.logout()
         advanceUntilIdle()
 
-        assertEquals(AuthState.Authenticated(user), recordedState)
-        assertEquals("token-abc", recordedToken)
-        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
-        assertNull(sessionStore.load())
+        assertEquals(AuthState.Unauthenticated, recordedState)
+        assertNull(recordedToken)
     }
 
     @Test
-    fun guard_released_apiClient_logoutの途中でcancelされてもガードは外れ以後の失効通知は処理される() = runTest {
+    fun `guard_released_logoutが戻った後はガードが外れ再ログインした新しいセッションへの失効通知は処理される`() = runTest {
         // verifies: CI-S0-10（F10: 減算が finally に無いと以後の失効通知を捨て続ける欠陥を判別する）
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
-        var subjectLeaveCalled = false
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(
-                onMe = { user },
-                onFetchPreferences = { preferences },
-                onLogout = { delay(1_000) },
-            ),
+        val loginResponse = LoginResponse(token = "token-2", user = userWithId("u-1"))
+        val viewModel = authenticatedViewModel(
             sessionStore = sessionStore,
-            onSubjectLeave = { subjectLeaveCalled = true },
+            onLogin = { _, _ -> loginResponse },
         )
-        viewModel.refreshAuth()
-
-        val job = launch { viewModel.logout() }
-        runCurrent()
-        job.cancel()
+        viewModel.logout()
         advanceUntilIdle()
+        viewModel.login("u", "p")
+        assertEquals(AuthState.Authenticated(userWithId("u-1")), viewModel.authState.value)
 
-        assertEquals(AuthState.Authenticated(user), viewModel.authState.value)
-        assertEquals("token-abc", sessionStore.load())
-        assertFalse(subjectLeaveCalled)
-
-        viewModel.onUnauthorized("token-abc")
+        viewModel.onUnauthorized("token-2")
 
         assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
         assertNull(sessionStore.load())
     }
 
     @Test
-    fun cancel_during_cleanup_後始末の途中でcancelされても現行どおりclearまで進む() = runTest {
-        // verifies: CI-S0-10（現行の挙動の固定。onSubjectLeave 内の CancellationException は既存の catch に吸われる）
+    fun `cancel_during_cleanup_logoutの呼出元が終わった後も後始末は最後まで走りcleanupIncompleteが確定する`() = runTest {
+        // verifies: CI-S0-10, android-contract-15
         val sessionStore = InMemorySessionStore(initialToken = "token-abc")
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onMe = { user }, onFetchPreferences = { preferences }),
-            sessionStore = sessionStore,
-            onSubjectLeave = { delay(1_000) },
-        )
-        viewModel.refreshAuth()
+        val calls = mutableListOf<Pair<String, Subject>>()
+        val cleanup = newCleanup(recordingSteps(calls, pauseMillis = 1_000))
+        val viewModel = authenticatedViewModel(sessionStore = sessionStore, onSubjectLeave = cleanup::start)
 
         val job = launch { viewModel.logout() }
         runCurrent()
@@ -785,6 +862,8 @@ class AuthViewModelTest {
 
         assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
         assertNull(sessionStore.load())
+        assertEquals(cleanupStepNames, calls.map { it.first })
+        assertNull(cleanup.cleanupIncomplete.value)
     }
 
     // --- retryRefreshAuth（CI-S0-8, T-S0-8） ---
@@ -1120,5 +1199,395 @@ class AuthViewModelTest {
         viewModel.logout()
         assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
         assertNull(viewModel.currentSubjectId())
+    }
+
+    // --- 離脱の導出と後始末の手順列（shared-leave-01・02・04・07。SubjectCleanup 実物＋delay の手順） ---
+
+    @Test
+    fun `shared-leave-01 android-test-14 logoutは後始末の完了を待たずにUnauthenticatedになり手順は5つの名前の順に走る`() = runTest {
+        // verifies: android-contract-14
+        val sessionStore = InMemorySessionStore(initialToken = "token-abc")
+        val calls = mutableListOf<Pair<String, Subject>>()
+        val cleanup = newCleanup(recordingSteps(calls, pauseMillis = 1_000))
+        val viewModel = authenticatedViewModel(sessionStore = sessionStore, onSubjectLeave = cleanup::start)
+
+        launch { viewModel.logout() }
+        runCurrent()
+
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+        assertNull(sessionStore.load())
+        assertTrue("手順はまだ完了していない", calls.size < cleanupStepNames.size)
+
+        advanceUntilIdle()
+
+        assertEquals(cleanupStepNames, calls.map { it.first })
+        assertEquals(List(5) { Subject("u-1", "u") }, calls.map { it.second })
+        assertNull(cleanup.cleanupIncomplete.value)
+    }
+
+    @Test
+    fun `shared-leave-01 決定14 logoutは破棄前に捕捉したトークンをapiClientのlogoutへ渡し完了を待たずにUnauthenticatedになる`() = runTest {
+        val sent = mutableListOf<String>()
+        val viewModel = authenticatedViewModel(onLogout = { token -> delay(1_000); sent += token })
+
+        val job = launch { viewModel.logout() }
+        runCurrent()
+
+        assertTrue("logout は送信の完了を待たずに戻る", job.isCompleted)
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+        assertTrue(sent.isEmpty())
+
+        advanceUntilIdle()
+
+        assertEquals(listOf("token-abc"), sent)
+    }
+
+    @Test
+    fun `shared-leave-02 android-test-14 Authenticatedで保存トークン付きの失効通知を受けるとlogoutと同じ事後条件になる`() = runTest {
+        // verifies: android-contract-14
+        val sessionStore = InMemorySessionStore(initialToken = "token-abc")
+        val calls = mutableListOf<Pair<String, Subject>>()
+        val cleanup = newCleanup(recordingSteps(calls))
+        val sent = mutableListOf<String>()
+        val viewModel = authenticatedViewModel(
+            sessionStore = sessionStore,
+            onLogout = { sent += it },
+            onSubjectLeave = cleanup::start,
+        )
+
+        viewModel.onUnauthorized("token-abc")
+        advanceUntilIdle()
+
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+        assertNull(sessionStore.load())
+        assertEquals(cleanupStepNames, calls.map { it.first })
+        assertEquals(List(5) { Subject("u-1", "u") }, calls.map { it.second })
+        assertTrue("失効通知ではサーバ logout を送らない", sent.isEmpty())
+    }
+
+    @Test
+    fun `shared-leave-02 android-test-14 Authenticatedの再実行のmeがUnauthorizedでも離脱主体の後始末が起動される`() = runTest {
+        // verifies: android-contract-14
+        val left = mutableListOf<Subject>()
+        var meUnauthorized = false
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(
+                onMe = { if (meUnauthorized) throw ApiException.Unauthorized() else userWithId("u-1") },
+                onFetchPreferences = { preferences },
+            ),
+            sessionStore = InMemorySessionStore(initialToken = "token-abc"),
+            onSubjectLeave = { left += it },
+        )
+        viewModel.refreshAuth()
+        assertTrue(left.isEmpty())
+        meUnauthorized = true
+
+        viewModel.refreshAuth()
+        advanceUntilIdle()
+
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+        assertEquals(listOf(Subject("u-1", "u")), left)
+    }
+
+    @Test
+    fun `shared-leave-02 同じ失効通知が2回届いても後始末は1回だけ起動される`() = runTest {
+        var leaveCount = 0
+        val viewModel = authenticatedViewModel(onSubjectLeave = { leaveCount++ })
+
+        viewModel.onUnauthorized("token-abc")
+        viewModel.onUnauthorized("token-abc")
+        advanceUntilIdle()
+
+        assertEquals(1, leaveCount)
+    }
+
+    @Test
+    fun `shared-leave-04 android-test-15 手順の1つが失敗しても残りは実行されcleanupIncompleteにpartsが出て再ログイン後のlogoutの再実行で全成功ならnullに戻る`() = runTest {
+        // verifies: android-contract-15
+        val calls = mutableListOf<Pair<String, Subject>>()
+        val cleanup = newCleanup(recordingSteps(calls, failFirst = setOf("audio_cache")))
+        val loginResponse = LoginResponse(token = "token-2", user = userWithId("u-1"))
+        val viewModel = authenticatedViewModel(onLogin = { _, _ -> loginResponse }, onSubjectLeave = cleanup::start)
+
+        viewModel.logout()
+        advanceUntilIdle()
+
+        assertEquals(CleanupIncomplete(setOf("audio_cache")), cleanup.cleanupIncomplete.value)
+        assertEquals(cleanupStepNames, calls.map { it.first })
+
+        viewModel.login("u", "p")
+        viewModel.logout()
+        advanceUntilIdle()
+
+        assertEquals(cleanupStepNames + cleanupStepNames, calls.map { it.first })
+        assertNull(cleanup.cleanupIncomplete.value)
+    }
+
+    @Test
+    fun `shared-leave-04 preferencesの失敗は旧主体の4keyを残し別主体の次のlogoutのpreferences手順で消える`() = runTest {
+        // verifies: android-contract-15（入口 ② の次回起動の回収は音声キャッシュだけで、4 key は次の離脱が消す）
+        val preferencesStore = InMemoryPreferencesStore(
+            initialDefaultDifficulty = "toeic_900",
+            initialDefaultPlaybackSpeed = 2.0,
+            initialWeeklyGoalEpisodes = 9,
+            initialSeenAchievementIds = setOf("streak_7"),
+        )
+        var preferencesAttempts = 0
+        val cleanup = newCleanup(
+            listOf(
+                CleanupStep("preferences") {
+                    if (preferencesAttempts++ == 0) throw RuntimeException("clear failed")
+                    preferencesStore.clearSubjectScoped()
+                },
+            ),
+        )
+        val loginResponse = LoginResponse(token = "token-b", user = userWithId("u-2", "other"))
+        val viewModel = authenticatedViewModel(
+            userId = "u-1",
+            preferencesStore = preferencesStore,
+            onLogin = { _, _ -> loginResponse },
+            onSubjectLeave = cleanup::start,
+        )
+        // refreshAuth の同期が 3 項目を stub で上書きするので、比較のスナップショットは refreshAuth の後に取る。
+        val difficulty = preferencesStore.defaultDifficulty.value
+        val speed = preferencesStore.defaultPlaybackSpeed.value
+        val goal = preferencesStore.weeklyGoalEpisodes.value
+        val seen = preferencesStore.seenAchievementIds.value
+
+        viewModel.logout()
+        advanceUntilIdle()
+
+        assertEquals(CleanupIncomplete(setOf("preferences")), cleanup.cleanupIncomplete.value)
+        assertEquals(difficulty, preferencesStore.defaultDifficulty.value)
+        assertEquals(speed, preferencesStore.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(goal, preferencesStore.weeklyGoalEpisodes.value)
+        assertEquals(seen, preferencesStore.seenAchievementIds.value)
+
+        viewModel.login("other", "p")
+        viewModel.logout()
+        advanceUntilIdle()
+
+        assertNull(cleanup.cleanupIncomplete.value)
+        assertEquals("toeic_600", preferencesStore.defaultDifficulty.value)
+        assertEquals(1.0, preferencesStore.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(3, preferencesStore.weeklyGoalEpisodes.value)
+        assertEquals(emptySet<String>(), preferencesStore.seenAchievementIds.value)
+    }
+
+    @Test
+    fun `shared-leave-07 android-test-14 Authenticated(A)からBのloginでAの後始末が起動されBの確立は待たない`() = runTest {
+        // verifies: android-contract-14
+        val sessionStore = InMemorySessionStore(initialToken = "token-abc")
+        val calls = mutableListOf<Pair<String, Subject>>()
+        val cleanup = newCleanup(recordingSteps(calls, pauseMillis = 1_000))
+        val userB = userWithId("u-2", "bob")
+        val viewModel = authenticatedViewModel(
+            userId = "u-1",
+            sessionStore = sessionStore,
+            onLogin = { _, _ -> LoginResponse(token = "token-b", user = userB) },
+            onSubjectLeave = cleanup::start,
+        )
+
+        launch { viewModel.login("bob", "p") }
+        runCurrent()
+
+        assertEquals(AuthState.Authenticated(userB), viewModel.authState.value)
+        assertEquals("token-b", sessionStore.load())
+        assertTrue("A の手順はまだ完了していない", calls.size < cleanupStepNames.size)
+
+        advanceUntilIdle()
+
+        assertEquals(List(5) { Subject("u-1", "u") }, calls.map { it.second })
+    }
+
+    @Test
+    fun `shared-leave-07 遷移④でonSubjectResolvedがBで1回呼ばれshared-leave-09の回数に入らない`() = runTest {
+        val events = mutableListOf<String>()
+        val resolved = mutableListOf<Subject?>()
+        val userB = userWithId("u-2", "bob")
+        val viewModel = authenticatedViewModel(
+            userId = "u-1",
+            onLogin = { _, _ -> LoginResponse(token = "token-b", user = userB) },
+            onSubjectLeave = { events += "leave:${it.username}" },
+            onSubjectResolved = { resolved += it; events += "resolved:${it?.username}" },
+            onAuthenticated = { events += "authenticated" },
+        )
+        assertEquals(listOf<Subject?>(Subject("u-1", "u")), resolved)
+        events.clear()
+
+        viewModel.login("bob", "p")
+        advanceUntilIdle()
+
+        assertEquals(listOf<Subject?>(Subject("u-1", "u"), Subject("u-2", "bob")), resolved)
+        assertEquals(listOf("leave:u", "resolved:bob", "authenticated"), events)
+    }
+
+    @Test
+    fun `shared-leave-07 同じ主体のloginとapplyProfileUpdateとmeの再取得は離脱を起動しない`() = runTest {
+        var leaveCount = 0
+        val viewModel = authenticatedViewModel(
+            userId = "u-1",
+            onLogin = { _, _ -> LoginResponse(token = "token-2", user = userWithId("u-1")) },
+            onSubjectLeave = { leaveCount++ },
+        )
+
+        viewModel.login("u", "p")
+        viewModel.applyProfileUpdate(userWithId("u-1").copy(displayName = "Renamed"))
+        viewModel.refreshAuth()
+        advanceUntilIdle()
+
+        assertEquals(0, leaveCount)
+        assertTrue(viewModel.authState.value is AuthState.Authenticated)
+    }
+
+    @Test
+    fun `shared-leave-07 completePasskeyLoginでも遷移④はAの後始末を起動する`() = runTest {
+        val left = mutableListOf<Subject>()
+        val viewModel = authenticatedViewModel(userId = "u-1", onSubjectLeave = { left += it })
+
+        viewModel.completePasskeyLogin(LoginResponse(token = "token-b", user = userWithId("u-2", "bob")))
+        advanceUntilIdle()
+
+        assertEquals(listOf(Subject("u-1", "u")), left)
+    }
+
+    @Test
+    fun `shared-leave-07 userIdが片方でも欠落なら同一主体はusernameで判定し両方あればuserIdで判定する`() = runTest {
+        // (subject A: userId, username) -> (subject B: userId, username) => 離脱するか
+        data class Case(val a: Pair<String?, String>, val b: Pair<String?, String>, val leaves: Boolean)
+        val cases = listOf(
+            Case(null to "x", "u-1" to "x", leaves = false),
+            Case("u-1" to "x", null to "x", leaves = false),
+            Case(null to "x", "u-1" to "y", leaves = true),
+            Case("u-1" to "x", "u-1" to "y", leaves = false),
+            Case("u-1" to "x", "u-2" to "x", leaves = true),
+        )
+        cases.forEach { c ->
+            val left = mutableListOf<Subject>()
+            val viewModel = authenticatedViewModel(
+                userId = c.a.first,
+                username = c.a.second,
+                onLogin = { _, _ ->
+                    LoginResponse(token = "token-b", user = UserResponse(c.b.second, "member", "U", c.b.first))
+                },
+                onSubjectLeave = { left += it },
+            )
+            viewModel.login(c.b.second, "p")
+            advanceUntilIdle()
+            assertEquals("$c", if (c.leaves) 1 else 0, left.size)
+        }
+    }
+
+    @Test
+    fun `shared-leave-07 保存に失敗したloginはAのままで離脱を起動しない`() = runTest {
+        var leaveCount = 0
+        val userA = userWithId("u-1")
+        val store = object : SessionStore {
+            private val backing = InMemorySessionStore(initialToken = "token-abc")
+            var saveFails = false
+            override fun save(token: String): Boolean = if (saveFails) false else backing.save(token)
+            override fun load(): String? = backing.load()
+            override fun clear() = backing.clear()
+        }
+        val viewModel = authenticatedViewModel(
+            userId = "u-1",
+            sessionStore = store,
+            onLogin = { _, _ -> LoginResponse(token = "token-b", user = userWithId("u-2", "bob")) },
+            onSubjectLeave = { leaveCount++ },
+        )
+        store.saveFails = true
+
+        viewModel.login("bob", "p")
+        advanceUntilIdle()
+
+        assertEquals(AuthState.Authenticated(userA), viewModel.authState.value)
+        assertEquals(0, leaveCount)
+        assertEquals(sessionSaveErrorMessage, viewModel.loginErrorMessage.value)
+    }
+
+    @Test
+    fun `logoutはUnknownからでも後始末を起動せずonSubjectResolvedをnullで1回呼ぶ`() = runTest {
+        val resolved = mutableListOf<Subject?>()
+        val sent = mutableListOf<String>()
+        var leaveCount = 0
+        val sessionStore = InMemorySessionStore(initialToken = "token-abc")
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onLogout = { sent += it }),
+            sessionStore = sessionStore,
+            onSubjectLeave = { leaveCount++ },
+            onSubjectResolved = { resolved += it },
+        )
+
+        viewModel.logout()
+        advanceUntilIdle()
+
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+        assertEquals(0, leaveCount)
+        assertEquals(listOf<Subject?>(null), resolved)
+        assertNull(sessionStore.load())
+        assertEquals(listOf("token-abc"), sent)
+    }
+
+    @Test
+    fun `logoutでトークンが無ければapiClientのlogoutを呼ばない`() = runTest {
+        val sent = mutableListOf<String>()
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onLogout = { sent += it }),
+            sessionStore = InMemorySessionStore(initialToken = null),
+        )
+
+        viewModel.logout()
+        advanceUntilIdle()
+
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun `logoutはUnauthenticatedからでは後始末もonSubjectResolvedも呼ばない`() = runTest {
+        val resolved = mutableListOf<Subject?>()
+        val sent = mutableListOf<String>()
+        var leaveCount = 0
+        val viewModel = newViewModel(
+            apiClient = FakeApiClient(onLogout = { sent += it }),
+            sessionStore = InMemorySessionStore(initialToken = null),
+            onSubjectLeave = { leaveCount++ },
+            onSubjectResolved = { resolved += it },
+        )
+        viewModel.refreshAuth()
+        assertEquals(AuthState.Unauthenticated, viewModel.authState.value)
+        val resolvedBefore = resolved.size
+
+        viewModel.logout()
+        advanceUntilIdle()
+
+        assertEquals(0, leaveCount)
+        assertEquals(resolvedBefore, resolved.size)
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun `onSubjectLeaveとonSubjectResolvedはsessionLockの外で呼ばれる`() = runTest {
+        // 両 hook の中から別スレッドで onUnauthorized を呼ぶ。lock を保持したまま呼ばれていれば、別スレッドは待たされて終了しない
+        // （同じスレッドからの呼出は synchronized が再入可能で検出できない）。
+        val blocked = mutableListOf<String>()
+        lateinit var viewModel: AuthViewModel
+        fun probeFromOtherThread(label: String) {
+            val thread = Thread { viewModel.onUnauthorized("x") }
+            thread.start()
+            thread.join(5_000)
+            if (thread.isAlive) blocked += label
+        }
+        viewModel = authenticatedViewModel(
+            userId = "u-1",
+            onLogin = { _, _ -> LoginResponse(token = "token-b", user = userWithId("u-2", "bob")) },
+            onSubjectLeave = { probeFromOtherThread("leave") },
+            onSubjectResolved = { if (it?.userId == "u-2") probeFromOtherThread("resolved") },
+        )
+
+        viewModel.login("bob", "p")
+        viewModel.logout()
+        advanceUntilIdle()
+
+        assertTrue("lock を保持したまま hook を呼んでいる: $blocked", blocked.isEmpty())
     }
 }

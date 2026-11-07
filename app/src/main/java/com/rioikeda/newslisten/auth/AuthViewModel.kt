@@ -40,27 +40,16 @@ class AuthViewModel(
      */
     private val preferencesStore: PreferencesStore,
     /**
-     * logout 時に追加で行うクリーンアップ（フェーズ8-D・shared-playback-spec.md §6.3）。
-     * android-slice-auth-01（SG-R18）で `onLogoutCleanup` から改名（挙動不変。呼出元は logout 経路のみ）。
+     * 主体が離れたときに呼ぶフック（ADR-104 決定 1・3、shared-leave-01・02・07）。離脱は認証状態の遷移から導出する:
+     * 直前が `Authenticated(A)` で、次が `Unauthenticated` か別主体の `Authenticated(B)` のとき、離脱主体 A を引数に
+     * [sessionLock] の外で 1 回呼ぶ。トークンの破棄と新しい状態の確定は呼出より先に済んでいる。
+     * 同一主体の更新、`Unknown` / `Unauthenticated` からの遷移では呼ばない。
      *
-     * spec §6.3 は共有端末対応として「logout 時にユーザー固有キャッシュ（音声）を完全削除する」ことを
-     * 全プラットフォーム共通の方針として定めるが、実体（音声キャッシュ）は podcast 層（OfflineLibrary）に属し、
-     * auth 層から直接依存させると層の依存方向が逆転する（auth → podcast）。そのため呼び出し元
-     * （AppContainer）が OfflineLibrary の cancelDownloads と removeSubject を束ねた関数を注入する形にし、
-     * auth 層は「ログアウト時に何かクリーンアップが要る」という事実のみを知る設計にした。
-     *
-     * suspend である理由: OfflineLibrary の cancelDownloads が dispatcher 上で Job を cancel する suspend 関数のため。
-     * cancel の完了は待たない。cancel が間に合わず完了した書込は離脱主体のディレクトリに入り、
-     * 次回起動の回収が消す（shared-leave-06）。
-     *
-     * 注記: iOS (AppState.swift:171-178) の logout() は現時点でキャッシュ削除を呼び出しておらず、
-     * spec §6.3 の表が言う「ビルトイン」実装とは実際には未配線（反証済み）。ADR-053 の
-     * 「spec が正本・実装が追随」原則に従い、Android は spec 準拠で先行実装する。iOS 側の追随は
-     * 別途 docs 側の follow-up として扱う。
-     *
-     * **失効経路（[onUnauthorized]）からは呼ばない**（order:12。後始末の呼出元・順序は変えない）。
+     * 非 suspend で、呼出元は戻りを待たない（後始末の完了を待たずに遷移する）。例外は握り、状態も送信も巻き戻さない。
+     * 実体（再生停止・ダウンロード中断・音声キャッシュ削除・端末設定の削除・通知の印の初期化）は他の層に属するため、
+     * 呼び出し元（AppContainer）が手順列として束ねて注入し、auth 層は「主体が離れた」という事実だけを知る。
      */
-    private val onSubjectLeave: suspend () -> Unit = {},
+    private val onSubjectLeave: (Subject) -> Unit = {},
     /**
      * 認証確立時（refreshAuth の me 成功・login 成功）に追加で行うフック（フェーズ9・FCM トークン登録）。
      *
@@ -72,9 +61,10 @@ class AuthViewModel(
      */
     private val onAuthenticated: suspend () -> Unit = {},
     /**
-     * 認証状態が `Unknown` から `Authenticated` / `Unauthenticated` に確定した直後に 1 回だけ呼ぶ（起動時回収。
-     * shared-leave-08・09、android-dec-48）。引数は確定後の主体（`Unauthenticated` なら null）。一時障害で
-     * `Unknown` のままの間、確定の後の login・再実行では呼ばない。[sessionLock] の外で呼ぶ。
+     * `Unknown` からの確定の直後と、遷移 ④（`Authenticated(A)` から別主体 B への確立）の直後に、それぞれ 1 回呼ぶ
+     * （起動時回収。shared-leave-07・08・09、android-dec-48）。引数は確定後の主体（`Unauthenticated` なら null）。
+     * 一時障害で `Unknown` のままの間、確定の後の同一主体の login・再実行では呼ばない。遷移 ④ の呼出は
+     * shared-leave-09 の回数に入れない。[sessionLock] の外で呼び、離脱の通知（[onSubjectLeave]）の後に呼ぶ。
      */
     private val onSubjectResolved: (Subject?) -> Unit = {},
 ) {
@@ -118,8 +108,9 @@ class AuthViewModel(
     private val sessionLock = Any()
 
     /**
-     * logout 実行中（サーバ側失効・後始末含む）に届いた失効通知を抑止するガード
-     * （CI-S0-10・SG-S0-7 = (a)。order:95-99 で user 承認済み）。[sessionLock] で保護する。
+     * logout の同期部分（トークンの捕捉から離脱の通知まで）に届いた失効通知を抑止するガード
+     * （CI-S0-10・SG-S0-7 = (a)）。[sessionLock] で保護する。抑止は、このカウンタが正であることと、付与トークンが
+     * 現在値と一致することの両方で行う。
      *
      * `withContext(dispatcher)` に入った直後に加算し `finally` で必ず減算することで、
      * logout 処理が cancel されてもガードが解放され、以後の失効通知が処理される
@@ -131,13 +122,48 @@ class AuthViewModel(
     private val retryInFlight = AtomicBoolean(false)
 
     /**
-     * [retryRefreshAuth] 用の内部 CoroutineScope（CI-S0-8）。
+     * 内部 CoroutineScope（CI-S0-8）。[retryRefreshAuth] の実行と、logout のサーバ送信（完了を待たない）に使う。
      *
      * UI（Compose の `rememberCoroutineScope`）から起動すると、`Authenticated` への遷移で
      * 分岐が composition を離れて scope が cancel され、refreshAuth が完走しない
      * （SR-10 / C3）。呼出元 scope に依存せず完走させるため、ViewModel 自身が scope を持つ。
      */
     private val internalScope = CoroutineScope(SupervisorJob() + dispatcher)
+
+    /** 認証状態の遷移。[left] は離脱する主体（離脱でなければ null）。 */
+    private class Transition(val previous: AuthState, val left: Subject?)
+
+    /**
+     * 認証状態の唯一の書込口。[sessionLock] の中で呼ぶ。離脱は直前が `Authenticated(A)` で、次が `Unauthenticated` か
+     * A と別主体の `Authenticated(B)` のときだけ導出する（共有仕様 6.5）。`Unknown` に戻す遷移は存在しない。
+     */
+    private fun setAuthState(next: AuthState): Transition {
+        val previous = _authState.value
+        val left = (previous as? AuthState.Authenticated)?.let { Subject.from(it.user) }?.takeUnless { leaving ->
+            next is AuthState.Authenticated && leaving.isSameSubjectAs(Subject.from(next.user))
+        }
+        _authState.value = next
+        return Transition(previous, left)
+    }
+
+    /**
+     * 遷移の通知。[sessionLock] の外で呼ぶ。離脱があれば [onSubjectLeave] を 1 回、その後に [onSubjectResolved] を
+     * （`Unknown` からの確定、または遷移 ④ の B の確立で）1 回呼ぶ。
+     */
+    private fun announce(transition: Transition, next: AuthState) {
+        transition.left?.let { left ->
+            try {
+                onSubjectLeave(left)
+            } catch (e: Exception) {
+                // ベストエフォート: 後始末の起動の失敗でログアウトや遷移を失敗させない。
+            }
+        }
+        val resolved = (next as? AuthState.Authenticated)?.let { Subject.from(it.user) }
+        when {
+            transition.previous is AuthState.Unknown -> onSubjectResolved(resolved)
+            transition.left != null && resolved != null -> onSubjectResolved(resolved)
+        }
+    }
 
     /** [sessionLock] 内で付与トークンが現在値と一致するときだけ [block] を適用する。適用有無を返す。 */
     private fun applyIfCurrent(attachedToken: String?, block: () -> Unit): Boolean =
@@ -192,37 +218,33 @@ class AuthViewModel(
         val token = sessionStore.load()
         if (token == null) {
             // トークン無しの経路も、lock の中で load()==null を確かめてから書く（CI-S0-5）。
-            var wasUnknown = false
-            applyIfCurrent(null) {
-                wasUnknown = _authState.value is AuthState.Unknown
-                _authState.value = AuthState.Unauthenticated
-            }
-            if (wasUnknown) onSubjectResolved(null)
+            var transition: Transition? = null
+            applyIfCurrent(null) { transition = setAuthState(AuthState.Unauthenticated) }
+            transition?.let { announce(it, AuthState.Unauthenticated) }
             return@withContext
         }
         try {
             val user = apiClient.me()
-            var wasUnknown = false
+            val next = AuthState.Authenticated(user)
+            var transition: Transition? = null
             val applied = applyIfCurrent(token) {
-                wasUnknown = _authState.value is AuthState.Unknown
-                _authState.value = AuthState.Authenticated(user)
+                transition = setAuthState(next)
                 _lastFailure.value = null
             }
             if (applied) {
-                if (wasUnknown) onSubjectResolved(Subject.from(user))
+                transition?.let { announce(it, next) }
                 // 認証確立後、サーバーの preferences を同期する（失敗時は既存のローカル値を保持）。
                 syncPreferences()
                 onAuthenticated()
             }
         } catch (e: ApiException.Unauthorized) {
-            var wasUnknown = false
+            var transition: Transition? = null
             applyIfCurrent(token) {
-                wasUnknown = _authState.value is AuthState.Unknown
                 sessionStore.clear()
-                _authState.value = AuthState.Unauthenticated
+                transition = setAuthState(AuthState.Unauthenticated)
                 _lastFailure.value = null
             }
-            if (wasUnknown) onSubjectResolved(null)
+            transition?.let { announce(it, AuthState.Unauthenticated) }
         } catch (e: ApiException) {
             // 一時障害: authState には触れない（Unknown へ落として再ログイン画面を出してしまわないため）。
             // 画面回転等で Authenticated 中に再実行された一時障害、または並行する refreshAuth が
@@ -244,21 +266,21 @@ class AuthViewModel(
      * 「三点一致かつ `Authorization` を付与したリクエストの 401」のときのみ呼ぶため、送信時に
      * 付与したトークン（[attachedToken]）を受け取り、[sessionLock] 内で「logout 実行中でない」
      * かつ「現在のセッションと一致する」ときだけ破棄する（両方の確認を同じ排他区間で行う。F3）。
-     * logout 実行中（サーバ側失効・後始末含む）は無視する（CI-S0-10・SG-S0-7 = (a)）。
+     * logout の同期部分に届いた通知は無視する（CI-S0-10・SG-S0-7 = (a)）。
      *
-     * [onSubjectLeave] は呼ばない（order:12。失効経路は後始末を呼ばない、既存の slice）。
+     * 直前が `Authenticated` なら遷移 ② として [onSubjectLeave] で後始末を起動する（shared-leave-02）。サーバ logout は送らない。
+     * `Unknown` からの失効は離脱でなく、起動時回収が拾う。
      */
     fun onUnauthorized(attachedToken: String) {
-        val wasUnknown = synchronized(sessionLock) {
+        val transition = synchronized(sessionLock) {
             if (logoutsInProgress > 0) return
             if (sessionStore.load() != attachedToken) return
-            val unknown = _authState.value is AuthState.Unknown
             sessionStore.clear()
-            _authState.value = AuthState.Unauthenticated
+            val t = setAuthState(AuthState.Unauthenticated)
             _lastFailure.value = null
-            unknown
+            t
         }
-        if (wasUnknown) onSubjectResolved(null)
+        announce(transition, AuthState.Unauthenticated)
     }
 
     /**
@@ -310,28 +332,7 @@ class AuthViewModel(
             return@withContext
         }
         try {
-            val response = apiClient.login(trimmedUsername, password)
-            // save → loginErrorMessage=null → Authenticated → lastFailure=null を1つの区間に
-            // まとめる（CI-S0-5・T6-6）。onAuthenticated() は lock の外で呼ぶ。
-            var wasUnknown = false
-            val saved = synchronized(sessionLock) {
-                if (sessionStore.save(response.token)) {
-                    _loginErrorMessage.value = null
-                    wasUnknown = _authState.value is AuthState.Unknown
-                    _authState.value = AuthState.Authenticated(response.user)
-                    _lastFailure.value = null
-                    true
-                } else {
-                    false
-                }
-            }
-            if (!saved) {
-                // android-contract-16: 保存失敗時は Authenticated へ遷移させない。
-                _loginErrorMessage.value = SESSION_SAVE_ERROR_MESSAGE
-                return@withContext
-            }
-            if (wasUnknown) onSubjectResolved(Subject.from(response.user))
-            onAuthenticated()
+            establishSession(apiClient.login(trimmedUsername, password))
         } catch (e: ApiException.Unauthorized) {
             _loginErrorMessage.value = "ユーザーIDまたはパスワードが正しくありません"
         } catch (e: ApiException) {
@@ -341,37 +342,41 @@ class AuthViewModel(
     }
 
     /**
-     * ログアウトしてサーバ側セッションを破棄し、ローカル状態を未認証にする。
-     * サーバ失効に失敗してもローカルのトークン・状態は必ず落とす（iOS `try?` 相当のベストエフォート）。
+     * ログアウトし、ローカル状態を未認証にする。サーバ側のセッション破棄は送るだけで完了を待たない
+     * （送信が失敗してもローカルのトークン・状態は必ず落とす。iOS `try?` 相当のベストエフォート）。
      *
-     * android-slice-auth-01（CI-S0-10・SG-S0-7 = (a)）: 実行中（サーバ側失効・後始末含む）は [logoutsInProgress]
-     * を立てて [onUnauthorized] を抑止する。`withContext` に入った直後、減算の `finally` を持つ
-     * `try` の直前に [sessionLock] の中で加算する（増加と `try` の間に suspend する地点を挟まない）。
-     * `try` には `apiClient.logout()` を含めるため、cancel されても `finally` が必ず走り、ガードが
-     * 解放されて以後の失効通知を捨て続けない（F10）。
+     * 順序（ADR-104 決定 1・14）: [sessionLock] の中でトークンを捕捉 → 破棄 → `Unauthenticated` → lock の外で離脱の通知
+     * （[onSubjectLeave]。後始末の起動で、完了は待たない）→ 捕捉したトークンでサーバへ送信（[internalScope]。
+     * await しない）。捕捉したトークンが無ければ送らない。`Unknown` / `Unauthenticated` からの logout も同じ手順で、
+     * 離脱は起動せず、`Unknown` からなら [onSubjectResolved] を `null` で 1 回呼ぶ。
      *
-     * CI-S0-10 の WHY（経路 B）: logout の途中でサーバ側がセッションを削除するため、同じ時間帯に
-     * 別の要求が 401 を受け得る。後始末の完了前に遷移させない（order:57）。
+     * android-slice-auth-01（CI-S0-10・SG-S0-7 = (a)）: 同期部分の間は [logoutsInProgress] を立てて [onUnauthorized] を
+     * 抑止する。`withContext` に入った直後、減算の `finally` を持つ `try` の直前に [sessionLock] の中で加算する
+     * （増加と `try` の間に suspend する地点を挟まない）。cancel されても `finally` が必ず走り、ガードが解放されて
+     * 以後の失効通知を捨て続けない（F10）。
+     *
+     * CI-S0-10 の WHY（経路 B）: サーバがセッションを削除した直後に別の要求が 401 を受け得る。捕捉と破棄を先に済ませ、
+     * 破棄後の失効通知はトークンの照合で、破棄前の通知はこのガードで無視する。
      */
     suspend fun logout(): Unit = withContext(dispatcher) {
         synchronized(sessionLock) { logoutsInProgress++ }
         try {
-            try {
-                apiClient.logout()
-            } catch (e: ApiException) {
-                // ベストエフォート: サーバ側の失効に失敗してもローカルの認証状態は落とす。
-            }
-            try {
-                onSubjectLeave()
-            } catch (e: Exception) {
-                // ベストエフォート（spec §6.3）: キャッシュ削除の失敗でログアウト自体を失敗させない。
-                // onSubjectLeave は呼び出し元が注入する任意の処理のため、ApiException に限定せず
-                // 汎用 Exception で受ける（クライアント側の状態は信頼できない前提）。
-            }
-            synchronized(sessionLock) {
+            val (token, transition) = synchronized(sessionLock) {
+                val captured = sessionStore.load()
                 sessionStore.clear()
-                _authState.value = AuthState.Unauthenticated
+                val t = setAuthState(AuthState.Unauthenticated)
                 _lastFailure.value = null
+                captured to t
+            }
+            announce(transition, AuthState.Unauthenticated)
+            token?.let { captured ->
+                internalScope.launch {
+                    try {
+                        apiClient.logout(captured)
+                    } catch (e: ApiException) {
+                        // ベストエフォート: 送信に失敗してもローカルの認証状態は落ちている。
+                    }
+                }
             }
         } finally {
             synchronized(sessionLock) { logoutsInProgress-- }
@@ -391,25 +396,32 @@ class AuthViewModel(
      * android-slice-auth-01（CI-S0-3）: [login] と同じ保存失敗の保証を持つ。
      */
     suspend fun completePasskeyLogin(response: LoginResponse): Unit = withContext(dispatcher) {
-        // login と同じく、save → loginErrorMessage=null → Authenticated → lastFailure=null を
-        // 1つの区間にまとめる（CI-S0-5・T6-6）。onAuthenticated() は lock の外で呼ぶ。
-        var wasUnknown = false
-        val saved = synchronized(sessionLock) {
+        establishSession(response)
+    }
+
+    /**
+     * [login] と [completePasskeyLogin] に共通のセッション確立。save → loginErrorMessage=null → 状態の遷移 →
+     * lastFailure=null を 1 つの区間にまとめ（CI-S0-5・T6-6）、離脱の通知と [onAuthenticated] は lock の外で呼ぶ。
+     * 別主体への確立（遷移 ④）では、前の主体の後始末を起動するが、その完了は待たない。
+     */
+    private suspend fun establishSession(response: LoginResponse) {
+        val next = AuthState.Authenticated(response.user)
+        val transition = synchronized(sessionLock) {
             if (sessionStore.save(response.token)) {
                 _loginErrorMessage.value = null
-                wasUnknown = _authState.value is AuthState.Unknown
-                _authState.value = AuthState.Authenticated(response.user)
+                val t = setAuthState(next)
                 _lastFailure.value = null
-                true
+                t
             } else {
-                false
+                null
             }
         }
-        if (!saved) {
+        if (transition == null) {
+            // android-contract-16: 保存失敗時は Authenticated へ遷移させない。
             _loginErrorMessage.value = SESSION_SAVE_ERROR_MESSAGE
-            return@withContext
+            return
         }
-        if (wasUnknown) onSubjectResolved(Subject.from(response.user))
+        announce(transition, next)
         onAuthenticated()
     }
 
@@ -423,11 +435,11 @@ class AuthViewModel(
      */
     fun applyProfileUpdate(updatedUser: UserResponse) {
         // 判定と書込みを sessionLock の中で行う（CI-S0-5・T6-6。失効との競合で復活させない）。
-        synchronized(sessionLock) {
-            if (_authState.value is AuthState.Authenticated) {
-                _authState.value = AuthState.Authenticated(updatedUser)
-            }
+        val next = AuthState.Authenticated(updatedUser)
+        val transition = synchronized(sessionLock) {
+            if (_authState.value is AuthState.Authenticated) setAuthState(next) else null
         }
+        transition?.let { announce(it, next) }
     }
 
     private companion object {
