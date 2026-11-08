@@ -74,6 +74,6 @@ class PodcastViewModelPortTest {
 
         assertEquals(1, podcastApi.fetchPodcastsCallCount)
         assertEquals(listOf("p1"), viewModel.episodes.value.map { it.row.episodeId })
-        assertNull(viewModel.errorMessage.value)
+        assertNull(viewModel.notice.value)
     }
 }

@@ -6,6 +6,8 @@ import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.podcast.FakePodcastApi
+import com.rioikeda.newslisten.podcast.app.PlaybackNotice
+import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -16,6 +18,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -69,12 +72,12 @@ class EpisodeCatalogTest {
         assertEquals(listOf("1", "2"), f.catalog.episodes.value.map { it.episodeId })
         assertEquals(1, f.synced.size)
         assertEquals(list, f.synced.single())
-        assertNull(f.catalog.errorMessage.value)
+        assertNull(f.catalog.notice.value)
         assertFalse(f.catalog.isLoading.value)
     }
 
     @Test
-    fun `android-dec-68 ApiExceptionで失敗するとerrorMessageに反映され前の一覧とfindが残りafterRefreshは呼ばれない`() = runTest {
+    fun `android-dec-68 android-dec-08 ApiExceptionで失敗するとnoticeに反映され前の一覧とfindが残りafterRefreshは呼ばれない`() = runTest {
         val first = listOf(episode("1"))
         val exception = ApiException.NetworkError(RuntimeException("offline"))
         var fail = false
@@ -84,16 +87,19 @@ class EpisodeCatalogTest {
 
         f.catalog.refresh()
 
-        assertEquals(exception.message, f.catalog.errorMessage.value)
+        assertEquals("オフラインです。接続を確認してから、もう一度お試しください", f.catalog.notice.value?.message)
+        assertEquals(PlaybackNotice.FetchOffline, f.catalog.notice.value)
+        assertFalse("例外の message が画面に出る", f.catalog.notice.value?.message.orEmpty().contains(exception.message.orEmpty()))
         assertEquals(listOf("1"), f.catalog.episodes.value.map { it.episodeId })
         assertSame(first.single(), f.catalog.find("1"))
         assertEquals(1, f.synced.size) // 失敗では呼ばれない（最初の成功の 1 回のまま）
         assertFalse(f.catalog.isLoading.value)
 
-        f.catalog.clearError()
+        f.catalog.dismissNotice()
+        f.catalog.dismissNotice() // 冪等
 
-        assertNull(f.catalog.errorMessage.value)
-        assertEquals(listOf("1"), f.catalog.episodes.value.map { it.episodeId }) // clearError は一覧に触れない
+        assertNull(f.catalog.notice.value)
+        assertEquals(listOf("1"), f.catalog.episodes.value.map { it.episodeId }) // dismissNotice は一覧に触れない
     }
 
     @Test
@@ -114,12 +120,12 @@ class EpisodeCatalogTest {
         gate.complete(Unit)
         runCurrent()
         assertFalse(f.catalog.isLoading.value)
-        assertTrue(f.catalog.errorMessage.value != null)
+        assertTrue(f.catalog.notice.value != null)
 
         fail = false
         f.catalog.refresh()
 
-        assertNull(f.catalog.errorMessage.value) // 開始時に自分の失敗を消す
+        assertNull(f.catalog.notice.value) // 開始時に自分の失敗を消す
         assertEquals(listOf("1"), f.catalog.episodes.value.map { it.episodeId })
     }
 
@@ -180,5 +186,29 @@ class EpisodeCatalogTest {
         f.catalog.refresh()
         assertNull(f.catalog.find("1"))
         assertSame(second[0], f.catalog.find("3"))
+    }
+
+    @Test
+    fun `android-dec-68 android-dec-06 NetworkError以外のApiExceptionはFetchFailedになり例外のmessageを出さない`() = runTest {
+        val exception = ApiException.HttpError(500)
+        val f = fixture(FakePodcastApi(onFetchPodcasts = { throw exception }))
+
+        f.catalog.refresh()
+
+        assertEquals(PlaybackNotice.FetchFailed, f.catalog.notice.value)
+        assertEquals("エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください", f.catalog.notice.value?.message)
+        assertFalse("HTTP Error 500 が画面に出る", f.catalog.notice.value?.message.orEmpty().contains("HTTP Error 500"))
+        assertEquals(0, f.synced.size)
+    }
+
+    @Test
+    fun `android-dec-68 android-dec-08 NetworkErrorはFetchOfflineになりFetchFailedとは区別される`() = runTest {
+        val f = fixture(FakePodcastApi(onFetchPodcasts = { throw ApiException.NetworkError(IOException("boom")) }))
+
+        f.catalog.refresh()
+
+        assertNotNull(f.catalog.notice.value)
+        assertEquals(PlaybackNotice.FetchOffline, f.catalog.notice.value)
+        assertFalse("例外の message が画面に出る", f.catalog.notice.value?.message.orEmpty().contains("boom"))
     }
 }

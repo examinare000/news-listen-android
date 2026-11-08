@@ -4,6 +4,7 @@ import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.PodcastApi
 import com.rioikeda.newslisten.podcast.app.EpisodeLookup
+import com.rioikeda.newslisten.podcast.app.PlaybackNotice
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,27 +32,27 @@ class EpisodeCatalog(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    private val _notice = MutableStateFlow<PlaybackNotice?>(null)
+    val notice: StateFlow<PlaybackNotice?> = _notice.asStateFlow()
 
     /** 一覧を取得して写す。失敗しても前の一覧は残り、[afterRefresh] は呼ばれない。 */
     suspend fun refresh(): Unit = withContext(dispatcher) {
         _isLoading.value = true
-        _errorMessage.value = null
+        _notice.value = null
         try {
             val fetched = podcastApi.fetchPodcasts()
             loaded.value = fetched
             _episodes.value = fetched.map { toRow(it) }
             afterRefresh(fetched)
         } catch (e: ApiException) {
-            _errorMessage.value = e.message
+            _notice.value = if (e is ApiException.NetworkError) PlaybackNotice.FetchOffline else PlaybackNotice.FetchFailed
         }
         _isLoading.value = false
     }
 
     /** この Catalog 自身の失敗だけを消す。 */
-    fun clearError() {
-        _errorMessage.value = null
+    fun dismissNotice() {
+        _notice.value = null
     }
 
     override fun find(episodeId: String): Episode? = loaded.value.firstOrNull { it.id == episodeId }

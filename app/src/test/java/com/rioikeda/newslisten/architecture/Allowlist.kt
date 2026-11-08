@@ -113,7 +113,7 @@ object Allowlist {
             // android-dep-07 (1)
             rule("android-dep-07", "公開の var", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
 
-            // android-dep-09 (9)
+            // android-dep-09 (7)
             rule(
                 "android-dep-09", "e.code", "android-slice-failure-01",
                 "account/AccountViewModel.kt",
@@ -124,8 +124,6 @@ object Allowlist {
                 "podcast/QuizSheet.kt",
             ) +
             rule("android-dep-09", "= e.message", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
-            rule("android-dep-09", "= e.message", "android-slice-playapp-03", "catalog/app/EpisodeCatalog.kt") +
-            rule("android-dep-09", "= e.message", "android-slice-playapp-03", "podcast/OfflineLibrary.kt") +
 
             // android-check-02 (5)
             rule("android-check-02", "fetchLearningDashboard", "android-slice-learning-01", "network/LearningApi.kt") +

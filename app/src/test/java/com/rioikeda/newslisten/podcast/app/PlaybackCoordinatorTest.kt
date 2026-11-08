@@ -153,13 +153,13 @@ class PlaybackCoordinatorTest {
         assertEquals(listOf(freshPodcast.toPlaybackMetadata()), player.metadataCalls)
         assertEquals(1, player.playCallCount)
         assertEquals(freshPodcast.id, coordinator.nowPlaying.value?.episodeId)
-        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.notice.value)
 
         coordinator.stopForSubjectLeave()
     }
 
     @Test
-    fun play失敗でerrorMessageに反映されprepareは呼ばれない() = runTest {
+    fun `android-dec-08 play失敗でnoticeに反映されprepareは呼ばれない`() = runTest {
         val exception = ApiException.NetworkError(RuntimeException("offline"))
         val apiClient = FakePodcastApiClient(onFetchPodcast = { throw exception })
         val player = FakePlayerController()
@@ -167,8 +167,57 @@ class PlaybackCoordinatorTest {
 
         coordinator.playNow(podcast())
 
-        assertEquals(exception.message, coordinator.errorMessage.value)
+        assertEquals("オフラインです。接続を確認してから、もう一度お試しください", coordinator.notice.value?.message)
         assertTrue(player.prepareCalls.isEmpty())
+    }
+
+    @Test
+    fun `android-dec-08 NetworkErrorの取得失敗はFetchOfflineになり例外のmessageを出さない`() = runTest {
+        val player = FakePlayerController()
+        val coordinator = newCoordinator(FakePodcastApiClient(onFetchPodcast = { throw ApiException.NetworkError(IOException("boom")) }), player)
+
+        coordinator.playNow(podcast())
+
+        assertEquals(PlaybackNotice.FetchOffline, coordinator.notice.value)
+        assertFalse("例外の message が画面に出る", coordinator.notice.value?.message.orEmpty().contains("boom"))
+    }
+
+    @Test
+    fun `android-dec-06 NetworkError以外のApiExceptionの取得失敗はFetchFailedになり例外のmessageを出さない`() = runTest {
+        val player = FakePlayerController()
+        val coordinator = newCoordinator(FakePodcastApiClient(onFetchPodcast = { throw ApiException.HttpError(500) }), player)
+
+        coordinator.playNow(podcast())
+
+        assertEquals(PlaybackNotice.FetchFailed, coordinator.notice.value)
+        assertEquals("エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください", coordinator.notice.value?.message)
+        assertFalse("HTTP Error 500 が画面に出る", coordinator.notice.value?.message.orEmpty().contains("HTTP Error 500"))
+        assertTrue(player.prepareCalls.isEmpty())
+    }
+
+    @Test
+    fun `android-dec-06 取り直した値がquota_exhaustedのFailedなら上限に達した旨の知らせを出し識別子の生の値は出さない`() = runTest {
+        val player = FakePlayerController()
+        val apiClient = FakePodcastApiClient(onFetchPodcast = { podcast(status = "failed", errorMessage = "quota_exhausted") })
+        val coordinator = newCoordinator(apiClient, player)
+
+        coordinator.playNow(podcast())
+
+        assertEquals(PlaybackNotice.GenerationFailed(GenerationFailureReason.QUOTA_EXHAUSTED), coordinator.notice.value)
+        assertEquals("生成の上限に達したため、生成できませんでした", coordinator.notice.value?.message)
+        assertFalse("識別子の生の値が画面に出る", coordinator.notice.value?.message.orEmpty().contains("quota_exhausted"))
+        assertTrue(player.prepareCalls.isEmpty())
+    }
+
+    @Test
+    fun `android-dec-06 一覧の判定がquota_exhaustedのFailedなら取得せず上限に達した旨の知らせを出す`() = runTest {
+        val apiClient = FakePodcastApiClient()
+        val coordinator = newCoordinator(apiClient, FakePlayerController())
+
+        coordinator.playNow(podcast(status = "failed", errorMessage = "quota_exhausted"))
+
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertEquals("生成の上限に達したため、生成できませんでした", coordinator.notice.value?.message)
     }
 
     // --- play: processing/failed の再生ゲート（iOS は暗黙失敗するが Android は明示ガード） ---
@@ -183,11 +232,11 @@ class PlaybackCoordinatorTest {
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertTrue(player.prepareCalls.isEmpty())
-        assertEquals("生成中のため再生できません", coordinator.errorMessage.value)
+        assertEquals("生成中のため再生できません", coordinator.notice.value?.message)
     }
 
     @Test
-    fun failedのpodcastはerror_messageを再生不可メッセージに反映する() = runTest {
+    fun `android-dec-06 failedのpodcastは識別子を生成の失敗の知らせに写す`() = runTest {
         val apiClient = FakePodcastApiClient()
         val player = FakePlayerController()
         val coordinator = newCoordinator(apiClient, player)
@@ -195,7 +244,7 @@ class PlaybackCoordinatorTest {
         coordinator.playNow(podcast(status = "failed", errorMessage = "TTS生成に失敗しました"))
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
-        assertEquals("TTS生成に失敗しました", coordinator.errorMessage.value)
+        assertEquals("生成に失敗しました", coordinator.notice.value?.message)
     }
 
     @Test
@@ -207,7 +256,7 @@ class PlaybackCoordinatorTest {
         coordinator.playNow(podcast(status = "partial_failed", errorMessage = null))
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
-        assertEquals("生成に失敗しました", coordinator.errorMessage.value)
+        assertEquals("生成に失敗しました", coordinator.notice.value?.message)
     }
 
     // --- オフライン再生（フェーズ8-C: resolvePlaybackSource 統合。正本: shared-playback-spec.md §6.1） ---
@@ -232,7 +281,7 @@ class PlaybackCoordinatorTest {
         assertEquals(listOf(p1.toPlaybackMetadata()), player.metadataCalls)
         assertEquals(1, player.playCallCount)
         assertEquals(p1.id, coordinator.nowPlaying.value?.episodeId)
-        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.notice.value)
 
         coordinator.stopForSubjectLeave()
     }
@@ -270,7 +319,7 @@ class PlaybackCoordinatorTest {
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertTrue(player.prepareCalls.isEmpty())
         assertEquals(0, player.playCallCount)
-        assertEquals("オフラインのため再生できません", coordinator.errorMessage.value)
+        assertEquals("オフラインのため再生できません", coordinator.notice.value?.message)
     }
 
     @Test
@@ -294,7 +343,7 @@ class PlaybackCoordinatorTest {
         advanceTimeBy(15_000)
         runCurrent()
 
-        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.notice.value)
 
         coordinator.stopForSubjectLeave()
     }
@@ -742,7 +791,7 @@ class PlaybackCoordinatorTest {
 
         emit(player, PlaybackState.Ended(300.0))
 
-        assertEquals("生成中のため再生できません", coordinator.errorMessage.value)
+        assertEquals("生成中のため再生できません", coordinator.notice.value?.message)
         assertNull(coordinator.nowPlaying.value)
         assertEquals(p2, coordinator.queue.value.current)
         assertEquals(1, player.stopCallCount)
@@ -831,14 +880,14 @@ class PlaybackCoordinatorTest {
         coordinator.playNow(p1)
 
         assertTrue(player.prepareCalls.isEmpty())
-        assertNotNull(coordinator.errorMessage.value)
+        assertNotNull(coordinator.notice.value)
         assertTrue(coordinator.session.value is NothingPlaying)
     }
 
     // --- 再生可否は Episode の種類で判定する（shared-session-08・android-deriv-26・android-dec-22） ---
 
     @Test
-    fun `shared-session-08 completedでもerrorMessageを持つ行はfetchせず再生不可でerrorMessageを出す`() = runTest {
+    fun `shared-session-08 android-dec-06 completedでもerrorMessageを持つ行はfetchせず再生不可で生成の失敗の知らせを出す`() = runTest {
         val apiClient = FakePodcastApiClient()
         val player = FakePlayerController()
         val coordinator = newCoordinator(apiClient, player)
@@ -847,7 +896,7 @@ class PlaybackCoordinatorTest {
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertTrue(player.prepareCalls.isEmpty())
-        assertEquals("X", coordinator.errorMessage.value)
+        assertEquals("生成に失敗しました", coordinator.notice.value?.message)
     }
 
     @Test
@@ -860,7 +909,7 @@ class PlaybackCoordinatorTest {
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertTrue(player.prepareCalls.isEmpty())
-        assertEquals("生成に失敗しました", coordinator.errorMessage.value)
+        assertEquals("生成に失敗しました", coordinator.notice.value?.message)
     }
 
     @Test
@@ -873,7 +922,7 @@ class PlaybackCoordinatorTest {
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertTrue(player.prepareCalls.isEmpty())
-        assertEquals("生成に失敗しました", coordinator.errorMessage.value)
+        assertEquals("生成に失敗しました", coordinator.notice.value?.message)
     }
 
     @Test
@@ -884,7 +933,7 @@ class PlaybackCoordinatorTest {
         coordinator.playNow(podcast(status = "failed", errorMessage = ""))
 
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
-        assertEquals("生成に失敗しました", coordinator.errorMessage.value)
+        assertEquals("生成に失敗しました", coordinator.notice.value?.message)
     }
 
     @Test
@@ -903,7 +952,7 @@ class PlaybackCoordinatorTest {
         assertEquals(listOf("p1"), apiClient.fetchPodcastCalls)
         assertEquals(listOf("https://example.com/p1-fresh.mp3"), player.prepareCalls)
         assertEquals(1, player.playCallCount)
-        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.notice.value)
 
         coordinator.stopForSubjectLeave()
     }
@@ -911,7 +960,7 @@ class PlaybackCoordinatorTest {
     // --- 取り直した値が再生不可でも、前の再生を壊さない（android-deriv-17・android-dec-21） ---
 
     @Test
-    fun `android-deriv-17 一覧の判定で拒否されても再生中の位置同期は続く`() = runTest {
+    fun `android-deriv-17 android-dec-06 一覧の判定で拒否されても再生中の位置同期は続く`() = runTest {
         val pA = podcast(id = "pA")
         val apiClient = FakePodcastApiClient(
             onFetchPodcast = { pA },
@@ -930,7 +979,7 @@ class PlaybackCoordinatorTest {
 
         assertEquals(listOf("pA" to 5.0), apiClient.updatePlaybackPositionCalls)
         assertEquals(pA.id, coordinator.nowPlaying.value?.episodeId)
-        assertEquals("boom", coordinator.errorMessage.value)
+        assertEquals("生成に失敗しました", coordinator.notice.value?.message)
 
         coordinator.stopForSubjectLeave()
     }
@@ -950,13 +999,13 @@ class PlaybackCoordinatorTest {
 
         assertEquals(0, player.stopCallCount)
         assertEquals(pA.id, coordinator.nowPlaying.value?.episodeId)
-        assertEquals("生成中のため再生できません", coordinator.errorMessage.value)
+        assertEquals("生成中のため再生できません", coordinator.notice.value?.message)
 
         coordinator.stopForSubjectLeave()
     }
 
     @Test
-    fun `android-deriv-17 取り直した値がFailedなら前の再生を止めずそのerrorMessageを出す`() = runTest {
+    fun `android-deriv-17 android-dec-06 取り直した値がFailedなら前の再生を止めず生成の失敗の知らせを出す`() = runTest {
         val pA = podcast(id = "pA")
         val apiClient = FakePodcastApiClient(
             onFetchPodcast = { id -> if (id == "pB") podcast(id = "pB", status = "failed", errorMessage = "E") else pA },
@@ -970,7 +1019,7 @@ class PlaybackCoordinatorTest {
 
         assertEquals(0, player.stopCallCount)
         assertEquals(pA.id, coordinator.nowPlaying.value?.episodeId)
-        assertEquals("E", coordinator.errorMessage.value)
+        assertEquals("生成に失敗しました", coordinator.notice.value?.message)
 
         coordinator.stopForSubjectLeave()
     }
@@ -1040,7 +1089,7 @@ class PlaybackCoordinatorTest {
     }
 
     @Test
-    fun `shared-session-13 android-deriv-17 fetchがApiExceptionなら前の再生を止めずerrorMessageを出す`() = runTest {
+    fun `shared-session-13 android-deriv-17 android-dec-08 fetchがApiExceptionなら前の再生を止めずnoticeを出す`() = runTest {
         val pA = podcast(id = "pA")
         val exception = ApiException.NetworkError(RuntimeException("offline"))
         val apiClient = FakePodcastApiClient(
@@ -1055,7 +1104,7 @@ class PlaybackCoordinatorTest {
 
         assertEquals(0, player.stopCallCount)
         assertEquals(pA.id, coordinator.nowPlaying.value?.episodeId)
-        assertEquals(exception.message, coordinator.errorMessage.value)
+        assertEquals("オフラインです。接続を確認してから、もう一度お試しください", coordinator.notice.value?.message)
 
         coordinator.stopForSubjectLeave()
     }
@@ -1076,12 +1125,12 @@ class PlaybackCoordinatorTest {
         emit(player, PlaybackState.Ended(300.0))
 
         assertNull(coordinator.nowPlaying.value)
-        assertEquals("生成中のため再生できません", coordinator.errorMessage.value)
+        assertEquals("生成中のため再生できません", coordinator.notice.value?.message)
         assertEquals(1, player.stopCallCount)
     }
 
     @Test
-    fun `android-deriv-17 自動前進先の取り直し値がFailedならそのerrorMessageを出して止める`() = runTest {
+    fun `android-deriv-17 android-dec-06 自動前進先の取り直し値がFailedなら生成の失敗の知らせを出して止める`() = runTest {
         val pA = podcast(id = "pA")
         val pB = podcast(id = "pB")
         val apiClient = FakePodcastApiClient(
@@ -1096,7 +1145,7 @@ class PlaybackCoordinatorTest {
         emit(player, PlaybackState.Ended(300.0))
 
         assertNull(coordinator.nowPlaying.value)
-        assertEquals("E", coordinator.errorMessage.value)
+        assertEquals("生成に失敗しました", coordinator.notice.value?.message)
         assertEquals(1, player.stopCallCount)
     }
 
@@ -1148,7 +1197,7 @@ class PlaybackCoordinatorTest {
         assertEquals(0, apiClient.updatePlaybackPositionCalls.count { it.first == "pA" })
         assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
         assertEquals(pA.id, coordinator.nowPlaying.value?.episodeId)
-        assertEquals("オフラインのため再生できません", coordinator.errorMessage.value)
+        assertEquals("オフラインのため再生できません", coordinator.notice.value?.message)
 
         coordinator.stopForSubjectLeave()
     }
@@ -1270,7 +1319,7 @@ class PlaybackCoordinatorTest {
     // 完聴後の自動前進の開始前の失敗（shared-session-01・02・03・12）
 
     @Test
-    fun `android-test-06 shared-session-01 shared-session-02 shared-session-04 shared-session-12 android-contract-07 advance後のNETWORK取得失敗はIdOnlyのErroredで進まずretryが取得からやり直す`() = runTest {
+    fun `android-test-06 shared-session-01 shared-session-02 shared-session-04 shared-session-12 android-contract-07 android-dec-08 advance後のNETWORK取得失敗はIdOnlyのErroredで進まずretryが取得からやり直す`() = runTest {
         val (pA, pB, pC, pD) = listOf("pA", "pB", "pC", "pD").map { podcast(id = it) }
         val exception = ApiException.NetworkError(RuntimeException("offline"))
         var bFails = true
@@ -1290,7 +1339,7 @@ class PlaybackCoordinatorTest {
         assertEquals(erroredIdOnly("pB", SessionErrorReason.FetchFailed), coordinator.session.value)
         assertEquals(pB, coordinator.queue.value.current) // 自動で pC へ進まない
         assertEquals(stopsBefore + 1, player.stopCallCount)
-        assertEquals(exception.message, coordinator.errorMessage.value)
+        assertEquals("オフラインです。接続を確認してから、もう一度お試しください", coordinator.notice.value?.message)
         assertEquals(listOf("pA"), apiClient.markCompletedCalls)
         assertNull(coordinator.nowPlaying.value)
         assertTrue(apiClient.fetchPodcastCalls.none { it == "pC" })
@@ -1308,7 +1357,7 @@ class PlaybackCoordinatorTest {
         assertEquals(listOf("pA", "pB", "pB"), apiClient.fetchPodcastCalls)
         assertEquals(starting(pB), coordinator.session.value)
         assertEquals(playable(pB).audioUrl, player.prepareCalls.last())
-        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.notice.value)
         assertSharedInv01(coordinator)
         coordinator.stopForSubjectLeave()
     }
@@ -1328,7 +1377,7 @@ class PlaybackCoordinatorTest {
 
         assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
         assertEquals(erroredIdOnly("pB", SessionErrorReason.SourceUnavailable), coordinator.session.value)
-        assertEquals("オフラインのため再生できません", coordinator.errorMessage.value)
+        assertEquals("オフラインのため再生できません", coordinator.notice.value?.message)
         assertEquals(pB, coordinator.queue.value.current)
         assertSharedInv01(coordinator)
         coordinator.stopForSubjectLeave()
@@ -1349,7 +1398,7 @@ class PlaybackCoordinatorTest {
         emit(player, PlaybackState.Ended(300.0))
 
         assertEquals(erroredIdOnly("pB", SessionErrorReason.NotPlayable), coordinator.session.value)
-        assertEquals("生成中のため再生できません", coordinator.errorMessage.value)
+        assertEquals("生成中のため再生できません", coordinator.notice.value?.message)
         assertSharedInv01(coordinator)
     }
 
@@ -1389,7 +1438,7 @@ class PlaybackCoordinatorTest {
         assertEquals(playerBefore, listOf(player.prepareCalls, player.seekCalls, player.speedCalls))
         assertEquals(countsBefore, listOf(player.playCallCount, player.stopCallCount))
         assertEquals(updatesBefore, apiClient.updatePlaybackPositionCalls)
-        assertEquals(expectedMessage, coordinator.errorMessage.value)
+        assertEquals(expectedMessage, coordinator.notice.value?.message)
         if (!expectFetchOfB) assertEquals(fetchesBefore, apiClient.fetchPodcastCalls)
         assertSharedInv01(coordinator)
         coordinator.stopForSubjectLeave()
@@ -1401,8 +1450,8 @@ class PlaybackCoordinatorTest {
     }
 
     @Test
-    fun `android-test-08 shared-session-13 shared-dec-16 一覧の判定がFailedなら状態を変えずそのerrorMessageを出す`() = runTest {
-        assertManualStartRejectedKeepsState(podcast(id = "pB", status = "failed", errorMessage = "E"), "E", expectFetchOfB = false)
+    fun `android-test-08 shared-session-13 shared-dec-16 android-dec-06 一覧の判定がFailedなら状態を変えず生成の失敗の知らせを出す`() = runTest {
+        assertManualStartRejectedKeepsState(podcast(id = "pB", status = "failed", errorMessage = "E"), "生成に失敗しました", expectFetchOfB = false)
     }
 
     @Test
@@ -1411,9 +1460,9 @@ class PlaybackCoordinatorTest {
     }
 
     @Test
-    fun `android-test-08 shared-session-13 shared-dec-16 取得がApiExceptionなら状態を変えずe_messageを出す`() = runTest {
+    fun `android-test-08 shared-session-13 shared-dec-16 android-dec-08 取得がApiExceptionなら状態を変えず取得の失敗の知らせを出す`() = runTest {
         val exception = ApiException.NetworkError(RuntimeException("offline"))
-        assertManualStartRejectedKeepsState(podcast(id = "pB"), exception.message, expectFetchOfB = true, fetchB = { throw exception })
+        assertManualStartRejectedKeepsState(podcast(id = "pB"), "オフラインです。接続を確認してから、もう一度お試しください", expectFetchOfB = true, fetchB = { throw exception })
     }
 
     @Test
@@ -1425,10 +1474,10 @@ class PlaybackCoordinatorTest {
     }
 
     @Test
-    fun `android-test-08 shared-session-13 shared-dec-16 playでも取得失敗は状態を変えない`() = runTest {
+    fun `android-test-08 shared-session-13 shared-dec-16 android-dec-08 playでも取得失敗は状態を変えない`() = runTest {
         val exception = ApiException.NetworkError(RuntimeException("offline"))
         assertManualStartRejectedKeepsState(
-            podcast(id = "pB"), exception.message, expectFetchOfB = true,
+            podcast(id = "pB"), "オフラインです。接続を確認してから、もう一度お試しください", expectFetchOfB = true,
             fetchB = { throw exception }, start = { coordinator, episode -> coordinator.playNow(episode) },
         )
     }
@@ -1443,7 +1492,7 @@ class PlaybackCoordinatorTest {
 
         assertEquals(listOf(pB), coordinator.queue.value.items)
         assertTrue(coordinator.session.value is NothingPlaying)
-        assertEquals("生成中のため再生できません", coordinator.errorMessage.value)
+        assertEquals("生成中のため再生できません", coordinator.notice.value?.message)
         assertTrue(player.prepareCalls.isEmpty())
     }
 
@@ -1547,6 +1596,64 @@ class PlaybackCoordinatorTest {
 
         assertTrue(cacheManager.isCached("u1", "pA"))
         assertEquals(erroredLoaded(pA, PlaybackFailureReason.Source), coordinator.session.value)
+        coordinator.stopForSubjectLeave()
+    }
+
+    @Test
+    fun `android-dec-69 Activeで再生エンジンが失敗するとPlayerFailedの知らせが出て次の開始の確定で消える`() = runTest {
+        val pA = podcast(id = "pA")
+        val player = FakePlayerController()
+        val coordinator = newCoordinator(queueApiClient(pA), player)
+        coordinator.playNow(pA)
+        emitPlaying(player)
+        assertTrue(coordinator.session.value is Active)
+        assertNull(coordinator.notice.value) // 事象が来るまでは出ない
+
+        emit(player, PlaybackState.Failed(PlaybackFailureReason.Source))
+
+        assertEquals(erroredLoaded(pA, PlaybackFailureReason.Source), coordinator.session.value)
+        assertEquals(PlaybackNotice.PlayerFailed, coordinator.notice.value)
+        assertEquals("再生できませんでした。もう一度お試しください", coordinator.notice.value?.message)
+
+        coordinator.retry() // 開始の確定で消える
+
+        assertTrue(coordinator.session.value is Starting)
+        assertNull(coordinator.notice.value)
+        coordinator.stopForSubjectLeave()
+    }
+
+    @Test
+    fun `android-dec-69 Startingのうちに再生エンジンが失敗してもPlayerFailedの知らせが出る`() = runTest {
+        val pA = podcast(id = "pA")
+        val player = FakePlayerController()
+        val coordinator = newCoordinator(queueApiClient(pA), player)
+        coordinator.playNow(pA)
+        assertTrue(coordinator.session.value is Starting)
+        assertNull(coordinator.notice.value)
+
+        emit(player, PlaybackState.Failed(PlaybackFailureReason.Network))
+
+        assertTrue(coordinator.session.value is Errored)
+        assertEquals(PlaybackNotice.PlayerFailed, coordinator.notice.value)
+        coordinator.stopForSubjectLeave()
+    }
+
+    @Test
+    fun `android-dec-69 既にErroredのsessionへ届いたFailedはsessionを変えないので閉じた知らせを出し直さない`() = runTest {
+        val pA = podcast(id = "pA")
+        val player = FakePlayerController()
+        val coordinator = newCoordinator(queueApiClient(pA), player)
+        coordinator.playNow(pA)
+        emitPlaying(player)
+        emit(player, PlaybackState.Failed(PlaybackFailureReason.Source))
+        assertEquals(PlaybackNotice.PlayerFailed, coordinator.notice.value)
+        coordinator.dismissNotice()
+        assertNull(coordinator.notice.value)
+
+        emit(player, PlaybackState.Failed(PlaybackFailureReason.Network)) // Errored では handlePlayerFailure は何もしない
+
+        assertEquals(erroredLoaded(pA, PlaybackFailureReason.Source), coordinator.session.value)
+        assertNull(coordinator.notice.value)
         coordinator.stopForSubjectLeave()
     }
 
@@ -1900,7 +2007,7 @@ class PlaybackCoordinatorTest {
 
         assertEquals(NothingPlaying, coordinator.session.value)
         assertTrue(coordinator.queue.value.items.isEmpty())
-        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.notice.value)
         assertNull(coordinator.nowPlaying.value)
         assertTrue(player.prepareCalls.isEmpty())
         assertEquals(0, apiClient.fetchPodcastsCallCount)
@@ -1920,7 +2027,7 @@ class PlaybackCoordinatorTest {
 
         assertEquals(NothingPlaying, coordinator.session.value)
         assertTrue(coordinator.queue.value.items.isEmpty())
-        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.notice.value)
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
 
         // 正方向の対照: 既知の id は NothingPlaying なら開始し、続く addToQueue は待機列へ積む。
@@ -2625,7 +2732,7 @@ class PlaybackCoordinatorTest {
         emitPlaying(player)
         emit(player, PlaybackState.Ended(300.0))
         assertEquals(erroredIdOnly("pB", SessionErrorReason.FetchFailed), coordinator.session.value)
-        coordinator.clearError()
+        coordinator.dismissNotice()
         launch { coordinator.retry() }
         runCurrent() // 2 回目の pB の取得で止まる
 
@@ -2635,7 +2742,7 @@ class PlaybackCoordinatorTest {
 
         assertEquals(2, pBFetches)
         assertTrue(coordinator.session.value is NothingPlaying)
-        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.notice.value)
     }
 
     @Test
@@ -2892,7 +2999,7 @@ class PlaybackCoordinatorTest {
         cGate.complete(Unit)
         runCurrent()
 
-        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.notice.value)
         assertEquals(starting(pB), coordinator.session.value)
         assertEquals(pB, coordinator.queue.value.current)
         assertEquals(listOf(pC), coordinator.queue.value.upNext)
@@ -2931,7 +3038,7 @@ class PlaybackCoordinatorTest {
         cGate.complete(Unit)
         runCurrent()
 
-        assertNull("生成中の通知が出た", coordinator.errorMessage.value)
+        assertNull("生成中の通知が出た", coordinator.notice.value)
         assertEquals(starting(pB), coordinator.session.value)
         assertEquals(pB, coordinator.queue.value.current)
         assertEquals(listOf(pC), coordinator.queue.value.upNext)
@@ -2955,7 +3062,7 @@ class PlaybackCoordinatorTest {
         launch(start = CoroutineStart.UNDISPATCHED) { coordinator.playNow(pBGenerating) }
         runCurrent()
 
-        assertEquals("生成中のため再生できません", coordinator.errorMessage.value)
+        assertEquals("生成中のため再生できません", coordinator.notice.value?.message)
         assertEquals(Completed(playable(pA)), coordinator.session.value)
         assertEquals(pA, coordinator.queue.value.current)
         assertEquals(listOf("pA"), apiClient.fetchPodcastCalls)
@@ -3017,18 +3124,18 @@ class PlaybackCoordinatorTest {
     }
 
     @Test
-    fun `android-dec-59 clearErrorは再生の失敗を消し次の開始の確定でもnullのまま`() = runTest {
+    fun `android-dec-59 dismissNoticeは再生の失敗を消し次の開始の確定でもnullのまま`() = runTest {
         val ok = podcast(id = "ok")
         val player = FakePlayerController()
         val coordinator = newCoordinator(queueApiClient(ok), player)
         coordinator.playNow(podcast(id = "bad", status = "processing"))
-        assertEquals("生成中のため再生できません", coordinator.errorMessage.value)
+        assertEquals("生成中のため再生できません", coordinator.notice.value?.message)
 
-        coordinator.clearError()
+        coordinator.dismissNotice()
 
-        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.notice.value)
         coordinator.playNow(ok)
-        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.notice.value)
         coordinator.stopForSubjectLeave()
     }
 
@@ -3038,11 +3145,11 @@ class PlaybackCoordinatorTest {
         val player = FakePlayerController()
         val coordinator = newCoordinator(queueApiClient(ok), player)
         coordinator.playNow(podcast(id = "bad", status = "processing"))
-        assertEquals("生成中のため再生できません", coordinator.errorMessage.value)
+        assertEquals("生成中のため再生できません", coordinator.notice.value?.message)
 
         coordinator.playNow(ok)
 
-        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.notice.value)
         coordinator.stopForSubjectLeave()
     }
 }

@@ -5,6 +5,7 @@ import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.PodcastApi
 import com.rioikeda.newslisten.podcast.app.AudioStore
 import com.rioikeda.newslisten.podcast.app.EpisodeLookup
+import com.rioikeda.newslisten.podcast.app.PlaybackNotice
 import java.util.Collections
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -60,19 +61,19 @@ class OfflineLibrary(
     /** 現在の主体のダウンロード済み（キャッシュ済み）Podcast ID の集合。 */
     val downloadedIds: StateFlow<Set<String>> = _downloadedIds.asStateFlow()
 
-    private val _lastError = MutableStateFlow<String?>(null)
+    private val _notice = MutableStateFlow<PlaybackNotice?>(null)
 
-    /** 直近の操作の失敗の文言。[download]・[removeDownload] の冒頭で `null` に戻る。 */
-    val lastError: StateFlow<String?> = _lastError.asStateFlow()
+    /** 直近の操作の失敗の知らせ。[download]・[removeDownload] の冒頭で `null` に戻る。 */
+    val notice: StateFlow<PlaybackNotice?> = _notice.asStateFlow()
 
     /**
      * 指定 Podcast の音声を現在の主体の置き場へダウンロードし、[downloadedIds] に追加する。完了まで suspend する。
      *
      * 再生できない値、主体が `null`、既にダウンロード中・済みのときは何もしない。
-     * 取り直した値が再生できなければ保存せず [lastError] に文言を出す（android-deriv-17）。
+     * 取り直した値が再生できなければ保存せず [notice] を出す（android-deriv-17）。
      */
     suspend fun download(episodeId: String) {
-        _lastError.value = null
+        _notice.value = null
         // 未知の id は何もしない（android-dec-64）。直前の失敗は上で消し済み。
         val episode = episodeLookup.find(episodeId) ?: return
         if (episode !is Episode.Playable) return
@@ -98,22 +99,22 @@ class OfflineLibrary(
             // 署名付き URL を新たに取得（ダウンロード時点での最新 URL を確保）。
             val fresh = podcastApi.fetchPodcast(id)
             if (fresh !is Episode.Playable) {
-                _lastError.value = playabilityError(fresh)
+                _notice.value = PlaybackNotice.unplayable(fresh)
                 return
             }
             val audioData = podcastApi.downloadAudio(fresh.audioUrl)
             if (!audioStore.save(subject, id, audioData)) {
-                _lastError.value = SAVE_FAILED_MESSAGE
+                _notice.value = PlaybackNotice.SaveFailed
                 return
             }
             // 離脱後に完了した書込は離脱主体の置き場に入るだけで、現在の主体の画面へは出さない。
             if (subject == currentSubject()) {
                 _downloadedIds.update { readOnlyCopy(it + id) }
             }
-            // 他の Job の失敗の文言を、成功した操作の中継が再び写さないようにする。
-            _lastError.value = null
+            // 他の Job の失敗の知らせを、成功した操作の中継が再び写さないようにする。
+            _notice.value = null
         } catch (e: ApiException) {
-            _lastError.value = e.message
+            _notice.value = if (e is ApiException.NetworkError) PlaybackNotice.FetchOffline else PlaybackNotice.FetchFailed
         } finally {
             // 自分の登録だけを外す。cancel の後に同じ key で始まった新しい Job の登録を消さない。
             tracked.update { if (it[key] === self) it - key else it }
@@ -123,7 +124,7 @@ class OfflineLibrary(
 
     /**
      * 指定主体で進行中のダウンロードを cancel する。**join しない**（完了を待たない）。
-     * 追跡表から除き、[downloadingIds]・[downloadedIds] を空にし、[lastError] を `null` に戻す。
+     * 追跡表から除き、[downloadingIds]・[downloadedIds] を空にし、[notice] を `null` に戻す。
      */
     suspend fun cancelDownloads(subject: String): Unit = withContext(dispatcher) {
         val targets = tracked.value.filterKeys { it.subject == subject }
@@ -131,15 +132,15 @@ class OfflineLibrary(
         tracked.update { current -> current.filterKeys { it.subject != subject } }
         _downloadingIds.value = readOnlyCopy(emptySet())
         _downloadedIds.value = readOnlyCopy(emptySet())
-        _lastError.value = null
+        _notice.value = null
     }
 
     /** 現在の主体のキャッシュからダウンロード済み Podcast を削除する。主体が `null` なら何もしない。 */
     suspend fun removeDownload(id: String): Unit = withContext(dispatcher) {
-        _lastError.value = null
+        _notice.value = null
         val subject = currentSubject() ?: return@withContext
         if (!audioStore.validateId(subject) || !audioStore.validateId(id)) {
-            _lastError.value = REMOVE_FAILED_MESSAGE
+            _notice.value = PlaybackNotice.RemoveFailed
             return@withContext
         }
         audioStore.remove(subject, id)
@@ -193,18 +194,4 @@ class OfflineLibrary(
 
     private fun readOnlyCopy(ids: Set<String>): Set<String> =
         Collections.unmodifiableSet(LinkedHashSet(ids))
-
-    private companion object {
-        // 固定の文言（android-dec-58）。技術的な英語の例外文を利用者に見せない。
-        const val SAVE_FAILED_MESSAGE = "音声を保存できませんでした"
-        const val REMOVE_FAILED_MESSAGE = "音声を削除できませんでした"
-    }
-
-    // PlaybackCoordinator の再生ゲートと同じ文言の暫定の複製（android-dec-47）。
-    private fun playabilityError(episode: Episode): String? =
-        when (episode) {
-            is Episode.Playable -> null
-            is Episode.Generating -> "生成中のため再生できません"
-            is Episode.Failed -> episode.errorMessage?.takeIf { it.isNotEmpty() } ?: "生成に失敗しました"
-        }
 }
