@@ -2,8 +2,8 @@ package com.rioikeda.newslisten.catalog
 
 import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.PodcastResponse
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.podcast.FakePodcastApi
 import com.rioikeda.newslisten.podcast.app.PlaybackNotice
@@ -199,6 +199,26 @@ class EpisodeCatalogTest {
         assertEquals("エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください", f.catalog.notice.value?.message)
         assertFalse("HTTP Error 500 が画面に出る", f.catalog.notice.value?.message.orEmpty().contains("HTTP Error 500"))
         assertEquals(0, f.synced.size)
+    }
+
+    @Test
+    fun `android-dec-74 NetworkError以外の意味の失敗はすべてFetchFailedになりFetchOfflineにならない`() = runTest {
+        val failures = listOf(
+            ApiException.NotFound(),
+            ApiException.ServerError(503),
+            ApiException.Unauthorized(),
+        )
+
+        for (failure in failures) {
+            val f = fixture(FakePodcastApi(onFetchPodcasts = { throw failure }))
+
+            f.catalog.refresh()
+
+            val label = failure::class.simpleName
+            assertEquals(label, PlaybackNotice.FetchFailed, f.catalog.notice.value)
+            assertFalse(label, f.catalog.notice.value == PlaybackNotice.FetchOffline)
+            assertFalse(label, f.catalog.notice.value?.message.orEmpty().contains("HTTP Error"))
+        }
     }
 
     @Test

@@ -1,12 +1,12 @@
 package com.rioikeda.newslisten.podcast.app
 
 import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.core.PlaybackQueue
 import com.rioikeda.newslisten.core.PlaybackSource
 import com.rioikeda.newslisten.core.resolvePlaybackSource
 import com.rioikeda.newslisten.core.resolveResumePosition
 import com.rioikeda.newslisten.engagement.ListeningStreakStore
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.NetworkMonitoring
 import com.rioikeda.newslisten.network.PodcastApi
 import com.rioikeda.newslisten.podcast.OfflineLibrary

@@ -37,12 +37,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.designsystem.DSFeedback
 import com.rioikeda.newslisten.designsystem.DSFeedbackVocabulary
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.success
 import com.rioikeda.newslisten.model.QuizAnswerResponse
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.podcast.app.NowPlaying
 import kotlinx.coroutines.launch
 
@@ -191,12 +191,8 @@ fun QuizSheet(
                                         val response = submit(nowPlaying.episodeId, selections.filterNotNull())
                                         grade = response
                                         feedback.play(quizFeedbackVocabulary(response.correctRate))
-                                    } catch (e: ApiException.HttpError) {
-                                        if (e.code == 404) {
-                                            isUnavailable = true
-                                        } else {
-                                            errorMessage = "採点結果を取得できませんでした。もう一度お試しください。"
-                                        }
+                                    } catch (_: ApiException.NotFound) {
+                                        isUnavailable = true
                                     } catch (_: ApiException) {
                                         errorMessage = "採点結果を取得できませんでした。もう一度お試しください。"
                                     } finally {

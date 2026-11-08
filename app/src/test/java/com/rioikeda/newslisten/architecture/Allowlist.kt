@@ -69,13 +69,11 @@ object Allowlist {
             rule("android-dep-03", "model", "android-slice-periphery-01", "feed/PendingArticleAction.kt") +
             rule("android-dep-03", "model", "android-slice-learning-03", "network/LearningApi.kt", "network/VocabularyTestApi.kt") +
 
-            // android-dep-04 (46)
+            // android-dep-04 (45)
             rule("android-dep-04", "model", "android-slice-learning-01", "AppScaffold.kt", "learning/LearningScreen.kt") +
             rule("android-dep-04", "model", "android-slice-learning-02", "podcast/QuizSheet.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-01", "feed/FeedScreen.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-02", "onboarding/OnboardingScreen.kt", "settings/SettingsScreen.kt") +
-            // QuizSheet の network import は ApiException だけ。android-slice-failure-01 が ApiException を core へ移すと変わる。
-            rule("android-dep-04", "network", "android-slice-failure-01", "podcast/QuizSheet.kt") +
             rule(
                 "android-dep-04", "PreferencesStore", "android-slice-prefs-02",
                 "MainActivity.kt",
@@ -113,16 +111,7 @@ object Allowlist {
             // android-dep-07 (1)
             rule("android-dep-07", "公開の var", "android-slice-learning-01", "engagement/ListeningStreakStore.kt") +
 
-            // android-dep-09 (7)
-            rule(
-                "android-dep-09", "e.code", "android-slice-failure-01",
-                "account/AccountViewModel.kt",
-                "settings/SettingsViewModel.kt",
-                "engagement/ListeningStreakStore.kt",
-                "onboarding/OnboardingViewModel.kt",
-                "passkey/PasskeyRegistrationViewModel.kt",
-                "podcast/QuizSheet.kt",
-            ) +
+            // android-dep-09 (1)
             rule("android-dep-09", "= e.message", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
 
             // android-check-02 (5)

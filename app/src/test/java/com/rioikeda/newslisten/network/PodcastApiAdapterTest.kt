@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.network
 
 import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import java.io.IOException

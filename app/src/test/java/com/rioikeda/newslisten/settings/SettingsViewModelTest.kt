@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.settings
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
@@ -7,7 +8,6 @@ import com.rioikeda.newslisten.model.PreferencesResponse
 import com.rioikeda.newslisten.model.RssSource
 import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.podcast.PlaybackConstants
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
@@ -215,7 +215,7 @@ class SettingsViewModelTest {
     @Test
     fun loadGenerationQuotaは404でgracefulにnullとなりLoadFailedは立たない() = runTest {
         val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchGenerationQuota = { throw ApiException.HttpError(404) }),
+            apiClient = FakeApiClient(onFetchGenerationQuota = { throw ApiException.NotFound() }),
         )
 
         viewModel.loadGenerationQuota()
@@ -254,7 +254,7 @@ class SettingsViewModelTest {
     @Test
     fun loadListeningStreakは404でgracefulにnullとなりLoadFailedは立たない() = runTest {
         val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchListeningStreak = { throw ApiException.HttpError(404) }),
+            apiClient = FakeApiClient(onFetchListeningStreak = { throw ApiException.NotFound() }),
         )
 
         viewModel.loadListeningStreak()

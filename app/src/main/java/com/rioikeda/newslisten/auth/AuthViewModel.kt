@@ -1,9 +1,9 @@
 package com.rioikeda.newslisten.auth
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.SessionStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import java.util.concurrent.atomic.AtomicBoolean
@@ -322,7 +322,7 @@ class AuthViewModel(
      * ユーザー存在を露出しない汎用文言に丸める方針は iOS LoginViewModel.swift 準拠
      * （`Unauthorized` のみ専用文言、429 含むそれ以外は汎用文言）。
      *
-     * android-slice-auth-01（android-contract-23・leakage guard）: 401 か否かは [ApiException.HttpError.code] の数値比較では
+     * android-slice-auth-01（android-contract-23・leakage guard）: 401 か否かはステータスコードの数値比較では
      * なく [ApiException.Unauthorized] の型で判定する（`network/` の外でステータスコード比較を残さない）。
      */
     suspend fun login(username: String, password: String): Unit = withContext(dispatcher) {

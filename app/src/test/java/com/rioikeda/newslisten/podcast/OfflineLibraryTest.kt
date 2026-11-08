@@ -1,8 +1,8 @@
 package com.rioikeda.newslisten.podcast
 
 import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.PodcastResponse
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem

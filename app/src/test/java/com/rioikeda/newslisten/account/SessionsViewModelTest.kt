@@ -1,10 +1,10 @@
 package com.rioikeda.newslisten.account
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.RevokeSessionsResponse
 import com.rioikeda.newslisten.model.SessionResponse
 import com.rioikeda.newslisten.model.SessionsListResponse
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest

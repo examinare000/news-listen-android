@@ -1,7 +1,7 @@
 package com.rioikeda.newslisten.architecture
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.feed.FeedViewModel
-import com.rioikeda.newslisten.network.ApiException
 import java.net.URL
 import org.junit.Assert.fail
 

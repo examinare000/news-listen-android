@@ -35,6 +35,7 @@ data class PermanentException(val id: String, val rule: String, val file: String
 object LayerMap {
 
     private val domain = listOf(
+        "core/ApiException.kt",
         "core/Difficulty.kt",
         "core/PlaybackQueue.kt",
         "core/PlaybackSourceResolver.kt",
@@ -88,7 +89,6 @@ object LayerMap {
         "preferences/DataStorePreferencesStore.kt",
         "network/ApiClient.kt",
         "network/ApiEndpoint.kt",
-        "network/ApiException.kt",
         "network/AudioCacheManager.kt",
         "network/AuthInterceptor.kt",
         "network/ConnectivityNetworkMonitor.kt",

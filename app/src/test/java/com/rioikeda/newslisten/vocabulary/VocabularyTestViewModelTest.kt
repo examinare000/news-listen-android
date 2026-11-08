@@ -1,10 +1,10 @@
 package com.rioikeda.newslisten.vocabulary
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.VocabularyTestItemResponse
 import com.rioikeda.newslisten.model.VocabularyTestResultItemRequest
 import com.rioikeda.newslisten.model.VocabularyTestResultResponse
 import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.VocabularyTestApi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch

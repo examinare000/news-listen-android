@@ -1,9 +1,9 @@
 package com.rioikeda.newslisten.learning
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.AchievementResponse
 import com.rioikeda.newslisten.model.LearningDashboardResponse
 import com.rioikeda.newslisten.model.VocabularyItemResponse
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.LearningApi
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import kotlinx.coroutines.CoroutineDispatcher

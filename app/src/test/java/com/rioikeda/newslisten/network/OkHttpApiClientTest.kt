@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.network
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.QuizAnswerRequest
 import com.rioikeda.newslisten.model.StarRequest
@@ -240,14 +241,126 @@ class OkHttpApiClientTest {
     }
 
     @Test
-    fun HTTP500はHttpErrorを投げる() = runTest {
+    fun HTTP500はServerErrorを投げる() = runTest {
         server.enqueue(MockResponse().setResponseCode(500))
+
+        try {
+            client.me()
+            fail("ApiException.ServerError が投げられるべき")
+        } catch (e: ApiException.ServerError) {
+            assertEquals("HTTP Error 500", e.message)
+        }
+    }
+
+    // --- HTTP status の写像（android-dep-09）---
+
+    @Test
+    fun `android-dep-09 HTTP400はInvalidInputを投げmessageは現行の文言のまま`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(400))
+
+        try {
+            client.me()
+            fail("ApiException.InvalidInput が投げられるべき")
+        } catch (e: ApiException.InvalidInput) {
+            assertEquals("HTTP Error 400", e.message)
+        }
+    }
+
+    @Test
+    fun `android-dep-09 HTTP401はUnauthorizedを投げmessageは現行の文言のまま`() = runTest {
+        token = "t"
+        server.enqueue(MockResponse().setResponseCode(401))
+
+        try {
+            client.me()
+            fail("ApiException.Unauthorized が投げられるべき")
+        } catch (e: ApiException.Unauthorized) {
+            assertEquals("認証が失効しました", e.message)
+        }
+    }
+
+    @Test
+    fun `android-dep-09 HTTP404はNotFoundを投げmessageは現行の文言のまま`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        try {
+            client.me()
+            fail("ApiException.NotFound が投げられるべき")
+        } catch (e: ApiException.NotFound) {
+            assertEquals("HTTP Error 404", e.message)
+        }
+    }
+
+    @Test
+    fun `android-dep-09 HTTP409はConflictを投げmessageは現行の文言のまま`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(409))
+
+        try {
+            client.me()
+            fail("ApiException.Conflict が投げられるべき")
+        } catch (e: ApiException.Conflict) {
+            assertEquals("HTTP Error 409", e.message)
+        }
+    }
+
+    @Test
+    fun `android-dep-09 HTTP422はUnprocessableInputを投げmessageは現行の文言のまま`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(422))
+
+        try {
+            client.me()
+            fail("ApiException.UnprocessableInput が投げられるべき")
+        } catch (e: ApiException.UnprocessableInput) {
+            assertEquals("HTTP Error 422", e.message)
+        }
+    }
+
+    @Test
+    fun `android-dep-09 HTTP429はRateLimitedを投げmessageは現行の文言のまま`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(429))
+
+        try {
+            client.me()
+            fail("ApiException.RateLimited が投げられるべき")
+        } catch (e: ApiException.RateLimited) {
+            assertEquals("リクエストが多すぎます。しばらくしてからお試しください。", e.message)
+        }
+    }
+
+    @Test
+    fun `android-dep-09 HTTP500はServerErrorを投げmessageは現行の文言のまま`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        try {
+            client.me()
+            fail("ApiException.ServerError が投げられるべき")
+        } catch (e: ApiException.ServerError) {
+            assertEquals("HTTP Error 500", e.message)
+        }
+    }
+
+    @Test
+    fun `android-dep-09 HTTP503はServerErrorを投げmessageは現行の文言のまま`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(503))
+
+        try {
+            client.me()
+            fail("ApiException.ServerError が投げられるべき")
+        } catch (e: ApiException.ServerError) {
+            assertEquals("HTTP Error 503", e.message)
+        }
+    }
+
+    @Test
+    fun `android-dep-09 HTTP403はHttpErrorを投げmessageは現行の文言のまま`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(403))
 
         try {
             client.me()
             fail("ApiException.HttpError が投げられるべき")
         } catch (e: ApiException.HttpError) {
-            assertEquals(500, e.code)
+            assertEquals(403, e.code)
+            assertEquals("HTTP Error 403", e.message)
         }
     }
 
@@ -551,26 +664,26 @@ class OkHttpApiClientTest {
     }
 
     @Test
-    fun changePasswordは現パスワード誤りで400のHttpErrorを投げる() = runTest {
+    fun changePasswordは現パスワード誤りで400のInvalidInputを投げる() = runTest {
         server.enqueue(MockResponse().setResponseCode(400))
 
         try {
             client.changePassword("wrong-pass", "new-pass")
-            fail("ApiException.HttpError が投げられるべき")
-        } catch (e: ApiException.HttpError) {
-            assertEquals(400, e.code)
+            fail("ApiException.InvalidInput が投げられるべき")
+        } catch (e: ApiException.InvalidInput) {
+            assertEquals("HTTP Error 400", e.message)
         }
     }
 
     @Test
-    fun changePasswordは新パスワード強度不足で422のHttpErrorを投げる() = runTest {
+    fun changePasswordは新パスワード強度不足で422のUnprocessableInputを投げる() = runTest {
         server.enqueue(MockResponse().setResponseCode(422))
 
         try {
             client.changePassword("old-pass", "weak")
-            fail("ApiException.HttpError が投げられるべき")
-        } catch (e: ApiException.HttpError) {
-            assertEquals(422, e.code)
+            fail("ApiException.UnprocessableInput が投げられるべき")
+        } catch (e: ApiException.UnprocessableInput) {
+            assertEquals("HTTP Error 422", e.message)
         }
     }
 
@@ -619,14 +732,14 @@ class OkHttpApiClientTest {
     }
 
     @Test
-    fun revokeSessionは404以外のエラーはHttpErrorを投げる() = runTest {
+    fun revokeSessionは404以外のエラーはServerErrorを投げる() = runTest {
         server.enqueue(MockResponse().setResponseCode(500))
 
         try {
             client.revokeSession("s1")
-            fail("ApiException.HttpError が投げられるべき")
-        } catch (e: ApiException.HttpError) {
-            assertEquals(500, e.code)
+            fail("ApiException.ServerError が投げられるべき")
+        } catch (e: ApiException.ServerError) {
+            assertEquals("HTTP Error 500", e.message)
         }
     }
 

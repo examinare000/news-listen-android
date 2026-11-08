@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.network
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.ActionResponse
 import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.DeviceTokenRequest
@@ -302,8 +303,8 @@ class OkHttpApiClient(
     override suspend fun revokeSession(id: String) {
         try {
             executeVoid(buildRequest(ApiEndpoint.RevokeSession(id)))
-        } catch (e: ApiException.HttpError) {
-            if (e.code != 404) throw e
+        } catch (_: ApiException.NotFound) {
+            // 失効済みは成功扱い（冪等）
         }
     }
 
@@ -455,7 +456,10 @@ class OkHttpApiClient(
      *
      * 正本: APIClient.swift:433-443（validateResponse）。429 は Retry-After（秒）を添えて
      * [ApiException.RateLimited] を、401 は [ApiException.Unauthorized]（android-slice-auth-01・DV-S0-2 = 案B。
-     * `HTTP_UNAUTHORIZED` 定数は導入しない）を、それ以外は [ApiException.HttpError] を投げる。
+     * `HTTP_UNAUTHORIZED` 定数は導入しない）を投げる。
+     * 400・404・409・422・5xx はそれぞれ [ApiException.InvalidInput]・[ApiException.NotFound]・
+     * [ApiException.Conflict]・[ApiException.UnprocessableInput]・[ApiException.ServerError] に写し、
+     * どれにも当たらない status だけを [ApiException.HttpError]（fallback）にする。status を意味へ写すのはここだけ。
      */
     private fun validateResponse(response: Response) {
         if (response.isSuccessful) return
@@ -466,7 +470,15 @@ class OkHttpApiClient(
             val retryAfter = response.header("Retry-After")?.toIntOrNull()
             throw ApiException.RateLimited(retryAfter)
         }
-        throw ApiException.HttpError(response.code, response.body?.string())
+        val body = response.body?.string()
+        throw when (response.code) {
+            400 -> ApiException.InvalidInput(body)
+            404 -> ApiException.NotFound(body)
+            409 -> ApiException.Conflict(body)
+            422 -> ApiException.UnprocessableInput(body)
+            in 500..599 -> ApiException.ServerError(response.code, body)
+            else -> ApiException.HttpError(response.code, body)
+        }
     }
 
     // endregion

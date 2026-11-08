@@ -1,10 +1,10 @@
 package com.rioikeda.newslisten.account
 
 import com.rioikeda.newslisten.auth.AuthViewModel
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.PreferencesResponse
 import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.InMemorySessionStore
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -148,7 +148,7 @@ class AccountViewModelTest {
     @Test
     fun changePasswordは400で現在のパスワードが正しくありませんと表示しフィールドを保持する() = runTest {
         val viewModel = newViewModel(
-            apiClient = FakeApiClient(onChangePassword = { _, _ -> throw ApiException.HttpError(400) }),
+            apiClient = FakeApiClient(onChangePassword = { _, _ -> throw ApiException.InvalidInput() }),
         )
         viewModel.onCurrentPasswordChange("wrong-pass")
         viewModel.onNewPasswordChange("NewPassw0rd!123")
@@ -163,7 +163,7 @@ class AccountViewModelTest {
     @Test
     fun changePasswordは422でパスワード強度不足の文言を表示する() = runTest {
         val viewModel = newViewModel(
-            apiClient = FakeApiClient(onChangePassword = { _, _ -> throw ApiException.HttpError(422) }),
+            apiClient = FakeApiClient(onChangePassword = { _, _ -> throw ApiException.UnprocessableInput() }),
         )
         viewModel.onCurrentPasswordChange("current-pass")
         viewModel.onNewPasswordChange("weak")

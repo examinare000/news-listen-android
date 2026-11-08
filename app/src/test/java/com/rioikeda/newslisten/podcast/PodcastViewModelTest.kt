@@ -2,13 +2,13 @@ package com.rioikeda.newslisten.podcast
 
 import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.engagement.ListeningStreakStore
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.model.QuizGradeResult
 import com.rioikeda.newslisten.model.VocabularyItemResponse
 import com.rioikeda.newslisten.model.VocabularyListResponse
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem

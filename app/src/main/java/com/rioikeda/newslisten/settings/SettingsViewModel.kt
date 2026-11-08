@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.settings
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.engagement.ApiListeningStreakStore
 import com.rioikeda.newslisten.engagement.ListeningStreakStore
 import com.rioikeda.newslisten.model.FeaturedSite
@@ -7,7 +8,6 @@ import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.RssSource
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -155,9 +155,9 @@ class SettingsViewModel(
         try {
             _generationQuota.value = apiClient.fetchGenerationQuota()
             _generationQuotaLoadFailed.value = false
-        } catch (e: ApiException.HttpError) {
+        } catch (_: ApiException.NotFound) {
             _generationQuota.value = null
-            _generationQuotaLoadFailed.value = e.code != 404
+            _generationQuotaLoadFailed.value = false
         } catch (e: ApiException) {
             _generationQuota.value = null
             _generationQuotaLoadFailed.value = true
