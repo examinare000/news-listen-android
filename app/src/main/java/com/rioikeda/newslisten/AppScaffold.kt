@@ -109,7 +109,7 @@ fun AppScaffold(
 
     // Get admin status from authViewModel
     val authState by authViewModel.authState.collectAsStateWithLifecycle()
-    val isAdmin = (authState as? AuthState.Authenticated)?.user?.role == "admin"
+    val isAdmin = (authState as? AuthState.Authenticated)?.user?.role?.isAdmin == true
 
     val tabs = listOf(
         TabItem(

@@ -12,6 +12,7 @@ import com.rioikeda.newslisten.account.AccountViewModel
 import com.rioikeda.newslisten.account.SessionsViewModel
 import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
+import com.rioikeda.newslisten.auth.app.AuthSession
 import com.rioikeda.newslisten.auth.CleanupStep
 import com.rioikeda.newslisten.auth.SubjectCleanup
 import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
@@ -22,6 +23,7 @@ import com.rioikeda.newslisten.learning.LearningViewModel
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.vocabulary.VocabularyTestViewModel
 import com.rioikeda.newslisten.network.AudioCacheManager
+import com.rioikeda.newslisten.network.AuthApiAdapter
 import com.rioikeda.newslisten.network.AuthInterceptor
 import com.rioikeda.newslisten.network.ConnectivityNetworkMonitor
 import com.rioikeda.newslisten.network.JavaFileSystem
@@ -30,6 +32,7 @@ import com.rioikeda.newslisten.network.OkHttpApiClient
 import com.rioikeda.newslisten.network.PodcastApiAdapter
 import com.rioikeda.newslisten.network.PreferencesApiAdapter
 import com.rioikeda.newslisten.network.SessionStore
+import com.rioikeda.newslisten.network.toIssuedSession
 import com.rioikeda.newslisten.notification.FcmTokenRegistrar
 import com.rioikeda.newslisten.observability.CrashReporter
 import com.rioikeda.newslisten.observability.DeviceInfo
@@ -93,9 +96,9 @@ class AppContainer(context: Context) {
                 apiBaseUrl = baseUrl.toHttpUrl(),
                 apiKey = apiKey,
                 // OkHttp のコールバックスレッドから同期的に呼ぶ（android-slice-auth-01・android-contract-13・F5）。
-                // `_authViewModel` は `by lazy`（synchronized）で、ラムダは呼ばれた時点で解決する
+                // `authSession` は `by lazy`（synchronized）で、ラムダは呼ばれた時点で解決する
                 // ため、ここで参照しても循環初期化にはならない。
-                onUnauthorized = { attachedToken -> _authViewModel.onUnauthorized(attachedToken) },
+                onUnauthorized = { attachedToken -> authSession.onUnauthorized(attachedToken) },
                 tokenProvider = tokenProvider
             )
         )
@@ -129,15 +132,15 @@ class AppContainer(context: Context) {
 
     /**
      * 音声キャッシュの主体固定・起動時回収・ダウンロードの cancel を所有する capsule（android-dec-02）。
-     * `_authViewModel` のラムダがこの値を読むので `by lazy` にする。`_authViewModel` は構築時にこの値を評価しないため、
-     * 初期化は `offlineLibrary` → `_authViewModel` の一方向で、循環しない。
+     * `authSession` のラムダがこの値を読むので `by lazy` にする。`authSession` は構築時にこの値を評価しないため、
+     * 初期化は `offlineLibrary` → `authSession` の一方向で、循環しない。
      */
     private val offlineLibrary: OfflineLibrary by lazy {
         OfflineLibrary(
             audioStore = audioCacheManager,
             podcastApi = PodcastApiAdapter(apiClient),
             episodeLookup = _episodeCatalog,
-            currentSubject = _authViewModel::currentSubjectId,
+            currentSubject = authSession::currentSubjectId,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
         )
     }
@@ -244,14 +247,14 @@ class AppContainer(context: Context) {
     )
 
     /**
-     * 設定の同期の入口。`_authViewModel` のラムダと後始末の手順がこの値を読むので `by lazy` にする。
-     * `_authViewModel` は構築時にこの値を評価しないため、初期化は `preferencesSync` → `_authViewModel` の一方向で、循環しない。
+     * 設定の同期の入口。`authSession` のラムダと後始末の手順がこの値を読むので `by lazy` にする。
+     * `authSession` は構築時にこの値を評価しないため、初期化は `preferencesSync` → `authSession` の一方向で、循環しない。
      */
     private val preferencesSync: PreferencesSync by lazy {
         PreferencesSync(
             PreferencesApiAdapter(apiClient),
             preferencesStore,
-            _authViewModel::currentSubjectId,
+            authSession::currentSubjectId,
             preferencesScope,
         )
     }
@@ -287,23 +290,23 @@ class AppContainer(context: Context) {
     }
 
     /**
-     * AuthViewModel（認証状態ゲーティング + ログイン）を生成して返す。
+     * AuthSession（認証状態の持ち主）を生成して返す。
      *
      * Dispatcher: Dispatchers.Default は CPU バウンドタスク向き。IO タスクには Dispatchers.IO を
      * 推奨するが、login/refreshAuth は mainly ネットワーク IO であり、OkHttpClient が内部で
      * スレッドプールを持つため、Default でも問題ない（スレッド枯渇リスクは低い）。テスト時に
      * StandardTestDispatcher 差し替えで同期化テストを可能にする設計。
      *
-     * by lazy でシングルトンキャッシュ化：画面回転時に AuthViewModel インスタンスが同じ
+     * by lazy でシングルトンキャッシュ化：画面回転時に AuthSession インスタンスが同じ
      * ままであることを保証し、authState が Unknown にリセットされるのを防ぐ。
      *
      * onSubjectLeave（フェーズ8-D・shared-playback-spec.md §6.3・ADR-104）: 主体が離れたとき、離脱主体を引数に
      * [subjectCleanup] を起動する（完了は待たない）。手順列は [subjectCleanup] が持ち、auth 層に各資産の実体を
      * 直接依存させない。音声キャッシュは離れる主体 1 人分だけを対象にする（端末全体を消さない。ADR-104 決定 2）。
      */
-    private val _authViewModel: AuthViewModel by lazy {
-        AuthViewModel(
-            apiClient = apiClient,
+    private val authSession: AuthSession by lazy {
+        AuthSession(
+            authApi = AuthApiAdapter(apiClient),
             sessionStore = sessionStore,
             dispatcher = Dispatchers.Default,
             onSubjectLeave = subjectCleanup::start,
@@ -312,6 +315,14 @@ class AppContainer(context: Context) {
             // Unknown からの確定（shared-dec-05）と遷移 ④ の B の確立（android-dec-48）の直後に回収する。形式の判断は Subject の生成に任せる。
             onSubjectResolved = { s -> offlineLibrary.reclaim(s?.userId) },
         )
+    }
+
+    /**
+     * AuthViewModel（ログイン画面の入力の可否・文言）を生成して返す。by lazy でシングルトンにし、
+     * 画面回転時に `loginErrorMessage` が失われないようにする。認証状態は [authSession] が持つ。
+     */
+    private val _authViewModel: AuthViewModel by lazy {
+        AuthViewModel(authSession = authSession)
     }
 
     fun getAuthViewModel(): AuthViewModel = _authViewModel
@@ -375,7 +386,7 @@ class AppContainer(context: Context) {
 
     /**
      * 再生の use case を持つ Coordinator。PodcastViewModel はこれへ中継する。
-     * `_authViewModel` のラムダを読むので `by lazy` にし、構築時に `_authViewModel` を評価しない。
+     * `authSession` を読むので `by lazy` にし、構築時に `authSession` を評価しない。
      */
     private val _playbackCoordinator: PlaybackCoordinator by lazy {
         PlaybackCoordinator(
@@ -386,7 +397,7 @@ class AppContainer(context: Context) {
             preferencesStore = preferencesStore,
             listeningStreakStore = _listeningStreakStore,
             dispatcher = podcastDispatcher,
-            currentSubject = _authViewModel::currentSubjectId,
+            currentSubject = authSession::currentSubjectId,
             episodeLookup = _episodeCatalog,
         )
     }
@@ -458,10 +469,10 @@ class AppContainer(context: Context) {
      * 複数スレッドで競合すると更新の取りこぼしが起こり得るため、単一スレッドで直列化する。
      *
      * isAdminProvider: RSS ソース編集（updateSource）は admin 限定（issue #66・ADR-047）。
-     * settings 層が auth 層の型（AuthState）に直接依存しないよう、AuthViewModel の
+     * settings 層が auth 層の型（AuthState）に直接依存しないよう、AuthSession の
      * onSubjectLeave/onAuthenticated と同じ「呼び出し元が判定関数を注入する」パターンを踏襲する。
      * role は認証確立後に非同期で確定するため、コンストラクタ時点の固定値ではなく
-     * 呼び出し時点で都度 _authViewModel.authState.value を評価する。
+     * 呼び出し時点で都度 authSession.authState.value を評価する。
      *
      * by lazy でシングルトンキャッシュ化：画面回転時に SettingsViewModel インスタンスが
      * 同じままであることを保証し、sources/generationQuota 等の読み込み済み状態を保持する。
@@ -472,7 +483,7 @@ class AppContainer(context: Context) {
             preferencesSync = preferencesSync,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
             isAdminProvider = {
-                (_authViewModel.authState.value as? AuthState.Authenticated)?.user?.role == "admin"
+                (authSession.authState.value as? AuthState.Authenticated)?.user?.role?.isAdmin == true
             },
             listeningStreakStore = _listeningStreakStore,
         )
@@ -589,7 +600,7 @@ class AppContainer(context: Context) {
      * （フェーズ17 P17・issue #140）。`by lazy` にしない理由は
      * [createPasskeyRegistrationViewModel] と同じ（[PasskeyProvider] の Activity Context 依存）。
      *
-     * onLoginSuccess: verify 成功で得た LoginResponse を AuthViewModel に渡し、セッション確立
+     * onLoginSuccess: verify 成功で得た LoginResponse を IssuedSession に変換して AuthViewModel に渡し、セッション確立
      * （sessionStore 保存・authState 遷移・FCM 登録フック）を auth 層に一任する
      * （[AuthViewModel.completePasskeyLogin] 参照）。
      */
@@ -598,6 +609,6 @@ class AppContainer(context: Context) {
             apiClient = apiClient,
             passkeyProvider = passkeyProvider,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
-            onLoginSuccess = { response -> _authViewModel.completePasskeyLogin(response) },
+            onLoginSuccess = { response -> _authViewModel.completePasskeyLogin(response.toIssuedSession()) },
         )
 }

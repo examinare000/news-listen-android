@@ -1,6 +1,6 @@
 package com.rioikeda.newslisten.auth
 
-import com.rioikeda.newslisten.model.UserResponse
+import com.rioikeda.newslisten.auth.domain.AccountUser
 
 /**
  * 認証状態。
@@ -18,13 +18,13 @@ sealed class AuthState {
     data object Unauthenticated : AuthState()
 
     /** ログイン済み。 */
-    data class Authenticated(val user: UserResponse) : AuthState()
+    data class Authenticated(val user: AccountUser) : AuthState()
 }
 
 /**
  * 端末ローカル資産（音声キャッシュなど）の持ち主。[userId] は `[A-Za-z0-9_-]+` を満たすときだけ値を持ち、
  * 欠落・形式不正は `null`（その主体ではキャッシュを無効にして動作を続ける。ADR-104 決定 16）。
- * 形式の判断はここの生成関数 1 箇所に置く。
+ * 形式の判断は domain の id 型の生成関数（`of`）が持つ。
  */
 data class Subject(val userId: String?, val username: String) {
     /**
@@ -35,13 +35,8 @@ data class Subject(val userId: String?, val username: String) {
         if (userId != null && other.userId != null) userId == other.userId else username == other.username
 
     companion object {
-        private val VALID_USER_ID = Regex("[A-Za-z0-9_-]+")
-
-        fun from(user: UserResponse): Subject =
-            Subject(
-                userId = user.userId?.takeIf { VALID_USER_ID.matches(it) },
-                username = user.username,
-            )
+        fun from(user: AccountUser): Subject =
+            Subject(userId = user.subjectId?.value, username = user.username)
     }
 }
 
