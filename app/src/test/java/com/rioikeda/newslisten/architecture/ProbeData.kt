@@ -1,5 +1,8 @@
 package com.rioikeda.newslisten.architecture
 
+import com.rioikeda.newslisten.auth.domain.AccountUser
+import com.rioikeda.newslisten.auth.domain.Role
+import com.rioikeda.newslisten.auth.domain.SubjectId
 import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.AchievementResponse
@@ -19,7 +22,6 @@ import com.rioikeda.newslisten.model.RssSource
 import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.model.SessionResponse
 import com.rioikeda.newslisten.model.SessionsListResponse
-import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.model.VocabularyItemResponse
 import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.model.VocabularyTestItemResponse
@@ -64,7 +66,8 @@ internal object ProbeData {
 
     val podcastList: List<Episode> = listOf(podcast)
 
-    val user: UserResponse = UserResponse(username = "probe-user", role = "user", displayName = "Probe User")
+    val accountUser: AccountUser =
+        AccountUser(username = "probe-user", displayName = "Probe User", role = Role.User, subjectId = SubjectId.of("probe-user"))
 
     val vocabularyItem: VocabularyItemResponse = VocabularyItemResponse(
         vocabularyId = "vocabulary-1",

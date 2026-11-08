@@ -6,6 +6,7 @@ import com.rioikeda.newslisten.architecture.fixture.overload.OverloadedLoader
 import com.rioikeda.newslisten.architecture.fixture.summary.SummaryOwner
 import com.rioikeda.newslisten.account.accountViewModelQueryProbes
 import com.rioikeda.newslisten.account.sessionsViewModelQueryProbes
+import com.rioikeda.newslisten.auth.authSessionQueryProbes
 import com.rioikeda.newslisten.auth.authViewModelQueryProbes
 import com.rioikeda.newslisten.auth.subjectCleanupQueryProbes
 import com.rioikeda.newslisten.catalog.episodeCatalogQueryProbes
@@ -39,6 +40,7 @@ import org.junit.Test
 internal val registeredQueryProbeSets: List<QueryProbeSet> = listOf(
     podcastViewModelQueryProbes,
     authViewModelQueryProbes,
+    authSessionQueryProbes,
     accountViewModelQueryProbes,
     sessionsViewModelQueryProbes,
     passkeyCredentialsViewModelQueryProbes,
@@ -183,7 +185,7 @@ class QueryEffectCoverageTest {
 
     private companion object {
         val owners = listOf(
-            "PodcastViewModel", "AuthViewModel", "AccountViewModel", "SessionsViewModel",
+            "PodcastViewModel", "AuthViewModel", "AuthSession", "AccountViewModel", "SessionsViewModel",
             "PasskeyCredentialsViewModel", "PasskeyLoginViewModel", "PasskeyRegistrationViewModel",
             "FeedViewModel", "LearningViewModel", "VocabularyTestViewModel", "SettingsViewModel", "OnboardingViewModel",
             "ApiListeningStreakStore", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator", "EpisodeCatalog",
