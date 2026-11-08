@@ -54,6 +54,7 @@ internal val registeredQueryProbeSets: List<QueryProbeSet> = listOf(
     subjectCleanupQueryProbes,
     playbackCoordinatorQueryProbes,
     episodeCatalogQueryProbes,
+    com.rioikeda.newslisten.preferences.preferencesSyncQueryProbes,
 )
 
 internal fun productionCheckInput(probeSets: List<QueryProbeSet> = registeredQueryProbeSets): CheckInput = CheckInput(
@@ -186,6 +187,7 @@ class QueryEffectCoverageTest {
             "PasskeyCredentialsViewModel", "PasskeyLoginViewModel", "PasskeyRegistrationViewModel",
             "FeedViewModel", "LearningViewModel", "VocabularyTestViewModel", "SettingsViewModel", "OnboardingViewModel",
             "ApiListeningStreakStore", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator", "EpisodeCatalog",
+            "PreferencesSync",
         )
 
         /** 登録 list の各 probe set を、本番の母集団・台帳・分類表で 1 回ずつ run した結果。 */

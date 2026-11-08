@@ -1,7 +1,14 @@
 package com.rioikeda.newslisten.preferences
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.doublePreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import com.rioikeda.newslisten.core.PlaybackSpeed
+import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.preferences.domain.PreferenceItem
+import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -32,7 +39,7 @@ class DataStorePreferencesStoreTest {
 
         assertTrue(store.sfxEnabled.value)
         assertTrue(store.hapticsEnabled.value)
-        assertEquals(3, store.weeklyGoalEpisodes.value)
+        assertEquals(WeeklyGoal.DEFAULT, store.weeklyGoalEpisodes.value)
 
         store.setSfxEnabled(false)
         store.setHapticsEnabled(false)
@@ -41,7 +48,7 @@ class DataStorePreferencesStoreTest {
 
         assertFalse(store.sfxEnabled.value)
         assertFalse(store.hapticsEnabled.value)
-        assertEquals(7, store.weeklyGoalEpisodes.value)
+        assertEquals(7, store.weeklyGoalEpisodes.value.episodes)
     }
 
     @Test
@@ -78,11 +85,11 @@ class DataStorePreferencesStoreTest {
         val store = dispatcher.newStore(file)
         advanceUntilIdle()
 
-        assertEquals("toeic_600", store.defaultDifficulty.value)
-        assertEquals(1.0, store.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(Difficulty.TOEIC_600, store.defaultDifficulty.value)
+        assertEquals(1.0, store.defaultPlaybackSpeed.value.multiplier, 0.0)
         assertEquals(ArticleOpenMode.IN_APP, store.articleOpenMode.value)
         assertEquals(TimeFormat.ABSOLUTE, store.timeFormat.value)
-        assertEquals(3, store.weeklyGoalEpisodes.value)
+        assertEquals(WeeklyGoal.DEFAULT, store.weeklyGoalEpisodes.value)
     }
 
     @Test
@@ -92,14 +99,14 @@ class DataStorePreferencesStoreTest {
         val store = dispatcher.newStore(file)
         advanceUntilIdle()
 
-        store.setDefaultDifficulty("toeic_900")
+        store.setDefaultDifficulty(Difficulty.TOEIC_900)
         store.setDefaultPlaybackSpeed(1.5)
         store.setArticleOpenMode(ArticleOpenMode.EXTERNAL)
         store.setTimeFormat(TimeFormat.RELATIVE)
         advanceUntilIdle()
 
-        assertEquals("toeic_900", store.defaultDifficulty.value)
-        assertEquals(1.5, store.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(Difficulty.TOEIC_900, store.defaultDifficulty.value)
+        assertEquals(1.5, store.defaultPlaybackSpeed.value.multiplier, 0.0)
         assertEquals(ArticleOpenMode.EXTERNAL, store.articleOpenMode.value)
         assertEquals(TimeFormat.RELATIVE, store.timeFormat.value)
     }
@@ -113,13 +120,13 @@ class DataStorePreferencesStoreTest {
         advanceUntilIdle()
         store.setDefaultPlaybackSpeed(1.5)
         advanceUntilIdle()
-        assertEquals(1.5, store.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(1.5, store.defaultPlaybackSpeed.value.multiplier, 0.0)
 
         listOf(0.0, 3.0, 1.0001, -1.0, Double.NaN).forEach { rejected ->
             store.setDefaultPlaybackSpeed(rejected)
             advanceUntilIdle()
 
-            assertEquals(1.5, store.defaultPlaybackSpeed.value, 0.0)
+            assertEquals(1.5, store.defaultPlaybackSpeed.value.multiplier, 0.0)
         }
     }
 
@@ -130,7 +137,7 @@ class DataStorePreferencesStoreTest {
         val firstJob = Job()
         val firstStore = dispatcher.newStore(file, firstJob)
         advanceUntilIdle()
-        firstStore.setDefaultDifficulty("ielts_7")
+        firstStore.setDefaultDifficulty(Difficulty.IELTS_7)
         firstStore.setDefaultPlaybackSpeed(2.0)
         firstStore.setArticleOpenMode(ArticleOpenMode.EXTERNAL)
         firstStore.setTimeFormat(TimeFormat.RELATIVE)
@@ -143,20 +150,20 @@ class DataStorePreferencesStoreTest {
         val secondStore = dispatcher.newStore(file)
         advanceUntilIdle()
 
-        assertEquals("ielts_7", secondStore.defaultDifficulty.value)
-        assertEquals(2.0, secondStore.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(Difficulty.IELTS_7, secondStore.defaultDifficulty.value)
+        assertEquals(2.0, secondStore.defaultPlaybackSpeed.value.multiplier, 0.0)
         assertEquals(ArticleOpenMode.EXTERNAL, secondStore.articleOpenMode.value)
         assertEquals(TimeFormat.RELATIVE, secondStore.timeFormat.value)
     }
 
     private suspend fun DataStorePreferencesStore.writeAllEightNonDefault() {
-        setDefaultDifficulty("toeic_900")
+        setDefaultDifficulty(Difficulty.TOEIC_900)
         setDefaultPlaybackSpeed(2.0)
         setArticleOpenMode(ArticleOpenMode.EXTERNAL)
         setTimeFormat(TimeFormat.RELATIVE)
         setSfxEnabled(false)
         setHapticsEnabled(false)
-        setWeeklyGoalEpisodes(9)
+        setWeeklyGoalEpisodes(10)
         markAchievementsSeen(setOf("streak_7"))
     }
 
@@ -174,9 +181,9 @@ class DataStorePreferencesStoreTest {
         store.clearSubjectScoped()
         advanceUntilIdle()
 
-        assertEquals("toeic_600", store.defaultDifficulty.value)
-        assertEquals(1.0, store.defaultPlaybackSpeed.value, 0.0)
-        assertEquals(3, store.weeklyGoalEpisodes.value)
+        assertEquals(Difficulty.TOEIC_600, store.defaultDifficulty.value)
+        assertEquals(1.0, store.defaultPlaybackSpeed.value.multiplier, 0.0)
+        assertEquals(WeeklyGoal.DEFAULT, store.weeklyGoalEpisodes.value)
         assertEquals(emptySet<String>(), store.seenAchievementIds.value)
         assertEquals(ArticleOpenMode.EXTERNAL, store.articleOpenMode.value)
         assertEquals(TimeFormat.RELATIVE, store.timeFormat.value)
@@ -200,6 +207,50 @@ class DataStorePreferencesStoreTest {
         val keyNames = dataStore.data.first().asMap().keys.map { it.name }.toSet()
 
         assertEquals(PreferenceItem.entries.map { it.key }.toSet(), keyNames)
+        job.cancel()
+    }
+
+    @Test
+    fun `android-dec-79 保存値が値域外ならDataStoreの読みは既定値に倒す`() = runTest {
+        // verifies: android-dec-79
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val file = File.createTempFile("prefs_out_of_range", ".preferences_pb").apply { deleteOnExit() }
+        val job = Job()
+        val scope = CoroutineScope(job + dispatcher)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
+        dataStore.edit { prefs ->
+            prefs[stringPreferencesKey(PreferenceItem.DEFAULT_DIFFICULTY.key)] = "toeic_800"
+            prefs[doublePreferencesKey(PreferenceItem.DEFAULT_PLAYBACK_SPEED.key)] = 3.0
+            prefs[intPreferencesKey(PreferenceItem.WEEKLY_GOAL_EPISODES.key)] = 9
+        }
+        advanceUntilIdle()
+
+        val store = DataStorePreferencesStore(dataStore, scope)
+        advanceUntilIdle()
+
+        assertEquals(Difficulty.DEFAULT, store.defaultDifficulty.value)
+        assertEquals(PlaybackSpeed.DEFAULT, store.defaultPlaybackSpeed.value)
+        assertEquals(WeeklyGoal.DEFAULT, store.weeklyGoalEpisodes.value)
+        job.cancel()
+    }
+
+    @Test
+    fun `android-dec-79 setWeeklyGoalEpisodesは値域外を保存も通知もしない`() = runTest {
+        // verifies: android-dec-79
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val file = File.createTempFile("prefs_goal_reject", ".preferences_pb").apply { deleteOnExit() }
+        val job = Job()
+        val scope = CoroutineScope(job + dispatcher)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope, produceFile = { file })
+        val store = DataStorePreferencesStore(dataStore, scope)
+        advanceUntilIdle()
+
+        store.setWeeklyGoalEpisodes(4)
+        advanceUntilIdle()
+
+        val keyNames = dataStore.data.first().asMap().keys.map { it.name }.toSet()
+        assertEquals(WeeklyGoal.DEFAULT, store.weeklyGoalEpisodes.value)
+        assertFalse(keyNames.contains(PreferenceItem.WEEKLY_GOAL_EPISODES.key))
         job.cancel()
     }
 }

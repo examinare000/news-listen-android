@@ -1,6 +1,8 @@
 package com.rioikeda.newslisten.auth
 
 import com.rioikeda.newslisten.core.ApiException
+import com.rioikeda.newslisten.core.Difficulty
+import com.rioikeda.newslisten.core.PlaybackSpeed
 import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
 import com.rioikeda.newslisten.model.UserResponse
@@ -8,7 +10,7 @@ import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.InMemorySessionStore
 import com.rioikeda.newslisten.network.SessionStore
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
-import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -30,8 +32,8 @@ import org.junit.Test
  * 正本: ios/NewsListenApp/NewsListenApp/AppState.swift:130-178（refreshAuth/refreshPreferences/logout）、
  * ios/NewsListenApp/NewsListenApp/Auth/LoginViewModel.swift（ログインのエラー文言）のミラー。
  *
- * フェーズ10 P10 Task3: defaultDifficulty/defaultPlaybackSpeed の値の正本は [PreferencesStore] に
- * 一本化した（AuthViewModel は StateFlow を委譲するのみで独自コピーを持たない）。
+ * 保存済みトークンで認証が確立したとき、設定の取り込みは hook `onSessionRestored` が担う
+ * （AuthViewModel は設定を知らない。取り込み自体の検証は PreferencesSyncTest）。
  *
  * android-slice-auth-01（認証失効の型分離と検知）: `onLogoutCleanup` を `onSubjectLeave` へ改名（SG-R18）。
  * 401 は [ApiException.Unauthorized] 型で受け、一時障害とは区別する（android-contract-12）。
@@ -40,7 +42,7 @@ class AuthViewModelTest {
 
     private val user = UserResponse(username = "u", role = "member", displayName = "U")
     private val preferences = PreferencesResponse(
-        defaultDifficulty = "toeic_800",
+        defaultDifficulty = "ielts_7",
         defaultPlaybackSpeed = 1.5,
         digestEnabled = true,
         digestArticleCount = 5,
@@ -53,8 +55,8 @@ class AuthViewModelTest {
     private fun TestScope.newViewModel(
         apiClient: ApiClient = FakeApiClient(),
         sessionStore: SessionStore = InMemorySessionStore(),
-        preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
         onSubjectLeave: (Subject) -> Unit = {},
+        onSessionRestored: suspend () -> Unit = {},
         onAuthenticated: () -> Unit = {},
         onSubjectResolved: (Subject?) -> Unit = {},
     ): AuthViewModel =
@@ -62,8 +64,8 @@ class AuthViewModelTest {
             apiClient = apiClient,
             sessionStore = sessionStore,
             dispatcher = StandardTestDispatcher(testScheduler),
-            preferencesStore = preferencesStore,
             onSubjectLeave = onSubjectLeave,
+            onSessionRestored = onSessionRestored,
             onAuthenticated = onAuthenticated,
             onSubjectResolved = onSubjectResolved,
         )
@@ -71,14 +73,13 @@ class AuthViewModelTest {
     private fun userWithId(userId: String?, username: String = "u") =
         UserResponse(username = username, role = "member", displayName = "U", userId = userId)
 
-    /** 起点を `Authenticated` にする。`refreshAuth()` を先に呼ぶので、`onFetchPreferences` は stub する。 */
+    /** 起点を `Authenticated` にする（`refreshAuth()` を先に呼ぶ。設定の取り込みは hook の先なので、ここでは行わない）。 */
     private suspend fun TestScope.authenticatedViewModel(
         userId: String? = "u-1",
         username: String = "u",
         sessionStore: SessionStore = InMemorySessionStore(initialToken = "token-abc"),
         onLogin: suspend (String, String) -> LoginResponse = { _, _ -> error("login is not stubbed") },
         onLogout: suspend (String) -> Unit = {},
-        preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
         onSubjectLeave: (Subject) -> Unit = {},
         onAuthenticated: () -> Unit = {},
         onSubjectResolved: (Subject?) -> Unit = {},
@@ -88,10 +89,8 @@ class AuthViewModelTest {
                 onLogin = onLogin,
                 onLogout = onLogout,
                 onMe = { userWithId(userId, username) },
-                onFetchPreferences = { preferences },
             ),
             sessionStore = sessionStore,
-            preferencesStore = preferencesStore,
             onSubjectLeave = onSubjectLeave,
             onAuthenticated = onAuthenticated,
             onSubjectResolved = onSubjectResolved,
@@ -263,56 +262,41 @@ class AuthViewModelTest {
         assertNull(viewModel.lastFailure.value)
     }
 
-    // --- preferences 同期（refreshAuth の Authenticated 後続処理） ---
+    // --- onSessionRestored（保存済みトークンで確立した事実の通知） ---
 
     @Test
-    fun 認証成功後preferences取得成功でStateFlowへ反映される() = runTest {
+    fun `android-dec-78 保存済みトークンでme成功するとonSessionRestoredがonAuthenticatedより前に1回呼ばれる`() = runTest {
+        // verifies: android-dec-78
+        val events = mutableListOf<String>()
         val viewModel = newViewModel(
-            apiClient = FakeApiClient(onMe = { user }, onFetchPreferences = { preferences }),
+            apiClient = FakeApiClient(onMe = { user }),
             sessionStore = InMemorySessionStore(initialToken = "token-abc"),
+            onSessionRestored = { events += "restored" },
+            onAuthenticated = { events += "authenticated" },
         )
 
         viewModel.refreshAuth()
 
-        assertEquals("toeic_800", viewModel.defaultDifficulty.value)
-        assertEquals(1.5, viewModel.defaultPlaybackSpeed.value, 0.0)
-        assertFalse(viewModel.preferencesSyncFailed.value)
+        assertEquals(listOf("restored", "authenticated"), events)
     }
 
     @Test
-    fun 認証成功後preferences取得成功で注入したPreferencesStore自体が更新される() = runTest {
-        // 二重管理でないことの検証: AuthViewModel が内部に独自コピーを持たず、注入した
-        // PreferencesStore インスタンスそのものへ書き戻していることを確認する。
-        val preferencesStore = InMemoryPreferencesStore()
+    fun `android-dec-78 loginの確立ではonSessionRestoredを呼ばずonAuthenticatedだけが呼ばれる`() = runTest {
+        // verifies: android-dec-78
+        var restoredCallCount = 0
+        var authenticatedCallCount = 0
         val viewModel = newViewModel(
-            apiClient = FakeApiClient(onMe = { user }, onFetchPreferences = { preferences }),
-            sessionStore = InMemorySessionStore(initialToken = "token-abc"),
-            preferencesStore = preferencesStore,
+            apiClient = FakeApiClient(onLogin = { _, _ -> LoginResponse(token = "new-token", user = user) }),
+            sessionStore = InMemorySessionStore(initialToken = null),
+            onSessionRestored = { restoredCallCount++ },
+            onAuthenticated = { authenticatedCallCount++ },
         )
 
-        viewModel.refreshAuth()
+        viewModel.login("u", "p")
 
-        assertEquals("toeic_800", preferencesStore.defaultDifficulty.value)
-        assertEquals(1.5, preferencesStore.defaultPlaybackSpeed.value, 0.0)
-    }
-
-    @Test
-    fun 認証成功後preferences取得失敗でも既存値を保持しフラグを立てる() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(
-                onMe = { user },
-                onFetchPreferences = { throw ApiException.NetworkError(RuntimeException("offline")) },
-            ),
-            sessionStore = InMemorySessionStore(initialToken = "token-abc"),
-        )
-        val difficultyBeforeSync = viewModel.defaultDifficulty.value
-        val speedBeforeSync = viewModel.defaultPlaybackSpeed.value
-
-        viewModel.refreshAuth()
-
-        assertEquals(difficultyBeforeSync, viewModel.defaultDifficulty.value)
-        assertEquals(speedBeforeSync, viewModel.defaultPlaybackSpeed.value, 0.0)
-        assertTrue(viewModel.preferencesSyncFailed.value)
+        assertEquals(AuthState.Authenticated(user), viewModel.authState.value)
+        assertEquals(0, restoredCallCount)
+        assertEquals(1, authenticatedCallCount)
     }
 
     // --- login（android-contract-23, android-test-25） ---
@@ -871,10 +855,12 @@ class AuthViewModelTest {
     @Test
     fun completes_without_caller_scope_呼出元のscopeが無くてもrefreshが完走する() = runTest {
         // verifies: CI-S0-8
+        var restoredCallCount = 0
         var authenticatedCallCount = 0
         val viewModel = newViewModel(
             apiClient = FakeApiClient(onMe = { user }, onFetchPreferences = { preferences }),
             sessionStore = InMemorySessionStore(initialToken = "token-abc"),
+            onSessionRestored = { restoredCallCount++ },
             onAuthenticated = { authenticatedCallCount++ },
         )
 
@@ -883,7 +869,7 @@ class AuthViewModelTest {
 
         assertEquals(AuthState.Authenticated(user), viewModel.authState.value)
         assertNull(viewModel.lastFailure.value)
-        assertEquals("toeic_800", viewModel.defaultDifficulty.value)
+        assertEquals(1, restoredCallCount)
         assertEquals(1, authenticatedCallCount)
     }
 
@@ -1138,20 +1124,15 @@ class AuthViewModelTest {
     fun `shared-leave-08 me成功のonSubjectResolvedはpreferencesの同期より前に発火する`() = runTest {
         val events = mutableListOf<String>()
         val viewModel = newViewModel(
-            apiClient = FakeApiClient(
-                onMe = { userWithId("u-1") },
-                onFetchPreferences = {
-                    events += "fetchPreferences"
-                    preferences
-                },
-            ),
+            apiClient = FakeApiClient(onMe = { userWithId("u-1") }),
             sessionStore = InMemorySessionStore(initialToken = "t"),
             onSubjectResolved = { events += "resolved" },
+            onSessionRestored = { events += "sessionRestored" },
         )
 
         viewModel.refreshAuth()
 
-        assertEquals(listOf("resolved", "fetchPreferences"), events)
+        assertEquals(listOf("resolved", "sessionRestored"), events)
     }
 
     @Test
@@ -1327,9 +1308,9 @@ class AuthViewModelTest {
     fun `shared-leave-04 preferencesの失敗は旧主体の4keyを残し別主体の次のlogoutのpreferences手順で消える`() = runTest {
         // verifies: android-contract-15（入口 ② の次回起動の回収は音声キャッシュだけで、4 key は次の離脱が消す）
         val preferencesStore = InMemoryPreferencesStore(
-            initialDefaultDifficulty = "toeic_900",
-            initialDefaultPlaybackSpeed = 2.0,
-            initialWeeklyGoalEpisodes = 9,
+            initialDefaultDifficulty = Difficulty.TOEIC_900,
+            initialDefaultPlaybackSpeed = PlaybackSpeed.of(2.0)!!,
+            initialWeeklyGoalEpisodes = WeeklyGoal.of(10)!!,
             initialSeenAchievementIds = setOf("streak_7"),
         )
         var preferencesAttempts = 0
@@ -1344,11 +1325,10 @@ class AuthViewModelTest {
         val loginResponse = LoginResponse(token = "token-b", user = userWithId("u-2", "other"))
         val viewModel = authenticatedViewModel(
             userId = "u-1",
-            preferencesStore = preferencesStore,
             onLogin = { _, _ -> loginResponse },
             onSubjectLeave = cleanup::start,
         )
-        // refreshAuth の同期が 3 項目を stub で上書きするので、比較のスナップショットは refreshAuth の後に取る。
+        // 失敗した後始末が旧主体の 4 key を残すことを比べるため、離脱の前にスナップショットを取る。
         val difficulty = preferencesStore.defaultDifficulty.value
         val speed = preferencesStore.defaultPlaybackSpeed.value
         val goal = preferencesStore.weeklyGoalEpisodes.value
@@ -1359,7 +1339,7 @@ class AuthViewModelTest {
 
         assertEquals(CleanupIncomplete(setOf("preferences")), cleanup.cleanupIncomplete.value)
         assertEquals(difficulty, preferencesStore.defaultDifficulty.value)
-        assertEquals(speed, preferencesStore.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(speed, preferencesStore.defaultPlaybackSpeed.value)
         assertEquals(goal, preferencesStore.weeklyGoalEpisodes.value)
         assertEquals(seen, preferencesStore.seenAchievementIds.value)
 
@@ -1368,9 +1348,9 @@ class AuthViewModelTest {
         advanceUntilIdle()
 
         assertNull(cleanup.cleanupIncomplete.value)
-        assertEquals("toeic_600", preferencesStore.defaultDifficulty.value)
-        assertEquals(1.0, preferencesStore.defaultPlaybackSpeed.value, 0.0)
-        assertEquals(3, preferencesStore.weeklyGoalEpisodes.value)
+        assertEquals(Difficulty.TOEIC_600, preferencesStore.defaultDifficulty.value)
+        assertEquals(PlaybackSpeed.DEFAULT, preferencesStore.defaultPlaybackSpeed.value)
+        assertEquals(WeeklyGoal.DEFAULT, preferencesStore.weeklyGoalEpisodes.value)
         assertEquals(emptySet<String>(), preferencesStore.seenAchievementIds.value)
     }
 

@@ -75,6 +75,13 @@ data class EffectTypeCatalog(
                     propertyReads = emptySet(),
                 ),
                 PortRow(
+                    port = "PreferencesApi",
+                    interfaces = setOf("com.rioikeda.newslisten.preferences.app.PreferencesApi"),
+                    writes = setOf("updateDefaultDifficulty", "updateDefaultPlaybackSpeed", "updateWeeklyGoalEpisodes"),
+                    sequenceReads = setOf("fetchPreferences"),
+                    propertyReads = emptySet(),
+                ),
+                PortRow(
                     port = "PreferencesStore",
                     interfaces = setOf("com.rioikeda.newslisten.preferences.PreferencesStore"),
                     writes = setOf(
@@ -142,6 +149,7 @@ data class EffectTypeCatalog(
             ),
             hooks = listOf(
                 HookRow("AuthViewModel#onSubjectLeave", HookKind.WRITE, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
+                HookRow("AuthViewModel#onSessionRestored", HookKind.WRITE, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("AuthViewModel#onAuthenticated", HookKind.WRITE, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("PasskeyLoginViewModel#onLoginSuccess", HookKind.WRITE, HookShape.SUSPEND_ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow(
@@ -158,6 +166,7 @@ data class EffectTypeCatalog(
                 HookRow("SettingsViewModel#isAdminProvider", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("PlaybackCoordinator#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("OfflineLibrary#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
+                HookRow("PreferencesSync#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("AuthViewModel#onSubjectResolved", HookKind.WRITE, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("VocabularyTestViewModel#shuffle", HookKind.READ, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("FcmTokenRegistrar#tokenProvider", HookKind.READ, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),

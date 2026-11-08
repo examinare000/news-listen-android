@@ -5,7 +5,6 @@ import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.SessionStore
-import com.rioikeda.newslisten.preferences.PreferencesStore
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -34,12 +33,6 @@ class AuthViewModel(
     private val sessionStore: SessionStore,
     private val dispatcher: CoroutineDispatcher,
     /**
-     * 難易度・再生速度の値の正本（フェーズ10 P10 Task3）。AuthViewModel は独自コピーを持たず、
-     * このストアの StateFlow をそのまま公開し、同期成功時にこのストアへ書き戻すのみを行う
-     * （「どちらが最新か」の二重管理を避ける設計。詳細は [PreferencesStore] のコメント参照）。
-     */
-    private val preferencesStore: PreferencesStore,
-    /**
      * 主体が離れたときに呼ぶフック（ADR-104 決定 1・3、shared-leave-01・02・07）。離脱は認証状態の遷移から導出する:
      * 直前が `Authenticated(A)` で、次が `Unauthenticated` か別主体の `Authenticated(B)` のとき、離脱主体 A を引数に
      * [sessionLock] の外で 1 回呼ぶ。トークンの破棄と新しい状態の確定は呼出より先に済んでいる。
@@ -50,6 +43,11 @@ class AuthViewModel(
      * 呼び出し元（AppContainer）が手順列として束ねて注入し、auth 層は「主体が離れた」という事実だけを知る。
      */
     private val onSubjectLeave: (Subject) -> Unit = {},
+    /**
+     * 保存済みトークンで認証が確立した事実を知らせるフック（refreshAuth の me 成功の直後・[onAuthenticated] の前に 1 回）。
+     * login・パスキーの確立では呼ばない。何をするかは呼び出し元（AppContainer）が束ねて注入し、auth 層は事実だけを知る。
+     */
+    private val onSessionRestored: suspend () -> Unit = {},
     /**
      * 認証確立時（refreshAuth の me 成功・login 成功）に追加で行うフック（フェーズ9・FCM トークン登録）。
      *
@@ -176,23 +174,6 @@ class AuthViewModel(
             }
         }
 
-    /** 値の正本は [preferencesStore]（フェーズ10 P10 Task3）。ここでは委譲するのみ。 */
-    val defaultDifficulty: StateFlow<String> = preferencesStore.defaultDifficulty
-
-    /** 値の正本は [preferencesStore]（フェーズ10 P10 Task3）。ここでは委譲するのみ。 */
-    val defaultPlaybackSpeed: StateFlow<Double> = preferencesStore.defaultPlaybackSpeed
-
-    /**
-     * 直近の preferences 同期が失敗したか（issue #164 同型。既存値は保持したまま可視化のみ行う）。
-     *
-     * WHY AuthViewModel が保持する（[PreferencesStore] に置かない）: この値は「直近の同期試行の
-     * 結果」という auth/sync フロー固有の一時的な UI シグナルであり、再起動をまたいで
-     * 永続化すべきユーザー設定値ではない（再起動後は refreshAuth() が再評価する）。
-     * PreferencesStore の契約を「値そのもの」に保つため、揮発性フラグはここに留める。
-     */
-    private val _preferencesSyncFailed = MutableStateFlow(false)
-    val preferencesSyncFailed: StateFlow<Boolean> = _preferencesSyncFailed.asStateFlow()
-
     private val _loginErrorMessage = MutableStateFlow<String?>(null)
     val loginErrorMessage: StateFlow<String?> = _loginErrorMessage.asStateFlow()
 
@@ -233,8 +214,7 @@ class AuthViewModel(
             }
             if (applied) {
                 transition?.let { announce(it, next) }
-                // 認証確立後、サーバーの preferences を同期する（失敗時は既存のローカル値を保持）。
-                syncPreferences()
+                onSessionRestored()
                 onAuthenticated()
             }
         } catch (e: ApiException.Unauthorized) {
@@ -297,22 +277,6 @@ class AuthViewModel(
             } finally {
                 retryInFlight.set(false)
             }
-        }
-    }
-
-    /**
-     * サーバーから preferences を取得し、ローカルの defaultDifficulty/defaultPlaybackSpeed を更新する。
-     * 取得失敗時は既存値を保持しつつ [preferencesSyncFailed] を立てる（issue #164）。
-     */
-    private suspend fun syncPreferences() {
-        try {
-            val preferences = apiClient.fetchPreferences()
-            preferencesStore.setDefaultDifficulty(preferences.defaultDifficulty)
-            preferencesStore.setDefaultPlaybackSpeed(preferences.defaultPlaybackSpeed)
-            preferences.weeklyGoalEpisodes?.let { preferencesStore.setWeeklyGoalEpisodes(it) }
-            _preferencesSyncFailed.value = false
-        } catch (e: ApiException) {
-            _preferencesSyncFailed.value = true
         }
     }
 

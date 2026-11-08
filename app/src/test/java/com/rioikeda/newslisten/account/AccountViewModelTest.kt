@@ -6,7 +6,6 @@ import com.rioikeda.newslisten.model.PreferencesResponse
 import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.InMemorySessionStore
-import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -48,7 +47,6 @@ class AccountViewModelTest {
             ),
             sessionStore = InMemorySessionStore(initialToken = "token-abc"),
             dispatcher = StandardTestDispatcher(testScheduler),
-            preferencesStore = InMemoryPreferencesStore(),
         )
         return viewModel
     }
@@ -84,7 +82,6 @@ class AccountViewModelTest {
             apiClient = com.rioikeda.newslisten.auth.FakeApiClient(),
             sessionStore = InMemorySessionStore(initialToken = null),
             dispatcher = StandardTestDispatcher(testScheduler),
-            preferencesStore = InMemoryPreferencesStore(),
         )
         val viewModel = newViewModel(authViewModel = authViewModel)
         authViewModel.refreshAuth()

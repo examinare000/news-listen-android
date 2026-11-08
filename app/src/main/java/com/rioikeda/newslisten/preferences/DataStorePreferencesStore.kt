@@ -10,8 +10,9 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.rioikeda.newslisten.core.Difficulty
-import com.rioikeda.newslisten.podcast.PlaybackConstants
+import com.rioikeda.newslisten.core.PlaybackSpeed
 import com.rioikeda.newslisten.preferences.domain.PreferenceItem
+import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,15 +41,15 @@ class DataStorePreferencesStore(
     scope: CoroutineScope,
 ) : PreferencesStore {
 
-    override val defaultDifficulty: StateFlow<String> = dataStore.data
+    override val defaultDifficulty: StateFlow<Difficulty> = dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
-        .map { it[KEY_DEFAULT_DIFFICULTY] ?: Difficulty.DEFAULT.code }
-        .stateIn(scope, SharingStarted.Eagerly, Difficulty.DEFAULT.code)
+        .map { Difficulty.fromCode(it[KEY_DEFAULT_DIFFICULTY]) }
+        .stateIn(scope, SharingStarted.Eagerly, Difficulty.DEFAULT)
 
-    override val defaultPlaybackSpeed: StateFlow<Double> = dataStore.data
+    override val defaultPlaybackSpeed: StateFlow<PlaybackSpeed> = dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
-        .map { it[KEY_DEFAULT_PLAYBACK_SPEED] ?: DEFAULT_PLAYBACK_SPEED }
-        .stateIn(scope, SharingStarted.Eagerly, DEFAULT_PLAYBACK_SPEED)
+        .map { prefs -> prefs[KEY_DEFAULT_PLAYBACK_SPEED]?.let(PlaybackSpeed::of) ?: PlaybackSpeed.DEFAULT }
+        .stateIn(scope, SharingStarted.Eagerly, PlaybackSpeed.DEFAULT)
 
     override val articleOpenMode: StateFlow<ArticleOpenMode> = dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
@@ -70,22 +71,22 @@ class DataStorePreferencesStore(
         .map { it[KEY_HAPTICS_ENABLED] ?: true }
         .stateIn(scope, SharingStarted.Eagerly, true)
 
-    override val weeklyGoalEpisodes: StateFlow<Int> = dataStore.data
+    override val weeklyGoalEpisodes: StateFlow<WeeklyGoal> = dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
-        .map { it[KEY_WEEKLY_GOAL_EPISODES] ?: DEFAULT_WEEKLY_GOAL_EPISODES }
-        .stateIn(scope, SharingStarted.Eagerly, DEFAULT_WEEKLY_GOAL_EPISODES)
+        .map { prefs -> prefs[KEY_WEEKLY_GOAL_EPISODES]?.let(WeeklyGoal::of) ?: WeeklyGoal.DEFAULT }
+        .stateIn(scope, SharingStarted.Eagerly, WeeklyGoal.DEFAULT)
 
     override val seenAchievementIds: StateFlow<Set<String>> = dataStore.data
         .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
         .map { it[KEY_SEEN_ACHIEVEMENT_IDS].orEmpty() }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
-    override suspend fun setDefaultDifficulty(code: String) {
-        dataStore.edit { it[KEY_DEFAULT_DIFFICULTY] = code }
+    override suspend fun setDefaultDifficulty(difficulty: Difficulty) {
+        dataStore.edit { it[KEY_DEFAULT_DIFFICULTY] = difficulty.code }
     }
 
     override suspend fun setDefaultPlaybackSpeed(speed: Double) {
-        if (!PlaybackConstants.isSelectableSpeed(speed)) return
+        if (PlaybackSpeed.of(speed) == null) return
         dataStore.edit { it[KEY_DEFAULT_PLAYBACK_SPEED] = speed }
     }
 
@@ -106,6 +107,7 @@ class DataStorePreferencesStore(
     }
 
     override suspend fun setWeeklyGoalEpisodes(episodes: Int) {
+        if (WeeklyGoal.of(episodes) == null) return
         dataStore.edit { it[KEY_WEEKLY_GOAL_EPISODES] = episodes }
     }
 
@@ -127,8 +129,6 @@ class DataStorePreferencesStore(
     }
 
     private companion object {
-        const val DEFAULT_PLAYBACK_SPEED = 1.0
-        const val DEFAULT_WEEKLY_GOAL_EPISODES = 3
         val KEY_DEFAULT_DIFFICULTY = stringPreferencesKey("default_difficulty")
         val KEY_DEFAULT_PLAYBACK_SPEED = doublePreferencesKey("default_playback_speed")
         val KEY_ARTICLE_OPEN_MODE = stringPreferencesKey("article_open_mode")
