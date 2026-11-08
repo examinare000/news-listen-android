@@ -9,7 +9,6 @@ import com.rioikeda.newslisten.engagement.ListeningStreakStore
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.NetworkMonitoring
 import com.rioikeda.newslisten.network.PodcastApi
-import com.rioikeda.newslisten.podcast.NowPlaying
 import com.rioikeda.newslisten.podcast.OfflineLibrary
 import com.rioikeda.newslisten.podcast.PlaybackConstants
 import com.rioikeda.newslisten.podcast.PlaybackFailureReason
@@ -42,19 +41,23 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * 再生の command の入口。引数の型は画面が今使っている型のまま（id の command は後続の slice）。
+ * 再生の command の入口。エピソードは id で受け、解決は [EpisodeLookup] が行う（未知の id は何もしない: android-dec-64）。
  * 戻り値は無い。
  */
 interface PlaybackCommands {
-    suspend fun playNow(podcast: Episode)
+    suspend fun playNow(episodeId: String)
 
-    suspend fun playNext(podcast: Episode)
+    suspend fun playNext(episodeId: String)
 
-    suspend fun addToQueue(podcast: Episode)
+    suspend fun addToQueue(episodeId: String)
 
-    suspend fun removeFromQueue(id: String)
+    suspend fun removeFromQueue(episodeId: String)
 
-    suspend fun moveUpNext(from: Int, toOffset: Int)
+    /** 待機列の中で 1 つ前へ動かす。先頭と待機列に無い id では何もしない。 */
+    suspend fun moveUp(episodeId: String)
+
+    /** 待機列の中で 1 つ後ろへ動かす。末尾と待機列に無い id では何もしない。 */
+    suspend fun moveDown(episodeId: String)
 
     fun togglePlayPause()
 
@@ -76,6 +79,9 @@ interface PlaybackCommands {
 /** 再生の query の入口。読むだけで、書かない。 */
 interface PlaybackQueries {
     val nowPlaying: StateFlow<NowPlaying?>
+
+    /** 画面が読むキューのリードモデル。読んだ時点の [PlaybackCoordinator.queue] と [nowPlaying] から導く。 */
+    val queueView: StateFlow<QueueView>
 
     /** `state` が再生中のときだけ真。読んだ時点の `state` から導く。 */
     val isPlaying: StateFlow<Boolean>
@@ -115,6 +121,7 @@ class PlaybackCoordinator(
     private val listeningStreakStore: ListeningStreakStore?,
     private val dispatcher: CoroutineDispatcher,
     private val currentSubject: () -> String?,
+    private val episodeLookup: EpisodeLookup,
 ) : PlaybackCommands, PlaybackQueries {
     // 位置同期タイマー（15秒毎）を動かすための内部スコープ。suspend 関数の呼び出しを跨いで生存する必要があるため、
     // Coordinator 自身が Dispatcher から生成して保持する（呼び出し元の寿命に委ねると、返った時点でキャンセルされる）。
@@ -203,13 +210,38 @@ class PlaybackCoordinator(
         }
     }
 
+    override val queueView: StateFlow<QueueView> =
+        derived(combine(_queue, _nowPlaying) { queue, nowPlaying -> buildQueueView(queue, nowPlaying) }) {
+            buildQueueView(_queue.value, _nowPlaying.value)
+        }
+
+    /** [nowPlaying] が null のときは区画も null（android-dec-67）。最上位の関数にすると台帳の列挙に出るため、メンバーに置く。 */
+    private fun buildQueueView(queue: PlaybackQueue<Episode>, nowPlaying: NowPlaying?): QueueView {
+        val current = if (nowPlaying == null) null else queue.current
+        val upNext = queue.upNext
+        return QueueView(
+            nowPlaying = current?.let { QueueEntry(it.id, it.japaneseIntroText, it.difficultyCode, it.durationSeconds) },
+            upNext = upNext.mapIndexed { index, episode ->
+                UpNextEntry(
+                    episodeId = episode.id,
+                    displayTitle = episode.japaneseIntroText,
+                    difficultyCode = episode.difficultyCode,
+                    durationSeconds = episode.durationSeconds,
+                    canMoveUp = index > 0,
+                    canMoveDown = index < upNext.size - 1,
+                )
+            },
+            upNextCount = upNext.size,
+        )
+    }
+
     /**
-     * 画面側の自前の失敗 [own] と再生の失敗を合成する（自前が非 null ならそれ）。`.value` は読んだ時点で計算し、
-     * `collect` は合成の値の変化を出す。最上位の関数にすると台帳の列挙に出るため、メンバーに置く。
+     * 画面側の自前の失敗 [own]・取得の失敗 [catalog]・再生の失敗を合成する（優先は own > catalog > 再生）。
+     * `.value` は読んだ時点で計算し、`collect` は合成の値の変化を出す。最上位の関数にすると台帳の列挙に出るため、メンバーに置く。
      */
-    internal fun errorMessageOver(own: StateFlow<String?>): StateFlow<String?> =
-        derived(combine(own, errorMessage) { ownMessage, playbackMessage -> ownMessage ?: playbackMessage }) {
-            own.value ?: errorMessage.value
+    internal fun errorMessageOver(own: StateFlow<String?>, catalog: StateFlow<String?>): StateFlow<String?> =
+        derived(combine(own, catalog, errorMessage) { ownMessage, catalogMessage, playbackMessage -> ownMessage ?: catalogMessage ?: playbackMessage }) {
+            own.value ?: catalog.value ?: errorMessage.value
         }
 
     /** 開始の要求の出どころ。出どころで、開始前の失敗の扱いと確定時に使う辺が変わる。 */
@@ -225,9 +257,15 @@ class PlaybackCoordinator(
      * キュー内に既にあればそこへジャンプ、無ければ現在の次に挿入してジャンプする（利用者が組んだ待機列を保つ）。
      * 正本: PodcastViewModel.swift:283-292（playNow）。
      */
-    override suspend fun playNow(podcast: Episode): Unit = withContext(dispatcher) {
+    override suspend fun playNow(episodeId: String): Unit = withContext(dispatcher) {
+        // 解決は世代を進める前に行う: 未知の id が待っている自動の前進を捨てさせないため。
+        val episode = episodeLookup.find(episodeId) ?: return@withContext
+        startManually(episode)
+    }
+
+    private suspend fun startManually(episode: Episode) {
         userStartGeneration++
-        startEpisode(podcast, StartTrigger.MANUAL, leaveGeneration, userStartGeneration)
+        startEpisode(episode, StartTrigger.MANUAL, leaveGeneration, userStartGeneration)
     }
 
     /**
@@ -499,20 +537,22 @@ class PlaybackCoordinator(
      * 現在の次に割り込む（「次に再生」）。何も再生していなければ即再生する。
      * 正本: PodcastViewModel.swift:303-310（playNext）。
      */
-    override suspend fun playNext(podcast: Episode): Unit = withContext(dispatcher) {
+    override suspend fun playNext(episodeId: String): Unit = withContext(dispatcher) {
+        val episode = episodeLookup.find(episodeId) ?: return@withContext
         val nothingPlaying = _session.value is PlaybackSession.NothingPlaying
-        _queue.value = _queue.value.playNext(podcast)
-        if (nothingPlaying) playNow(podcast)
+        _queue.value = _queue.value.playNext(episode)
+        if (nothingPlaying) startManually(episode)
     }
 
     /**
      * キュー末尾に追加する（「キューに追加」）。何も再生していなければ即再生する。
      * 正本: PodcastViewModel.swift:294-301（addToQueue）。
      */
-    override suspend fun addToQueue(podcast: Episode): Unit = withContext(dispatcher) {
+    override suspend fun addToQueue(episodeId: String): Unit = withContext(dispatcher) {
+        val episode = episodeLookup.find(episodeId) ?: return@withContext
         val nothingPlaying = _session.value is PlaybackSession.NothingPlaying
-        _queue.value = _queue.value.add(podcast)
-        if (nothingPlaying) playNow(podcast)
+        _queue.value = _queue.value.add(episode)
+        if (nothingPlaying) startManually(episode)
     }
 
     /**
@@ -523,22 +563,29 @@ class PlaybackCoordinator(
      * 仮に現在再生中の id を渡しても、キューモデル上は次の要素が currentIndex に昇格するだけで、
      * [nowPlaying]/実再生は不変（iOS 忠実写像）。
      *
-     * WHY suspend + withContext(dispatcher): [moveUpNext] と同じくロストアップデート防止のため
+     * WHY suspend + withContext(dispatcher): [moveUp] と同じくロストアップデート防止のため
      * 他のキュー変更操作と同じ直列化規律に揃える。
      */
-    override suspend fun removeFromQueue(id: String): Unit = withContext(dispatcher) {
-        _queue.value = _queue.value.remove(id)
+    override suspend fun removeFromQueue(episodeId: String): Unit = withContext(dispatcher) {
+        _queue.value = _queue.value.remove(episodeId)
     }
 
     /**
-     * 待機列（upNext）を並べ替える。`toOffset` は削除前オフセット方式（SwiftUI `onMove` 規約）。
-     * 正本: PodcastViewModel.swift:317-320（moveUpNext）。
+     * 待機列（upNext）の中で 1 つ前へ動かす。位置は id から引き、`toOffset` は削除前オフセット方式（SwiftUI `onMove` 規約）で渡す。
      *
      * WHY suspend + withContext(dispatcher): 連打で複数の呼び出しが並行に _queue.value を読み書きすると、
      * 片方の更新がもう片方に上書きされて消える（ロストアップデート）ため、他のキュー変更操作と同じ直列化規律に揃える。
      */
-    override suspend fun moveUpNext(from: Int, toOffset: Int): Unit = withContext(dispatcher) {
-        _queue.value = _queue.value.moveUpNext(from, toOffset)
+    override suspend fun moveUp(episodeId: String): Unit = withContext(dispatcher) {
+        val from = _queue.value.upNext.indexOfFirst { it.id == episodeId }
+        if (from > 0) _queue.value = _queue.value.moveUpNext(from, from - 1)
+    }
+
+    /** 待機列（upNext）の中で 1 つ後ろへ動かす（削除前オフセットは `from + 2`）。直列化の理由は [moveUp] と同じ。 */
+    override suspend fun moveDown(episodeId: String): Unit = withContext(dispatcher) {
+        val upNext = _queue.value.upNext
+        val from = upNext.indexOfFirst { it.id == episodeId }
+        if (from in 0 until upNext.size - 1) _queue.value = _queue.value.moveUpNext(from, from + 2)
     }
 
     /** 再生中なら一時停止し、停止中なら再生を再開する。 */

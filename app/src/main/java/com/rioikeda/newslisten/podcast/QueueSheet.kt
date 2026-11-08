@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
@@ -30,9 +30,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rioikeda.newslisten.R
-import com.rioikeda.newslisten.core.PlaybackQueue
 import com.rioikeda.newslisten.designsystem.DSSpacing
-import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.podcast.app.QueueEntry
+import com.rioikeda.newslisten.podcast.app.UpNextEntry
 import kotlinx.coroutines.launch
 
 /**
@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
  * 各行に上下移動ボタンを配置している。同じ行にスワイプ削除を共存させると、
  * 上下ボタンのタップ操作とスワイプジェスチャが干渉しうるため、削除も同じボタン方式に揃えて
  * ジェスチャ競合を避ける。
- * moveUpNext は SwiftUI onMove 規約（削除前オフセット方式）に準拠する。
+ * 並べ替えの位置の計算（SwiftUI onMove 規約の削除前オフセット）と可否の判定は Coordinator とリードモデルが持つ。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,7 +54,7 @@ fun QueueSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val queue by viewModel.queue.collectAsState()
+    val queueView by viewModel.queueView.collectAsState()
     val nowPlaying by viewModel.nowPlaying.collectAsState()
     val scope = rememberCoroutineScope()
 
@@ -79,8 +79,9 @@ fun QueueSheet(
                 .fillMaxWidth()
                 .padding(innerPadding)
         ) {
-            // 再生中セクション（nowPlaying があるときのみ表示。shared-inv-01 により queue.current も揃う）
-            if (nowPlaying != null) {
+            // 再生中セクション（nowPlaying があるときのみ表示。QueueView.nowPlaying は nowPlaying が null のとき null）
+            val current = queueView.nowPlaying
+            if (nowPlaying != null && current != null) {
                 item {
                     Text(
                         text = stringResource(R.string.queue_section_now_playing),
@@ -93,7 +94,7 @@ fun QueueSheet(
                     )
                 }
                 item {
-                    queue.current?.let { QueueRow(podcast = it) }
+                    QueueRow(entry = current)
                 }
             }
 
@@ -110,7 +111,7 @@ fun QueueSheet(
                 )
             }
 
-            if (queue.upNext.isEmpty()) {
+            if (queueView.upNext.isEmpty()) {
                 item {
                     Text(
                         text = stringResource(R.string.queue_empty),
@@ -123,23 +124,17 @@ fun QueueSheet(
                     )
                 }
             } else {
-                itemsIndexed(queue.upNext) { index, podcast ->
+                items(queueView.upNext) { entry ->
                     QueueUpNextRow(
-                        podcast = podcast,
-                        index = index,
-                        totalCount = queue.upNext.size,
+                        entry = entry,
                         onDelete = {
-                            scope.launch { viewModel.removeFromQueue(podcast.id) }
+                            scope.launch { viewModel.removeFromQueue(entry.episodeId) }
                         },
                         onMoveUp = {
-                            // 上へ移動: from = index, toOffset = index - 1
-                            // PlaybackQueue.moveUpNext の KDoc §2.7 参照：削除前オフセット方式
-                            scope.launch { viewModel.moveUpNext(index, index - 1) }
+                            scope.launch { viewModel.moveUp(entry.episodeId) }
                         },
                         onMoveDown = {
-                            // 下へ移動: from = index, toOffset = index + 2
-                            // (SwiftUI onMove semantics: toOffset は削除前の位置系)
-                            scope.launch { viewModel.moveUpNext(index, index + 2) }
+                            scope.launch { viewModel.moveDown(entry.episodeId) }
                         }
                     )
                 }
@@ -152,7 +147,7 @@ fun QueueSheet(
  * 再生中のエピソード行（タイトル＝日本語イントロ要約・難易度・長さ）。
  */
 @Composable
-private fun QueueRow(podcast: Episode) {
+private fun QueueRow(entry: QueueEntry) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -163,14 +158,14 @@ private fun QueueRow(podcast: Episode) {
         verticalArrangement = Arrangement.spacedBy(DSSpacing.xs)
     ) {
         Text(
-            text = podcast.japaneseIntroText,
+            text = entry.displayTitle,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onBackground,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = "${podcast.difficultyCode} · ${formatDuration(podcast.durationSeconds)}",
+            text = "${entry.difficultyCode} · ${formatDuration(entry.durationSeconds)}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -185,15 +180,11 @@ private fun QueueRow(podcast: Episode) {
 /**
  * 再生待ち行（上下ボタン・削除ボタン付き）。
  * WHY 上下ボタン方式：Compose に reorderable ライブラリがないため、
- * 各行に ▲▼ ボタンを配置して moveUpNext を手動呼び出しする。
- * SwiftUI onMove の削除前オフセット方式に準拠し、上移動は (i, i-1)、
- * 下移動は (i, i+2) を指定する（PlaybackQueue.moveUpNext の KDoc §2.7 参照）。
+ * 各行に ▲▼ ボタンを配置し、id で moveUp・moveDown を呼ぶ。有効・無効は UpNextEntry の canMoveUp・canMoveDown に従う。
  */
 @Composable
 private fun QueueUpNextRow(
-    podcast: Episode,
-    index: Int,
-    totalCount: Int,
+    entry: UpNextEntry,
     onDelete: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -217,14 +208,14 @@ private fun QueueUpNextRow(
                 verticalArrangement = Arrangement.spacedBy(DSSpacing.xs)
             ) {
                 Text(
-                    text = podcast.japaneseIntroText,
+                    text = entry.displayTitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${podcast.difficultyCode} · ${formatDuration(podcast.durationSeconds)}",
+                    text = "${entry.difficultyCode} · ${formatDuration(entry.durationSeconds)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -238,13 +229,13 @@ private fun QueueUpNextRow(
                 // 上へ移動ボタン（最上行は無効化）
                 IconButton(
                     onClick = onMoveUp,
-                    enabled = index > 0,
+                    enabled = entry.canMoveUp,
                     modifier = Modifier.padding(0.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.KeyboardArrowUp,
                         contentDescription = stringResource(R.string.queue_move_up_description),
-                        tint = if (index > 0) {
+                        tint = if (entry.canMoveUp) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
@@ -255,13 +246,13 @@ private fun QueueUpNextRow(
                 // 下へ移動ボタン（最下行は無効化）
                 IconButton(
                     onClick = onMoveDown,
-                    enabled = index < totalCount - 1,
+                    enabled = entry.canMoveDown,
                     modifier = Modifier.padding(0.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.KeyboardArrowDown,
                         contentDescription = stringResource(R.string.queue_move_down_description),
-                        tint = if (index < totalCount - 1) {
+                        tint = if (entry.canMoveDown) {
                             MaterialTheme.colorScheme.primary
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant

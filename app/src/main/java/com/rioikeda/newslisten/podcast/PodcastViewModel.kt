@@ -1,21 +1,31 @@
 package com.rioikeda.newslisten.podcast
 
-import com.rioikeda.newslisten.catalog.domain.Episode
-import com.rioikeda.newslisten.core.PlaybackQueue
+import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
+import com.rioikeda.newslisten.catalog.app.EpisodeRow
 import com.rioikeda.newslisten.model.QuizAnswerRequest
 import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
-import com.rioikeda.newslisten.network.PodcastApi
+import com.rioikeda.newslisten.podcast.app.NowPlaying
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
+import com.rioikeda.newslisten.podcast.app.QueueView
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** 一覧の 1 行に「再生中か」を付けた画面の値。突き合わせは [PodcastViewModel.episodes] の 1 箇所だけで行う。 */
+data class EpisodeListItem(val row: EpisodeRow, val isNowPlaying: Boolean)
 
 /**
  * Podcast タブの画面の状態と中継を担う ViewModel（presentation。android-dec-09）。
@@ -26,13 +36,13 @@ import kotlinx.coroutines.withContext
  * Dispatcher をコンストラクタ注入する（viewModelScope 直書きだと Dispatcher をテストで
  * 差し替えられず TDD が回せないため）。
  *
- * 再生の手順は [PlaybackCoordinator] が持ち、再生の操作と読みはそこへ中継する。ここで持つのは
- * 一覧（[fetchPodcasts]）・学習の中継・ダウンロードの中継と、それらの失敗の文言だけ。
+ * 再生の手順は [PlaybackCoordinator]、一覧の取得は [EpisodeCatalog] が持ち、操作と読みはそこへ中継する。
+ * ここで持つのは一覧への「再生中」の付与・学習の中継・ダウンロードの中継と、それらの失敗の文言だけ。
  */
 class PodcastViewModel(
-    private val podcastApi: PodcastApi,
     private val apiClient: ApiClient,
     private val coordinator: PlaybackCoordinator,
+    private val catalog: EpisodeCatalog,
     private val offlineLibrary: OfflineLibrary,
     private val dispatcher: CoroutineDispatcher,
 ) {
@@ -51,20 +61,26 @@ class PodcastViewModel(
     /** [PlaybackCoordinator.playbackSpeed] の中継。 */
     val playbackSpeed: StateFlow<Float> = coordinator.playbackSpeed
 
-    private val _podcasts = MutableStateFlow<List<Episode>>(emptyList())
-    val podcasts: StateFlow<List<Episode>> = _podcasts.asStateFlow()
+    /**
+     * 一覧の各行に、再生中かを付けたもの。読んだ時点の [EpisodeCatalog.episodes] と [PlaybackCoordinator.nowPlaying] を突き合わせる。
+     * 別の coroutine へ写すと書込の直後の同期の読みが遅れるため、値は保存しない（android-dec-59 (e)）。
+     */
+    val episodes: StateFlow<List<EpisodeListItem>> =
+        derived(combine(catalog.episodes, coordinator.nowPlaying) { rows, nowPlaying -> withNowPlaying(rows, nowPlaying) }) {
+            withNowPlaying(catalog.episodes.value, coordinator.nowPlaying.value)
+        }
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    /** [EpisodeCatalog.isLoading] の中継。 */
+    val isLoading: StateFlow<Boolean> = catalog.isLoading
 
-    // 自前の失敗（一覧の取得・語彙の登録・ダウンロードの中継）。再生に由来する失敗は coordinator が持つ（android-dec-59）。
+    // 自前の失敗（語彙の登録・ダウンロードの中継）。取得の失敗は catalog、再生に由来する失敗は coordinator が持つ（android-dec-59・android-dec-63）。
     private val _errorMessage = MutableStateFlow<String?>(null)
 
-    /** 自前の失敗が非 null ならそれ、null なら再生の失敗。2 つの持ち主の値を保存せず、読むたびに合成する。 */
-    val errorMessage: StateFlow<String?> = coordinator.errorMessageOver(_errorMessage.asStateFlow())
+    /** 優先は自前 > 取得 > 再生。3 つの持ち主の値を保存せず、読むたびに合成する。 */
+    val errorMessage: StateFlow<String?> = coordinator.errorMessageOver(_errorMessage.asStateFlow(), catalog.errorMessage)
 
-    /** 現在再生中のものの正本。[PlaybackCoordinator.session] の中継（テストの oracle）。 */
-    val session: StateFlow<PlaybackSession> = coordinator.session
+    /** [PlaybackCoordinator.queueView] の中継。 */
+    val queueView: StateFlow<QueueView> = coordinator.queueView
 
     /** 何が再生中かの読み取り用の値。NothingPlaying と Errored では null。 */
     val nowPlaying: StateFlow<NowPlaying?> = coordinator.nowPlaying
@@ -81,28 +97,22 @@ class PodcastViewModel(
     private val _savingVocabularyKeys = MutableStateFlow<Set<String>>(emptySet())
     val savingVocabularyKeys: StateFlow<Set<String>> = _savingVocabularyKeys.asStateFlow()
 
-    /**
-     * 再生キュー（連続再生・プレイリスト / issue #81 相当）。UI は current/upNext を購読する。[PlaybackCoordinator.queue] の中継。
-     * 正本: ios/NewsListenApp/NewsListenApp/Podcast/PodcastViewModel.swift:270-320。
-     */
-    val queue: StateFlow<PlaybackQueue<Episode>> = coordinator.queue
-
-    /**
-     * Podcast 一覧を取得して [podcasts] を更新する。失敗時は [errorMessage] に反映する。
-     * 開始で消すのは自前の失敗だけで、再生の失敗は消さない（android-dec-59 (d)）。
-     * 正本: PodcastViewModel.swift:99-110（loadPodcasts）。
-     */
-    suspend fun fetchPodcasts(): Unit = withContext(dispatcher) {
-        _isLoading.value = true
-        _errorMessage.value = null
-        try {
-            _podcasts.value = podcastApi.fetchPodcasts()
-            offlineLibrary.syncDownloadedState(_podcasts.value)
-        } catch (e: ApiException) {
-            _errorMessage.value = e.message
+    /** 読んだ時点で [read] を計算する [StateFlow]。[collect] は最初の値と、変わった値を出す。メンバー関数にして台帳の列挙に出さない。 */
+    @OptIn(ExperimentalForInheritanceCoroutinesApi::class)
+    private fun <T> derived(flow: Flow<T>, read: () -> T): StateFlow<T> = object : StateFlow<T> {
+        override val value: T get() = read()
+        override val replayCache: List<T> get() = listOf(read())
+        override suspend fun collect(collector: FlowCollector<T>): Nothing {
+            flow.distinctUntilChanged().collect(collector)
+            awaitCancellation()
         }
-        _isLoading.value = false
     }
+
+    private fun withNowPlaying(rows: List<EpisodeRow>, nowPlaying: NowPlaying?): List<EpisodeListItem> =
+        rows.map { EpisodeListItem(it, it.episodeId == nowPlaying?.episodeId) }
+
+    /** Podcast 一覧の取得を [EpisodeCatalog] へ中継する。失敗は [errorMessage] に出る。 */
+    suspend fun fetchPodcasts(): Unit = catalog.refresh()
 
     /** 語彙グロッサリの習得済み表示用。失敗してもPodcast本体の利用を妨げない。 */
     suspend fun loadVocabularyRegistrations(): Unit = withContext(dispatcher) {
@@ -142,9 +152,9 @@ class PodcastViewModel(
      * 中継と失敗の文言の写しは [scope] の上で行う。呼び手（画面の scope）はタブ移動で cancel されるが、
      * cancel は [join] を止めるだけで、中継の戻りの後に [errorMessage] へ写す処理は完走する。
      */
-    suspend fun download(podcast: Episode) {
+    suspend fun download(episodeId: String) {
         scope.launch {
-            offlineLibrary.download(podcast)
+            offlineLibrary.download(episodeId)
             relayDownloadError()
         }.join()
     }
@@ -166,19 +176,22 @@ class PodcastViewModel(
     suspend fun retry(): Unit = coordinator.retry()
 
     /** このエピソードを今すぐ再生する（一覧タップの導線）。正本: PodcastViewModel.swift:283-292（playNow）。 */
-    suspend fun playNow(podcast: Episode): Unit = coordinator.playNow(podcast)
+    suspend fun playNow(episodeId: String): Unit = coordinator.playNow(episodeId)
 
     /** 現在の次に割り込む（「次に再生」）。正本: PodcastViewModel.swift:303-310（playNext）。 */
-    suspend fun playNext(podcast: Episode): Unit = coordinator.playNext(podcast)
+    suspend fun playNext(episodeId: String): Unit = coordinator.playNext(episodeId)
 
     /** キュー末尾に追加する（「キューに追加」）。正本: PodcastViewModel.swift:294-301（addToQueue）。 */
-    suspend fun addToQueue(podcast: Episode): Unit = coordinator.addToQueue(podcast)
+    suspend fun addToQueue(episodeId: String): Unit = coordinator.addToQueue(episodeId)
 
     /** キューから取り除く。正本: PodcastViewModel.swift:313-315（removeFromQueue）。 */
-    suspend fun removeFromQueue(id: String): Unit = coordinator.removeFromQueue(id)
+    suspend fun removeFromQueue(episodeId: String): Unit = coordinator.removeFromQueue(episodeId)
 
-    /** 待機列（upNext）を並べ替える。正本: PodcastViewModel.swift:317-320（moveUpNext）。 */
-    suspend fun moveUpNext(from: Int, toOffset: Int): Unit = coordinator.moveUpNext(from, toOffset)
+    /** 待機列の中で 1 つ前へ動かす。 */
+    suspend fun moveUp(episodeId: String): Unit = coordinator.moveUp(episodeId)
+
+    /** 待機列の中で 1 つ後ろへ動かす。 */
+    suspend fun moveDown(episodeId: String): Unit = coordinator.moveDown(episodeId)
 
     /** 再生中なら一時停止し、停止中なら再生を再開する。 */
     fun togglePlayPause() = coordinator.togglePlayPause()
@@ -198,10 +211,11 @@ class PodcastViewModel(
     /** 主体の離脱での停止（shared-leave-01）。 */
     suspend fun stopForSubjectLeave(): Unit = coordinator.stopForSubjectLeave()
 
-    /** エラーメッセージをクリアする（UI の AlertDialog 閉じ時に呼ばれる）。自前の失敗と再生の失敗の両方を消す。 */
+    /** エラーメッセージをクリアする（UI の AlertDialog 閉じ時に呼ばれる）。3 つの持ち主の失敗をすべて消す。 */
     fun clearError() {
-        // 再生の失敗を先に消す: 自前を先に消すと、隠れていた再生の失敗が一瞬だけ見える。
+        // 優先の低い順に消す: 優先の高い自前を先に消すと、隠れていた失敗が一瞬だけ見える。
         coordinator.clearError()
+        catalog.clearError()
         _errorMessage.value = null
     }
 

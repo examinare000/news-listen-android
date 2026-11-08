@@ -8,6 +8,7 @@ import com.rioikeda.newslisten.account.accountViewModelQueryProbes
 import com.rioikeda.newslisten.account.sessionsViewModelQueryProbes
 import com.rioikeda.newslisten.auth.authViewModelQueryProbes
 import com.rioikeda.newslisten.auth.subjectCleanupQueryProbes
+import com.rioikeda.newslisten.catalog.episodeCatalogQueryProbes
 import com.rioikeda.newslisten.engagement.ApiListeningStreakStore
 import com.rioikeda.newslisten.engagement.apiListeningStreakStoreQueryProbes
 import com.rioikeda.newslisten.feed.feedViewModelQueryProbes
@@ -52,6 +53,7 @@ internal val registeredQueryProbeSets: List<QueryProbeSet> = listOf(
     offlineLibraryQueryProbes,
     subjectCleanupQueryProbes,
     playbackCoordinatorQueryProbes,
+    episodeCatalogQueryProbes,
 )
 
 internal fun productionCheckInput(probeSets: List<QueryProbeSet> = registeredQueryProbeSets): CheckInput = CheckInput(
@@ -183,7 +185,7 @@ class QueryEffectCoverageTest {
             "PodcastViewModel", "AuthViewModel", "AccountViewModel", "SessionsViewModel",
             "PasskeyCredentialsViewModel", "PasskeyLoginViewModel", "PasskeyRegistrationViewModel",
             "FeedViewModel", "LearningViewModel", "VocabularyTestViewModel", "SettingsViewModel", "OnboardingViewModel",
-            "ApiListeningStreakStore", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator",
+            "ApiListeningStreakStore", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator", "EpisodeCatalog",
         )
 
         /** 登録 list の各 probe set を、本番の母集団・台帳・分類表で 1 回ずつ run した結果。 */
@@ -202,7 +204,7 @@ class QueryEffectCoverageTest {
     // ---- 本番の probe の網羅と配線 ----
 
     @Test(timeout = 600_000)
-    fun 登録listは12のViewModelとApiListeningStreakStoreとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorを網羅し配線の違反なしで実行できる() {
+    fun 登録listは12のViewModelとApiListeningStreakStoreとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
         val registered = registeredQueryProbeSets.map { it.owner }
         assertEquals("登録された probe set の所有者", owners.sorted(), registered.sorted())
 

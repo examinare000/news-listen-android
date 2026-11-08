@@ -159,10 +159,9 @@ class ArchitectureStructureTest {
 
     @Test
     fun android_check_01_型単位の行NowPlayingが宣言のファイルと一致する() {
-        // verifies: CI-13 / T-08（NowPlaying が main に現れるまで skip）
+        // verifies: CI-13 / T-08
         val row = LayerMap.typeRows.single { it.type == "NowPlaying" }
         val declaredIn = ArchitectureScanner.topLevelDeclarationFile(mainSources, "NowPlaying")
-        assumeTrue("NowPlaying が main に無い（${row.owner} が足す）", declaredIn != null)
 
         assertEquals(
             "NowPlaying の宣言のファイルが型単位の行と違う: 宣言=$declaredIn、行=${row.file}",

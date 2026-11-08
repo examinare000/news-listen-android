@@ -47,18 +47,18 @@ import com.rioikeda.newslisten.designsystem.DSFeedback
  *
  * 正本: ios/NewsListenApp/NewsListenApp/Podcast/PodcastView.swift のミラー。
  * - 読み込み中 / 空 / 一覧 の3状態を出し分ける。
- * - 行タップで viewModel.playNow(podcast) を呼ぶ。
+ * - 行タップで viewModel.playNow(episodeId) を呼ぶ。
  * - 長押しで次に再生 / キューに追加メニューを表示する。
  * - nowPlaying が存在するときのみ AudioPlayerSection を表示する。
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
-    val podcasts by viewModel.podcasts.collectAsState()
+    val episodes by viewModel.episodes.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val nowPlaying by viewModel.nowPlaying.collectAsState()
-    val queue by viewModel.queue.collectAsState()
+    val queueView by viewModel.queueView.collectAsState()
     val downloadingIds by viewModel.downloadingIds.collectAsState()
     val downloadedIds by viewModel.downloadedIds.collectAsState()
     val scope = rememberCoroutineScope()
@@ -81,9 +81,9 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
             IconButton(onClick = { showQueue = true }) {
                 BadgedBox(
                     badge = {
-                        if (queue.upNext.isNotEmpty()) {
+                        if (queueView.upNextCount > 0) {
                             Badge {
-                                Text(queue.upNext.size.toString())
+                                Text(queueView.upNextCount.toString())
                             }
                         }
                     }
@@ -103,7 +103,7 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
                 .fillMaxWidth()
         ) {
             when {
-                isLoading && podcasts.isEmpty() -> {
+                isLoading && episodes.isEmpty() -> {
                     // 読み込み中
                     Column(
                         modifier = Modifier
@@ -119,7 +119,7 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
                         )
                     }
                 }
-                podcasts.isEmpty() -> {
+                episodes.isEmpty() -> {
                     // 空状態
                     Column(
                         modifier = Modifier
@@ -139,29 +139,30 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(podcasts) { podcast ->
+                        items(episodes) { item ->
+                            val row = item.row
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .combinedClickable(
                                         onClick = {
                                             scope.launch {
-                                                viewModel.playNow(podcast)
+                                                viewModel.playNow(row.episodeId)
                                             }
                                         },
                                         onLongClick = {
-                                            expandedMenuId = podcast.id
+                                            expandedMenuId = row.episodeId
                                         }
                                     )
                             ) {
                                 PodcastRowView(
-                                    podcast = podcast,
-                                    isNowPlaying = nowPlaying?.episodeId == podcast.id,
+                                    row = row,
+                                    isNowPlaying = item.isNowPlaying,
                                     downloadingIds = downloadingIds,
                                     downloadedIds = downloadedIds,
                                     onDownloadTap = {
                                         scope.launch {
-                                            viewModel.download(podcast)
+                                            viewModel.download(row.episodeId)
                                         }
                                     }
                                 )
@@ -169,14 +170,14 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
                                 // 長押しメニュー：次に再生 / キューに追加
                                 Box {
                                     DropdownMenu(
-                                        expanded = expandedMenuId == podcast.id,
+                                        expanded = expandedMenuId == row.episodeId,
                                         onDismissRequest = { expandedMenuId = null }
                                     ) {
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.podcast_play_next)) },
                                             onClick = {
                                                 scope.launch {
-                                                    viewModel.playNext(podcast)
+                                                    viewModel.playNext(row.episodeId)
                                                 }
                                                 expandedMenuId = null
                                             }
@@ -185,7 +186,7 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
                                             text = { Text(stringResource(R.string.podcast_add_to_queue)) },
                                             onClick = {
                                                 scope.launch {
-                                                    viewModel.addToQueue(podcast)
+                                                    viewModel.addToQueue(row.episodeId)
                                                 }
                                                 expandedMenuId = null
                                             }
