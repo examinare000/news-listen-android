@@ -5,6 +5,7 @@ import com.rioikeda.newslisten.architecture.fixture.cancel.SuppressTimerAndWrite
 import com.rioikeda.newslisten.architecture.fixture.overload.OverloadedLoader
 import com.rioikeda.newslisten.architecture.fixture.summary.SummaryOwner
 import com.rioikeda.newslisten.account.accountViewModelQueryProbes
+import com.rioikeda.newslisten.account.sessionQueriesQueryProbes
 import com.rioikeda.newslisten.account.sessionsViewModelQueryProbes
 import com.rioikeda.newslisten.auth.authSessionQueryProbes
 import com.rioikeda.newslisten.auth.authViewModelQueryProbes
@@ -43,6 +44,7 @@ internal val registeredQueryProbeSets: List<QueryProbeSet> = listOf(
     authSessionQueryProbes,
     accountViewModelQueryProbes,
     sessionsViewModelQueryProbes,
+    sessionQueriesQueryProbes,
     passkeyCredentialsViewModelQueryProbes,
     passkeyLoginViewModelQueryProbes,
     passkeyRegistrationViewModelQueryProbes,
@@ -185,7 +187,7 @@ class QueryEffectCoverageTest {
 
     private companion object {
         val owners = listOf(
-            "PodcastViewModel", "AuthViewModel", "AuthSession", "AccountViewModel", "SessionsViewModel",
+            "PodcastViewModel", "AuthViewModel", "AuthSession", "AccountViewModel", "SessionsViewModel", "SessionQueries",
             "PasskeyCredentialsViewModel", "PasskeyLoginViewModel", "PasskeyRegistrationViewModel",
             "FeedViewModel", "LearningViewModel", "VocabularyTestViewModel", "SettingsViewModel", "OnboardingViewModel",
             "ApiListeningStreakStore", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator", "EpisodeCatalog",
@@ -265,7 +267,7 @@ class QueryEffectCoverageTest {
 
         val expected = listOf(
             Expected("VocabularyTestViewModel#shuffle", setOf("VocabularyTestViewModel"), HookKind.READ, HookShape.ONE_ARG),
-            Expected("PasskeyLoginViewModel#onLoginSuccess", setOf("PasskeyLoginViewModel"), HookKind.WRITE, HookShape.SUSPEND_ONE_ARG),
+            Expected("PasskeyCommands#onLoginSuccess", setOf("PasskeyLoginViewModel"), HookKind.WRITE, HookShape.SUSPEND_ONE_ARG),
             Expected("FeedViewModel#onStarConfirmed", setOf("FeedViewModel"), HookKind.WRITE, HookShape.NO_ARG),
             Expected(
                 "ApiListeningStreakStore#onStreakIncreased",

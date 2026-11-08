@@ -19,11 +19,11 @@ class EffectTypeCatalogTest {
     // ---- 本番 ----
 
     @Test
-    fun 本番の分類表は12のportと21のhookを持つ() {
+    fun 本番の分類表は13のportと21のhookを持つ() {
         assertEquals(
             setOf(
                 "ApiClient", "PodcastApi", "PreferencesStore", "SessionStore", "PlayerController",
-                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi", "AuthApi",
+                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi", "AuthApi", "AccountApi",
             ),
             production.ports.map { it.port }.toSet(),
         )

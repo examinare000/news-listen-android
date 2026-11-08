@@ -1,8 +1,13 @@
 package com.rioikeda.newslisten.passkey
 
+import com.rioikeda.newslisten.account.app.AccountCommands
+import com.rioikeda.newslisten.account.app.SessionQueries
+import com.rioikeda.newslisten.account.testAuthSession
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.PasskeyCredential
 import com.rioikeda.newslisten.model.PasskeyCredentialsListResponse
+import com.rioikeda.newslisten.network.AccountApiAdapter
+import com.rioikeda.newslisten.passkey.app.PasskeyRow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -18,28 +23,42 @@ import org.junit.Test
  */
 class PasskeyCredentialsViewModelTest {
 
-    private val credential1 = PasskeyCredential(
+    /** 画面に出る値（read model）。fake には [response] で DTO に直して渡す。 */
+    private val credential1 = PasskeyRow(
         credentialId = "cred-1",
-        username = "u",
         name = "iPhone",
-        transports = listOf("internal"),
-        aaguid = null,
-        signCount = 0,
         createdAt = "2026-01-01T00:00:00+00:00",
-        lastUsedAt = null,
     )
     private val credential2 = credential1.copy(credentialId = "cred-2", name = "Pixel")
 
-    private fun TestScope.newViewModel(apiClient: FakeApiClient = FakeApiClient()): PasskeyCredentialsViewModel =
-        PasskeyCredentialsViewModel(
-            apiClient = apiClient,
+    private fun response(rows: List<PasskeyRow>) = PasskeyCredentialsListResponse(
+        rows.map {
+            PasskeyCredential(
+                credentialId = it.credentialId,
+                username = "u",
+                name = it.name,
+                transports = listOf("internal"),
+                aaguid = null,
+                signCount = 0,
+                createdAt = it.createdAt,
+                lastUsedAt = null,
+            )
+        },
+    )
+
+    private fun TestScope.newViewModel(apiClient: FakeApiClient = FakeApiClient()): PasskeyCredentialsViewModel {
+        val accountApi = AccountApiAdapter(apiClient)
+        return PasskeyCredentialsViewModel(
+            accountCommands = AccountCommands(accountApi, testAuthSession()),
+            sessionQueries = SessionQueries(accountApi),
             dispatcher = StandardTestDispatcher(testScheduler),
         )
+    }
 
     @Test
     fun loadCredentialsは取得した一覧を公開する() = runTest {
         val apiClient = FakeApiClient(
-            onListPasskeyCredentials = { PasskeyCredentialsListResponse(listOf(credential1, credential2)) },
+            onListPasskeyCredentials = { response(listOf(credential1, credential2)) },
         )
         val viewModel = newViewModel(apiClient)
 
@@ -59,14 +78,14 @@ class PasskeyCredentialsViewModelTest {
         viewModel.loadCredentials()
 
         assertEquals("パスキー一覧の取得に失敗しました", viewModel.errorMessage.value)
-        assertEquals(emptyList<PasskeyCredential>(), viewModel.credentials.value)
+        assertEquals(emptyList<PasskeyRow>(), viewModel.credentials.value)
     }
 
     @Test
     fun deleteCredentialは成功で一覧から即時除去する() = runTest {
         var deletedId: String? = null
         val apiClient = FakeApiClient(
-            onListPasskeyCredentials = { PasskeyCredentialsListResponse(listOf(credential1, credential2)) },
+            onListPasskeyCredentials = { response(listOf(credential1, credential2)) },
             onDeletePasskeyCredential = { id -> deletedId = id },
         )
         val viewModel = newViewModel(apiClient)
@@ -81,7 +100,7 @@ class PasskeyCredentialsViewModelTest {
     @Test
     fun deleteCredential失敗でerrorMessageに反映され一覧は変わらない() = runTest {
         val apiClient = FakeApiClient(
-            onListPasskeyCredentials = { PasskeyCredentialsListResponse(listOf(credential1)) },
+            onListPasskeyCredentials = { response(listOf(credential1)) },
             onDeletePasskeyCredential = { throw ApiException.NetworkError(RuntimeException("offline")) },
         )
         val viewModel = newViewModel(apiClient)
@@ -101,7 +120,7 @@ class PasskeyCredentialsViewModelTest {
             onListPasskeyCredentials = {
                 // ロード中（API 呼び出し実行中）に isLoading が true であることを検証する
                 isLoadingDuringCall = viewModel?.isLoading?.value ?: false
-                PasskeyCredentialsListResponse(emptyList())
+                response(emptyList())
             },
         )
         viewModel = newViewModel(apiClient)

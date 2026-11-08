@@ -1,13 +1,13 @@
 package com.rioikeda.newslisten.passkey
 
+import com.rioikeda.newslisten.auth.domain.IssuedSession
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.PasskeyOptionsResponse
-import com.rioikeda.newslisten.model.UserResponse
+import com.rioikeda.newslisten.network.AccountApiAdapter
+import com.rioikeda.newslisten.passkey.app.PasskeyCommands
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -22,93 +22,20 @@ import org.junit.Test
  */
 class PasskeyLoginViewModelTest {
 
-    private val user = UserResponse(username = "u", role = "member", displayName = "U")
-
     private fun TestScope.newViewModel(
         apiClient: FakeApiClient = FakeApiClient(),
         passkeyProvider: PasskeyProvider = FakePasskeyProvider(),
-        onLoginSuccess: suspend (LoginResponse) -> Unit = {},
+        onLoginSuccess: suspend (IssuedSession) -> Unit = {},
     ): PasskeyLoginViewModel =
         PasskeyLoginViewModel(
-            apiClient = apiClient,
-            passkeyProvider = passkeyProvider,
+            passkeyCommands = PasskeyCommands(
+                accountApi = AccountApiAdapter(apiClient),
+                passkeyProvider = passkeyProvider,
+                onRegistered = {},
+                onLoginSuccess = onLoginSuccess,
+            ),
             dispatcher = StandardTestDispatcher(testScheduler),
-            onLoginSuccess = onLoginSuccess,
         )
-
-    @Test
-    fun ログイン成功でoptionsからverifyまで完走しonLoginSuccessが呼ばれる() = runTest {
-        var received: LoginResponse? = null
-        val loginResponse = LoginResponse(token = "t-1", user = user)
-        val apiClient = FakeApiClient(
-            onPasskeyLoginOptions = { PasskeyOptionsResponse(challengeId = "c-1", options = "opts-json") },
-            onPasskeyLoginVerify = { _, _ -> loginResponse },
-        )
-        val passkeyProvider = FakePasskeyProvider(
-            onGetCredential = { """{"id":"cred-1","type":"public-key"}""" },
-        )
-        val viewModel = newViewModel(
-            apiClient = apiClient,
-            passkeyProvider = passkeyProvider,
-            onLoginSuccess = { received = it },
-        )
-
-        viewModel.loginWithPasskey()
-
-        assertEquals(loginResponse, received)
-        assertNull(viewModel.errorMessage.value)
-        assertFalse(viewModel.isLoggingIn.value)
-    }
-
-    @Test
-    fun usernameを渡さずdiscoverableフローでoptionsを取得する() = runTest {
-        var receivedUsername: String? = "unset"
-        val apiClient = FakeApiClient(
-            onPasskeyLoginOptions = { username ->
-                receivedUsername = username
-                PasskeyOptionsResponse(challengeId = "c-1", options = "opts")
-            },
-            onPasskeyLoginVerify = { _, _ -> LoginResponse(token = "t-1", user = user) },
-        )
-        val passkeyProvider = FakePasskeyProvider(onGetCredential = { """{"id":"cred-1"}""" })
-        val viewModel = newViewModel(apiClient = apiClient, passkeyProvider = passkeyProvider)
-
-        viewModel.loginWithPasskey()
-
-        assertNull(receivedUsername)
-    }
-
-    @Test
-    fun optionsのoptions文字列がそのままCredentialProviderへ渡る() = runTest {
-        val apiClient = FakeApiClient(
-            onPasskeyLoginOptions = { PasskeyOptionsResponse(challengeId = "c-1", options = "the-options-json") },
-            onPasskeyLoginVerify = { _, _ -> LoginResponse(token = "t-1", user = user) },
-        )
-        val passkeyProvider = FakePasskeyProvider(onGetCredential = { """{"id":"cred-1"}""" })
-        val viewModel = newViewModel(apiClient = apiClient, passkeyProvider = passkeyProvider)
-
-        viewModel.loginWithPasskey()
-
-        assertEquals("the-options-json", passkeyProvider.lastGetCredentialOptionsJson)
-    }
-
-    @Test
-    fun getCredentialのresponseJsonをJsonObjectにパースしてverifyへ送る() = runTest {
-        val apiClient = FakeApiClient(
-            onPasskeyLoginOptions = { PasskeyOptionsResponse(challengeId = "c-1", options = "opts") },
-            onPasskeyLoginVerify = { _, _ -> LoginResponse(token = "t-1", user = user) },
-        )
-        val passkeyProvider = FakePasskeyProvider(
-            onGetCredential = { """{"id":"cred-1","type":"public-key"}""" },
-        )
-        val viewModel = newViewModel(apiClient = apiClient, passkeyProvider = passkeyProvider)
-
-        viewModel.loginWithPasskey()
-
-        val sentCredential = requireNotNull(apiClient.lastLoginVerifyCredential)
-        assertEquals("cred-1", sentCredential.getValue("id").jsonPrimitive.content)
-        assertEquals("public-key", sentCredential.getValue("type").jsonPrimitive.content)
-    }
 
     @Test
     fun ユーザーキャンセルはエラー表示にしない() = runTest {

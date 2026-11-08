@@ -1,31 +1,24 @@
 package com.rioikeda.newslisten.passkey
 
-import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.model.NewsListenJson
-import com.rioikeda.newslisten.network.ApiClient
+import com.rioikeda.newslisten.passkey.app.PasskeyCommands
+import com.rioikeda.newslisten.passkey.app.PasskeyRegisterOutcome
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.jsonObject
 
 /**
  * 設定画面「パスキーを追加」フローの状態とロジックを担う ViewModel（フェーズ17 P17・issue #140）。
  *
  * 正本: backend/api/routers/passkey.py の register/options・register/verify。
  * androidx.lifecycle.ViewModel は継承しない（[com.rioikeda.newslisten.auth.AuthViewModel] と
- * 同じ設計判断）。Context/CredentialManager の実体には依存せず [PasskeyProvider] 経由で
- * セレモニーを実行する（ADR-066）。
- *
- * @param onRegistered 登録成功時に呼ぶフック（AppContainer が
- * `{ passkeyCredentialsViewModel.loadCredentials() }` を注入し、一覧に反映する）。
+ * 同じ設計判断）。セレモニーの手順と登録後の一覧の更新は [PasskeyCommands] が持つ。
+ * ここは結果から文言を選ぶだけ。
  */
 class PasskeyRegistrationViewModel(
-    private val apiClient: ApiClient,
-    private val passkeyProvider: PasskeyProvider,
+    private val passkeyCommands: PasskeyCommands,
     private val dispatcher: CoroutineDispatcher,
-    private val onRegistered: suspend () -> Unit = {},
 ) {
     private val _isRegistering = MutableStateFlow(false)
     val isRegistering: StateFlow<Boolean> = _isRegistering.asStateFlow()
@@ -43,19 +36,13 @@ class PasskeyRegistrationViewModel(
         _errorMessage.value = null
         _isRegistering.value = true
         try {
-            val options = apiClient.passkeyRegisterOptions()
-            val responseJson = passkeyProvider.createCredential(options.options)
-            val credential = NewsListenJson.parseToJsonElement(responseJson).jsonObject
-            apiClient.passkeyRegisterVerify(options.challengeId, credential)
-            onRegistered()
-        } catch (e: PasskeyCancellationException) {
-            // ユーザーがシステム UI をキャンセルしただけなので何もしない（エラー表示しない）。
-        } catch (_: ApiException.Conflict) {
-            _errorMessage.value = CONFLICT_MESSAGE
-        } catch (e: ApiException) {
-            _errorMessage.value = GENERIC_MESSAGE
-        } catch (e: PasskeyProviderException) {
-            _errorMessage.value = GENERIC_MESSAGE
+            when (passkeyCommands.registerPasskey()) {
+                // ユーザーがシステム UI をキャンセルしただけなので何も出さない。
+                PasskeyRegisterOutcome.Registered, PasskeyRegisterOutcome.Cancelled -> Unit
+                PasskeyRegisterOutcome.Conflict -> _errorMessage.value = CONFLICT_MESSAGE
+                is PasskeyRegisterOutcome.Failed, is PasskeyRegisterOutcome.ProviderFailed ->
+                    _errorMessage.value = GENERIC_MESSAGE
+            }
         } finally {
             _isRegistering.value = false
         }

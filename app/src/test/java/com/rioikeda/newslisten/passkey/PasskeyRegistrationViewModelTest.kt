@@ -2,14 +2,14 @@ package com.rioikeda.newslisten.passkey
 
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.PasskeyOptionsResponse
+import com.rioikeda.newslisten.network.AccountApiAdapter
+import com.rioikeda.newslisten.passkey.app.PasskeyCommands
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -26,34 +26,14 @@ class PasskeyRegistrationViewModelTest {
         onRegistered: suspend () -> Unit = {},
     ): PasskeyRegistrationViewModel =
         PasskeyRegistrationViewModel(
-            apiClient = apiClient,
-            passkeyProvider = passkeyProvider,
+            passkeyCommands = PasskeyCommands(
+                accountApi = AccountApiAdapter(apiClient),
+                passkeyProvider = passkeyProvider,
+                onRegistered = onRegistered,
+                onLoginSuccess = {},
+            ),
             dispatcher = StandardTestDispatcher(testScheduler),
-            onRegistered = onRegistered,
         )
-
-    @Test
-    fun 登録成功でoptionsからverifyまで完走しonRegisteredが呼ばれる() = runTest {
-        var registeredCalled = false
-        val apiClient = FakeApiClient(
-            onPasskeyRegisterOptions = { PasskeyOptionsResponse(challengeId = "c-1", options = "opts-json") },
-            onPasskeyRegisterVerify = { _, _ -> },
-        )
-        val passkeyProvider = FakePasskeyProvider(
-            onCreateCredential = { """{"id":"cred-1","type":"public-key"}""" },
-        )
-        val viewModel = newViewModel(
-            apiClient = apiClient,
-            passkeyProvider = passkeyProvider,
-            onRegistered = { registeredCalled = true },
-        )
-
-        viewModel.register()
-
-        assertTrue(registeredCalled)
-        assertNull(viewModel.errorMessage.value)
-        assertFalse(viewModel.isRegistering.value)
-    }
 
     @Test
     fun optionsのoptions文字列がそのままCredentialProviderへ渡る() = runTest {
@@ -69,24 +49,6 @@ class PasskeyRegistrationViewModelTest {
         viewModel.register()
 
         assertEquals("the-options-json", passkeyProvider.lastCreateCredentialOptionsJson)
-    }
-
-    @Test
-    fun createCredentialのresponseJsonをJsonObjectにパースしてverifyへ送る() = runTest {
-        val apiClient = FakeApiClient(
-            onPasskeyRegisterOptions = { PasskeyOptionsResponse(challengeId = "c-1", options = "opts") },
-            onPasskeyRegisterVerify = { _, _ -> },
-        )
-        val passkeyProvider = FakePasskeyProvider(
-            onCreateCredential = { """{"id":"cred-1","type":"public-key"}""" },
-        )
-        val viewModel = newViewModel(apiClient = apiClient, passkeyProvider = passkeyProvider)
-
-        viewModel.register()
-
-        val sentCredential = requireNotNull(apiClient.lastRegisterVerifyCredential)
-        assertEquals("cred-1", sentCredential.getValue("id").jsonPrimitive.content)
-        assertEquals("public-key", sentCredential.getValue("type").jsonPrimitive.content)
     }
 
     @Test

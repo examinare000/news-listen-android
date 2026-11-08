@@ -423,17 +423,6 @@ class AuthViewModelTest {
     }
 
     @Test
-    fun `android-dec-86 AuthViewModelのapplyProfileUpdateはAuthSessionへ中継される`() = runTest {
-        val viewModel = authenticatedViewModel(userId = "u-1")
-
-        viewModel.applyProfileUpdate("New")
-
-        val updated = (viewModel.authState.value as AuthState.Authenticated).user
-        assertEquals("New", updated.displayName)
-        assertEquals(user.username, updated.username)
-    }
-
-    @Test
     fun `android-dec-84 確立の後のhookが投げたloginはAuthenticatedのまま例外の型に応じた文言を出す`() = runTest {
         val cases = listOf<Pair<ApiException, String>>(
             ApiException.NetworkError(RuntimeException("offline")) to "ログインに失敗しました。接続設定を確認してください",

@@ -36,6 +36,10 @@ import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.model.VocabularyTestResultItemRequest
 import com.rioikeda.newslisten.model.VocabularyTestResultResponse
 import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
+import com.rioikeda.newslisten.account.app.AccountApi
+import com.rioikeda.newslisten.account.app.PasskeyOptions
+import com.rioikeda.newslisten.account.app.PasskeyRecord
+import com.rioikeda.newslisten.account.app.SessionRecord
 import com.rioikeda.newslisten.auth.app.AuthApi
 import com.rioikeda.newslisten.auth.domain.AccountUser
 import com.rioikeda.newslisten.auth.domain.IssuedSession
@@ -324,6 +328,8 @@ object RecordingDefaults {
     val revokeSessionsResponse: RevokeSessionsResponse = RevokeSessionsResponse(revokedCount = 0)
     val onboardingStatusResponse: OnboardingStatusResponse = OnboardingStatusResponse(onboardingCompleted = false)
     val passkeyOptionsResponse: PasskeyOptionsResponse = PasskeyOptionsResponse(challengeId = "default-challenge", options = "{}")
+    val passkeyOptions: PasskeyOptions = PasskeyOptions(challengeId = "default-challenge", options = "{}")
+    val accountUser: AccountUser = AccountUser(username = "default-user", displayName = "Default User", role = Role.User, subjectId = null)
 
     const val PASSKEY_CREDENTIAL: String = "{}"
     const val INITIAL_SFX_ENABLED: Boolean = true
@@ -359,6 +365,55 @@ class RecordingAuthApi(
     }
 
     override suspend fun logout(token: String) = core.write("logout")
+}
+
+/**
+ * アカウント・セッション・パスキーのサーバー往復 port [AccountApi] の記録 fake。一覧 2 操作は列の読み、ほかの 9 操作は書込
+ * （戻り値は [RecordingDefaults] の既定値）。
+ */
+class RecordingAccountApi(
+    val recorder: EffectRecorder,
+    val scenario: ProbeScenario,
+) : AccountApi {
+    private val core = ApiFake(recorder, scenario, port = "AccountApi")
+
+    override suspend fun updateProfile(displayName: String): AccountUser {
+        core.write("updateProfile")
+        return RecordingDefaults.accountUser
+    }
+
+    override suspend fun changePassword(currentPassword: String, newPassword: String) = core.write("changePassword")
+
+    override suspend fun listSessions(): List<SessionRecord> = core.read("listSessions")
+
+    override suspend fun revokeSession(id: String) = core.write("revokeSession")
+
+    override suspend fun revokeOtherSessions(): Int {
+        core.write("revokeOtherSessions")
+        return RecordingDefaults.revokeSessionsResponse.revokedCount
+    }
+
+    override suspend fun listPasskeyCredentials(): List<PasskeyRecord> = core.read("listPasskeyCredentials")
+
+    override suspend fun deletePasskeyCredential(credentialId: String) = core.write("deletePasskeyCredential")
+
+    override suspend fun passkeyRegisterOptions(): PasskeyOptions {
+        core.write("passkeyRegisterOptions")
+        return RecordingDefaults.passkeyOptions
+    }
+
+    override suspend fun passkeyRegisterVerify(challengeId: String, credentialJson: String) =
+        core.write("passkeyRegisterVerify")
+
+    override suspend fun passkeyLoginOptions(): PasskeyOptions {
+        core.write("passkeyLoginOptions")
+        return RecordingDefaults.passkeyOptions
+    }
+
+    override suspend fun passkeyLoginVerify(challengeId: String, credentialJson: String): IssuedSession {
+        core.write("passkeyLoginVerify")
+        return RecordingDefaults.issuedSession
+    }
 }
 
 /** 設定のサーバー往復 port [PreferencesApi] の記録 fake。列の読みは [ApiFake.read] と同じく先頭で注入された失敗を投げる。 */
@@ -795,6 +850,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
     val apiClient: RecordingApiClient = RecordingApiClient(recorder, scenario)
     val podcastApi: RecordingPodcastApi = RecordingPodcastApi(recorder, scenario)
     val authApi: RecordingAuthApi = RecordingAuthApi(recorder, scenario)
+    val accountApi: RecordingAccountApi = RecordingAccountApi(recorder, scenario)
     val preferencesApi: RecordingPreferencesApi = RecordingPreferencesApi(recorder, scenario)
     val preferencesStore: RecordingPreferencesStore = RecordingPreferencesStore(recorder, scenario)
     val sessionStore: RecordingSessionStore = RecordingSessionStore(recorder, scenario)
@@ -807,7 +863,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
 
     /** この実行単位の記録 fake の全部。配線の検査が「記録 fake であること」を照合する。 */
     val fakes: List<Any> = listOf(
-        apiClient, podcastApi, authApi, preferencesApi, preferencesStore, sessionStore, playerController,
+        apiClient, podcastApi, authApi, accountApi, preferencesApi, preferencesStore, sessionStore, playerController,
         fileSystem, audioStore, networkMonitor, passkeyProvider, feedbackPlayer,
     )
 

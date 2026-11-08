@@ -47,6 +47,8 @@ object LayerMap {
         "auth/AuthState.kt",
         "auth/domain/AccountUser.kt",
         "auth/domain/LoginOutcome.kt",
+        "auth/domain/LoginInput.kt",
+        "auth/domain/PasswordRule.kt",
         "preferences/ArticleOpenMode.kt",
         "preferences/TimeFormat.kt",
         "feed/ArticleUrlValidator.kt",
@@ -69,6 +71,9 @@ object LayerMap {
         "catalog/app/EpisodeCatalog.kt",
         "preferences/app/PreferencesSync.kt",
         "auth/app/AuthSession.kt",
+        "account/app/AccountCommands.kt",
+        "account/app/SessionQueries.kt",
+        "passkey/app/PasskeyCommands.kt",
     )
 
     private val port = listOf(
@@ -78,6 +83,7 @@ object LayerMap {
         "preferences/PreferencesStore.kt",
         "preferences/app/PreferencesApi.kt",
         "auth/app/AuthApi.kt",
+        "account/app/AccountApi.kt",
         "network/PodcastApi.kt",
         "network/LearningApi.kt",
         "network/VocabularyTestApi.kt",
@@ -91,6 +97,10 @@ object LayerMap {
         "podcast/app/PlaybackNotice.kt",
         "catalog/app/EpisodeRow.kt",
         "preferences/app/PreferencesView.kt",
+        "account/app/SessionRow.kt",
+        "account/app/RevokedSessionsReceipt.kt",
+        "passkey/app/PasskeyRow.kt",
+        "passkey/app/PasskeyOutcomes.kt",
     )
 
     private val adapter = listOf(
@@ -110,6 +120,7 @@ object LayerMap {
         "network/EpisodeDecoder.kt",
         "network/PodcastApiAdapter.kt",
         "network/PreferencesApiAdapter.kt",
+        "network/AccountApiAdapter.kt",
         "network/AuthApiAdapter.kt",
         "observability/CrashReporter.kt",
         "observability/CrashReportFormatter.kt",

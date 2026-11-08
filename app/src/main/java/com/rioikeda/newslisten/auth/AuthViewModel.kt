@@ -52,8 +52,6 @@ class AuthViewModel(private val authSession: AuthSession) {
         _loginErrorMessage.value = messageFor(authSession.completePasskeyLogin(session))
     }
 
-    fun applyProfileUpdate(displayName: String) = authSession.applyProfileUpdate(displayName)
-
     private fun messageFor(outcome: LoginOutcome): String? =
         when (outcome) {
             LoginOutcome.Established -> null

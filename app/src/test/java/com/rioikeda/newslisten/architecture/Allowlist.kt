@@ -22,21 +22,14 @@ object Allowlist {
         files.map { AllowEntry(ruleId, it, target, owner) }
 
     val entries: List<AllowEntry> =
-        // android-dep-02 (20)
+        // android-dep-02 (16)
         rule(
-            "android-dep-02", "model", "android-slice-account-02",
-            "account/SessionsViewModel.kt",
-            "passkey/PasskeyCredentialsViewModel.kt",
-            "passkey/PasskeyLoginViewModel.kt",
-            "passkey/PasskeyRegistrationViewModel.kt",
+            "android-dep-02", "model", "android-slice-learning-01",
+            "learning/LearningViewModel.kt",
+            "learning/LearningScreen.kt",
+            "engagement/ListeningStreakStore.kt",
+            "AppScaffold.kt",
         ) +
-            rule(
-                "android-dep-02", "model", "android-slice-learning-01",
-                "learning/LearningViewModel.kt",
-                "learning/LearningScreen.kt",
-                "engagement/ListeningStreakStore.kt",
-                "AppScaffold.kt",
-            ) +
             rule("android-dep-02", "model", "android-slice-learning-02", "podcast/QuizSheet.kt", "podcast/PodcastViewModel.kt") +
             rule("android-dep-02", "model", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
             rule(
@@ -66,14 +59,11 @@ object Allowlist {
             rule("android-dep-03", "model", "android-slice-periphery-01", "feed/PendingArticleAction.kt") +
             rule("android-dep-03", "model", "android-slice-learning-03", "network/LearningApi.kt", "network/VocabularyTestApi.kt") +
 
-            // android-dep-04 (33)
+            // android-dep-04 (22)
             rule("android-dep-04", "model", "android-slice-learning-01", "AppScaffold.kt", "learning/LearningScreen.kt") +
             rule("android-dep-04", "model", "android-slice-learning-02", "podcast/QuizSheet.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-01", "feed/FeedScreen.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-02", "onboarding/OnboardingScreen.kt", "settings/SettingsScreen.kt") +
-            rule("android-dep-04", "network", "android-slice-account-02", "account/AccountViewModel.kt", "account/SessionsViewModel.kt", "passkey/PasskeyCredentialsViewModel.kt", "passkey/PasskeyLoginViewModel.kt", "passkey/PasskeyRegistrationViewModel.kt") +
-            rule("android-dep-04", "model", "android-slice-account-02", "account/SessionsViewModel.kt", "passkey/PasskeyCredentialsViewModel.kt", "passkey/PasskeyLoginViewModel.kt", "passkey/PasskeyRegistrationViewModel.kt") +
-            rule("android-dep-04", "PasskeyProvider", "android-slice-account-02", "passkey/PasskeyLoginViewModel.kt", "passkey/PasskeyRegistrationViewModel.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
             rule("android-dep-04", "network", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
             rule("android-dep-04", "PreferencesStore", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
