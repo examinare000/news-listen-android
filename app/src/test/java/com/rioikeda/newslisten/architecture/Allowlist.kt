@@ -69,19 +69,11 @@ object Allowlist {
             rule("android-dep-03", "model", "android-slice-periphery-01", "feed/PendingArticleAction.kt") +
             rule("android-dep-03", "model", "android-slice-learning-03", "network/LearningApi.kt", "network/VocabularyTestApi.kt") +
 
-            // android-dep-04 (41)
+            // android-dep-04 (36)
             rule("android-dep-04", "model", "android-slice-learning-01", "AppScaffold.kt", "learning/LearningScreen.kt") +
             rule("android-dep-04", "model", "android-slice-learning-02", "podcast/QuizSheet.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-01", "feed/FeedScreen.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-02", "onboarding/OnboardingScreen.kt", "settings/SettingsScreen.kt") +
-            rule(
-                "android-dep-04", "PreferencesStore", "android-slice-prefs-02",
-                "MainActivity.kt",
-                "AppScaffold.kt",
-                "designsystem/DSFeedback.kt",
-                "settings/SettingsScreen.kt",
-            ) +
-            rule("android-dep-04", "preferencesStore.set", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
             rule("android-dep-04", "network", "android-slice-account-02", "account/AccountViewModel.kt", "account/SessionsViewModel.kt", "passkey/PasskeyCredentialsViewModel.kt", "passkey/PasskeyLoginViewModel.kt", "passkey/PasskeyRegistrationViewModel.kt") +
             rule("android-dep-04", "model", "android-slice-account-02", "account/SessionsViewModel.kt", "passkey/PasskeyCredentialsViewModel.kt", "passkey/PasskeyLoginViewModel.kt", "passkey/PasskeyRegistrationViewModel.kt") +
             rule("android-dep-04", "PasskeyProvider", "android-slice-account-02", "passkey/PasskeyLoginViewModel.kt", "passkey/PasskeyRegistrationViewModel.kt") +
@@ -119,9 +111,7 @@ object Allowlist {
             rule("android-check-02", "fetchVocabularyTestSession", "android-slice-learning-03", "network/VocabularyTestApi.kt") +
             rule("android-check-02", "submitVocabularyTestResults", "android-slice-learning-03", "network/VocabularyTestApi.kt") +
 
-            // android-check-04 (7)
-            rule("android-check-04", "listOf(3, 5, 7, 10)", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
-            rule("android-check-04", "/ 7.0", "android-slice-prefs-02", "settings/SettingsScreen.kt") +
+            // android-check-04 (5)
             rule("android-check-04", "/ 31.0", "android-slice-learning-01", "learning/LearningScreen.kt") +
             rule("android-check-04", "correctRate >=", "android-slice-learning-02", "podcast/QuizSheet.kt") +
             rule("android-check-04", "limit == 0", "android-slice-periphery-02", "settings/SettingsScreen.kt") +

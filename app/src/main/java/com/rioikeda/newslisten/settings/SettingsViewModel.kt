@@ -8,7 +8,10 @@ import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.RssSource
 import com.rioikeda.newslisten.network.ApiClient
+import com.rioikeda.newslisten.preferences.ArticleOpenMode
+import com.rioikeda.newslisten.preferences.TimeFormat
 import com.rioikeda.newslisten.preferences.app.PreferencesSync
+import com.rioikeda.newslisten.preferences.app.PreferencesView
 import com.rioikeda.newslisten.preferences.domain.PreferenceSyncResult
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -173,6 +176,9 @@ class SettingsViewModel(
      */
     suspend fun loadListeningStreak() = listeningStreakStore.refresh()
 
+    /** 設定の現在値と選択肢。画面が読む。 */
+    val preferences: StateFlow<PreferencesView> = preferencesSync.preferences
+
     /** 直近の取り込みが失敗したか。画面が読む。 */
     val preferencesSyncFailed: StateFlow<Boolean> = preferencesSync.preferencesSyncFailed
 
@@ -187,6 +193,22 @@ class SettingsViewModel(
     /** 週あたりの目標を同期する。 */
     suspend fun syncWeeklyGoalEpisodes(value: Int): SelectionAfterSave =
         relay { preferencesSync.setWeeklyGoal(value) }
+
+    /** 記事の開き方を端末へ保存する。保存の失敗は呼び手へ伝わる。 */
+    suspend fun setArticleOpenMode(mode: ArticleOpenMode): Unit =
+        withContext(dispatcher) { preferencesSync.setArticleOpenMode(mode) }
+
+    /** 日付表記を端末へ保存する。 */
+    suspend fun setTimeFormat(format: TimeFormat): Unit =
+        withContext(dispatcher) { preferencesSync.setTimeFormat(format) }
+
+    /** 効果音の有無を端末へ保存する。 */
+    suspend fun setSfxEnabled(enabled: Boolean): Unit =
+        withContext(dispatcher) { preferencesSync.setSfxEnabled(enabled) }
+
+    /** ハプティクスの有無を端末へ保存する。 */
+    suspend fun setHapticsEnabled(enabled: Boolean): Unit =
+        withContext(dispatcher) { preferencesSync.setHapticsEnabled(enabled) }
 
     private suspend fun relay(command: suspend () -> PreferenceSyncResult): SelectionAfterSave =
         when (withContext(dispatcher) { command() }) {

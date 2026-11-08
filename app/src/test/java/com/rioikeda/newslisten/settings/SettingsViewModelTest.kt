@@ -11,10 +11,13 @@ import com.rioikeda.newslisten.model.RssSource
 import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.podcast.PlaybackConstants
+import com.rioikeda.newslisten.preferences.ArticleOpenMode
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import com.rioikeda.newslisten.network.PreferencesApiAdapter
 import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.preferences.TimeFormat
 import com.rioikeda.newslisten.preferences.app.PreferencesSync
+import com.rioikeda.newslisten.preferences.app.PreferencesView
 import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -62,6 +65,135 @@ class SettingsViewModelTest {
         override suspend fun setDefaultPlaybackSpeed(speed: Double) {
             throw IOException("disk full")
         }
+    }
+
+    /** 効果音の書込だけが `IOException` で失敗する store（端末だけの設定の保存失敗の模擬）。 */
+    private class FailingSfxWriteStore(delegate: InMemoryPreferencesStore) : PreferencesStore by delegate {
+        override suspend fun setSfxEnabled(enabled: Boolean) {
+            throw IOException("disk full")
+        }
+    }
+
+    // --- 端末だけの設定（画面は ViewModel 越しに読み書きする） ---
+
+    @Test
+    fun `android-query-prefs-01 preferencesは構築直後に非既定のstoreの値を公開する`() = runTest {
+        // verifies: android-query-prefs-01
+        val store = InMemoryPreferencesStore(
+            initialDefaultDifficulty = Difficulty.TOEIC_900,
+            initialDefaultPlaybackSpeed = PlaybackSpeed.of(1.5)!!,
+            initialArticleOpenMode = ArticleOpenMode.EXTERNAL,
+            initialTimeFormat = TimeFormat.RELATIVE,
+            initialSfxEnabled = false,
+            initialHapticsEnabled = false,
+            initialWeeklyGoalEpisodes = WeeklyGoal.of(7)!!,
+            initialSeenAchievementIds = setOf("a"),
+        )
+
+        val viewModel = newViewModel(preferencesStore = store)
+
+        val expected = PreferencesView(
+            defaultDifficulty = Difficulty.TOEIC_900,
+            defaultPlaybackSpeed = PlaybackSpeed.of(1.5)!!,
+            weeklyGoal = WeeklyGoal.of(7)!!,
+            articleOpenMode = ArticleOpenMode.EXTERNAL,
+            timeFormat = TimeFormat.RELATIVE,
+            sfxEnabled = false,
+            hapticsEnabled = false,
+            seenAchievementIds = setOf("a"),
+        )
+        assertEquals(expected, viewModel.preferences.value)
+    }
+
+    @Test
+    fun `android-query-prefs-01 storeの端末だけの設定の変更がpreferencesに反映される`() = runTest {
+        // verifies: android-query-prefs-01
+        val store = InMemoryPreferencesStore()
+        val viewModel = newViewModel(preferencesStore = store)
+        assertTrue(viewModel.preferences.value.sfxEnabled)
+
+        store.setSfxEnabled(false)
+        runCurrent()
+
+        assertFalse(viewModel.preferences.value.sfxEnabled)
+    }
+
+    @Test
+    fun `android-cmd-prefs-02 setArticleOpenModeの中継はstoreに届きpreferencesに反映される`() = runTest {
+        // verifies: android-cmd-prefs-02
+        val store = InMemoryPreferencesStore()
+        val viewModel = newViewModel(preferencesStore = store)
+        assertEquals(ArticleOpenMode.IN_APP, store.articleOpenMode.value)
+
+        viewModel.setArticleOpenMode(ArticleOpenMode.EXTERNAL)
+        runCurrent()
+
+        assertEquals(ArticleOpenMode.EXTERNAL, store.articleOpenMode.value)
+        assertEquals(ArticleOpenMode.EXTERNAL, viewModel.preferences.value.articleOpenMode)
+    }
+
+    @Test
+    fun `android-cmd-prefs-02 setTimeFormatの中継はstoreに届きpreferencesに反映される`() = runTest {
+        // verifies: android-cmd-prefs-02
+        val store = InMemoryPreferencesStore()
+        val viewModel = newViewModel(preferencesStore = store)
+        assertEquals(TimeFormat.ABSOLUTE, store.timeFormat.value)
+
+        viewModel.setTimeFormat(TimeFormat.RELATIVE)
+        runCurrent()
+
+        assertEquals(TimeFormat.RELATIVE, store.timeFormat.value)
+        assertEquals(TimeFormat.RELATIVE, viewModel.preferences.value.timeFormat)
+    }
+
+    @Test
+    fun `android-cmd-prefs-02 setSfxEnabledの中継はstoreに届きpreferencesに反映される`() = runTest {
+        // verifies: android-cmd-prefs-02
+        val store = InMemoryPreferencesStore()
+        val viewModel = newViewModel(preferencesStore = store)
+        assertTrue(store.sfxEnabled.value)
+
+        viewModel.setSfxEnabled(false)
+        runCurrent()
+
+        assertFalse(store.sfxEnabled.value)
+        assertFalse(viewModel.preferences.value.sfxEnabled)
+    }
+
+    @Test
+    fun `android-cmd-prefs-02 setHapticsEnabledの中継はstoreに届きpreferencesに反映される`() = runTest {
+        // verifies: android-cmd-prefs-02
+        val store = InMemoryPreferencesStore()
+        val viewModel = newViewModel(preferencesStore = store)
+        assertTrue(store.hapticsEnabled.value)
+
+        viewModel.setHapticsEnabled(false)
+        runCurrent()
+
+        assertFalse(store.hapticsEnabled.value)
+        assertFalse(viewModel.preferences.value.hapticsEnabled)
+    }
+
+    @Test
+    fun `android-dec-82 端末だけの設定の保存失敗のIOExceptionは中継で捕まえず呼び手へ伝わる`() = runTest {
+        // verifies: android-dec-82
+        val viewModel = newViewModel(preferencesStore = FailingSfxWriteStore(InMemoryPreferencesStore()))
+
+        val thrown = runCatching { viewModel.setSfxEnabled(false) }.exceptionOrNull()
+
+        assertTrue(thrown is IOException)
+        assertNull(viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `android-dec-82 構築直後のpreferencesの効果音とハプティクスはstoreの値と等しい`() = runTest {
+        // verifies: android-dec-82
+        val store = InMemoryPreferencesStore(initialSfxEnabled = false, initialHapticsEnabled = false)
+
+        val viewModel = newViewModel(preferencesStore = store)
+
+        assertFalse(viewModel.preferences.value.sfxEnabled)
+        assertFalse(viewModel.preferences.value.hapticsEnabled)
     }
 
     // --- RSS ソース ---

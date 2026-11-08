@@ -80,14 +80,13 @@ class MainActivity : ComponentActivity() {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        // 依存グラフから ViewModel と PreferencesStore を取得
+        // 依存グラフから ViewModel を取得
         val appContainer = NewsListenApplication.getAppContainer()
         val authViewModel = appContainer.getAuthViewModel()
         val feedViewModel = appContainer.getFeedViewModel()
         val podcastViewModel = appContainer.getPodcastViewModel()
         val learningViewModel = appContainer.getLearningViewModel()
         val settingsViewModel = appContainer.getSettingsViewModel()
-        val preferencesStore = appContainer.getPreferencesStore()
         val listeningStreakStore = appContainer.getListeningStreakStore()
         val accountViewModel = appContainer.getAccountViewModel()
         val sessionsViewModel = appContainer.getSessionsViewModel()
@@ -181,7 +180,6 @@ class MainActivity : ComponentActivity() {
                                 podcastViewModel,
                                 learningViewModel,
                                 settingsViewModel,
-                                preferencesStore,
                                 authViewModel,
                                 accountViewModel,
                                 sessionsViewModel,
