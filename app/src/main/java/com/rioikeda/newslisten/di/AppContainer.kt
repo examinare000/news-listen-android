@@ -10,6 +10,9 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.rioikeda.newslisten.BuildConfig
 import com.rioikeda.newslisten.account.AccountViewModel
 import com.rioikeda.newslisten.account.SessionsViewModel
+import com.rioikeda.newslisten.account.app.AccountApi
+import com.rioikeda.newslisten.account.app.AccountCommands
+import com.rioikeda.newslisten.account.app.SessionQueries
 import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.auth.app.AuthSession
@@ -20,6 +23,7 @@ import com.rioikeda.newslisten.feed.FeedViewModel
 import com.rioikeda.newslisten.engagement.ApiListeningStreakStore
 import com.rioikeda.newslisten.engagement.ListeningStreakStore
 import com.rioikeda.newslisten.learning.LearningViewModel
+import com.rioikeda.newslisten.network.AccountApiAdapter
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.vocabulary.VocabularyTestViewModel
 import com.rioikeda.newslisten.network.AudioCacheManager
@@ -32,7 +36,6 @@ import com.rioikeda.newslisten.network.OkHttpApiClient
 import com.rioikeda.newslisten.network.PodcastApiAdapter
 import com.rioikeda.newslisten.network.PreferencesApiAdapter
 import com.rioikeda.newslisten.network.SessionStore
-import com.rioikeda.newslisten.network.toIssuedSession
 import com.rioikeda.newslisten.notification.FcmTokenRegistrar
 import com.rioikeda.newslisten.observability.CrashReporter
 import com.rioikeda.newslisten.observability.DeviceInfo
@@ -41,6 +44,7 @@ import com.rioikeda.newslisten.passkey.PasskeyCredentialsViewModel
 import com.rioikeda.newslisten.passkey.PasskeyLoginViewModel
 import com.rioikeda.newslisten.passkey.PasskeyProvider
 import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
+import com.rioikeda.newslisten.passkey.app.PasskeyCommands
 import com.rioikeda.newslisten.podcast.ExoPlayerController
 import com.rioikeda.newslisten.podcast.OfflineLibrary
 import com.rioikeda.newslisten.podcast.PodcastViewModel
@@ -328,6 +332,18 @@ class AppContainer(context: Context) {
     fun getAuthViewModel(): AuthViewModel = _authViewModel
 
     /**
+     * アカウント・セッション・パスキーの往復の port。入口（[accountCommands]・[sessionQueries]・パスキーの手順）が共有する。
+     * アダプタは状態を持たないので 1 つでよく、`by lazy` で [apiClient] の初期化の後に作る。
+     */
+    private val accountApi: AccountApi by lazy { AccountApiAdapter(apiClient) }
+
+    /** 表示名・パスワード・セッション失効・パスキー削除の書込の入口。表示名の反映先は [authSession]。 */
+    private val accountCommands: AccountCommands by lazy { AccountCommands(accountApi, authSession) }
+
+    /** セッション・パスキー一覧の読みの入口。状態は持たない。 */
+    private val sessionQueries: SessionQueries by lazy { SessionQueries(accountApi) }
+
+    /**
      * FeedViewModel（フィード一覧・Star/Dismiss・Undo）を生成して返す。
      *
      * Dispatcher: Dispatchers.Default.limitedParallelism(1) を使用し、状態変更を直列化する。
@@ -499,16 +515,15 @@ class AppContainer(context: Context) {
      * 表示名・パスワード入力欄の読み取り→書き込みが複数スレッドで競合すると入力の取りこぼしが
      * 起こり得るため、単一スレッドで直列化する。
      *
-     * authViewModel: 表示名更新成功時に AuthState.Authenticated.user を書き換えるため、
-     * SettingsViewModel の isAdminProvider（関数注入）とは異なり AuthViewModel を直接注入する
-     * （詳細は [AccountViewModel] のクラスコメント参照）。
+     * authViewModel: 入力欄のプリフィルで AuthState を読むために直接注入する
+     * （詳細は [AccountViewModel] のクラスコメント参照）。表示名更新の反映は [accountCommands] が行う。
      *
      * by lazy でシングルトンキャッシュ化：画面回転時に AccountViewModel インスタンスが
      * 同じままであることを保証し、入力中の表示名・パスワードやメッセージ表示が保持される。
      */
     private val _accountViewModel: AccountViewModel by lazy {
         AccountViewModel(
-            apiClient = apiClient,
+            accountCommands = accountCommands,
             authViewModel = _authViewModel,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
         )
@@ -529,7 +544,8 @@ class AppContainer(context: Context) {
      */
     private val _sessionsViewModel: SessionsViewModel by lazy {
         SessionsViewModel(
-            apiClient = apiClient,
+            sessionQueries = sessionQueries,
+            accountCommands = accountCommands,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
         )
     }
@@ -566,7 +582,8 @@ class AppContainer(context: Context) {
      */
     private val _passkeyCredentialsViewModel: PasskeyCredentialsViewModel by lazy {
         PasskeyCredentialsViewModel(
-            apiClient = apiClient,
+            sessionQueries = sessionQueries,
+            accountCommands = accountCommands,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
         )
     }
@@ -585,14 +602,12 @@ class AppContainer(context: Context) {
      * ファクトリメソッドにした（登録セレモニーは短時間で完結するモーダル操作のため、回転時に
      * 進行中状態＝isRegistering/errorMessage が失われても実害は小さいと判断）。
      *
-     * onRegistered: 登録成功後に一覧（[PasskeyCredentialsViewModel]）へ即座に反映する。
+     * 手順と hook は [passkeyCommands] が束ねる（登録成功後に一覧へ即座に反映する）。
      */
     fun createPasskeyRegistrationViewModel(passkeyProvider: PasskeyProvider): PasskeyRegistrationViewModel =
         PasskeyRegistrationViewModel(
-            apiClient = apiClient,
-            passkeyProvider = passkeyProvider,
+            passkeyCommands = passkeyCommands(passkeyProvider),
             dispatcher = Dispatchers.Default.limitedParallelism(1),
-            onRegistered = { _passkeyCredentialsViewModel.loadCredentials() },
         )
 
     /**
@@ -600,15 +615,24 @@ class AppContainer(context: Context) {
      * （フェーズ17 P17・issue #140）。`by lazy` にしない理由は
      * [createPasskeyRegistrationViewModel] と同じ（[PasskeyProvider] の Activity Context 依存）。
      *
-     * onLoginSuccess: verify 成功で得た LoginResponse を IssuedSession に変換して AuthViewModel に渡し、セッション確立
-     * （sessionStore 保存・authState 遷移・FCM 登録フック）を auth 層に一任する
-     * （[AuthViewModel.completePasskeyLogin] 参照）。
+     * セッション確立（sessionStore 保存・authState 遷移・FCM 登録フック）は [passkeyCommands] の hook から
+     * auth 層に一任する（[AuthViewModel.completePasskeyLogin] 参照）。
      */
     fun createPasskeyLoginViewModel(passkeyProvider: PasskeyProvider): PasskeyLoginViewModel =
         PasskeyLoginViewModel(
-            apiClient = apiClient,
-            passkeyProvider = passkeyProvider,
+            passkeyCommands = passkeyCommands(passkeyProvider),
             dispatcher = Dispatchers.Default.limitedParallelism(1),
-            onLoginSuccess = { response -> _authViewModel.completePasskeyLogin(response.toIssuedSession()) },
+        )
+
+    /**
+     * パスキーの登録・ログインの手順を [passkeyProvider] ごとに組む。登録とログインの両方の hook を必ず渡す
+     * （既定値は無い）。hook のラムダは呼ばれた時点で ViewModel を解決する。
+     */
+    private fun passkeyCommands(passkeyProvider: PasskeyProvider): PasskeyCommands =
+        PasskeyCommands(
+            accountApi = accountApi,
+            passkeyProvider = passkeyProvider,
+            onRegistered = { _passkeyCredentialsViewModel.loadCredentials() },
+            onLoginSuccess = { session -> _authViewModel.completePasskeyLogin(session) },
         )
 }

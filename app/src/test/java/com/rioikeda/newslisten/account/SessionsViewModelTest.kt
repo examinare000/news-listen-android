@@ -1,9 +1,13 @@
 package com.rioikeda.newslisten.account
 
+import com.rioikeda.newslisten.account.app.AccountCommands
+import com.rioikeda.newslisten.account.app.SessionQueries
+import com.rioikeda.newslisten.account.app.SessionRow
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.RevokeSessionsResponse
 import com.rioikeda.newslisten.model.SessionResponse
 import com.rioikeda.newslisten.model.SessionsListResponse
+import com.rioikeda.newslisten.network.AccountApiAdapter
 import com.rioikeda.newslisten.network.ApiClient
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -24,22 +28,30 @@ class SessionsViewModelTest {
 
     private fun TestScope.newViewModel(
         apiClient: ApiClient = FakeApiClient(),
-    ): SessionsViewModel =
-        SessionsViewModel(
-            apiClient = apiClient,
+    ): SessionsViewModel {
+        val accountApi = AccountApiAdapter(apiClient)
+        return SessionsViewModel(
+            accountCommands = AccountCommands(accountApi, testAuthSession()),
+            sessionQueries = SessionQueries(accountApi),
             dispatcher = StandardTestDispatcher(testScheduler),
         )
+    }
 
+    /** 画面に出る値（read model）。fake には [response] で DTO に直して渡す。 */
     private fun session(
         id: String,
         deviceLabel: String? = "Pixel 8",
         current: Boolean = false,
-    ) = SessionResponse(
+    ) = SessionRow(
         id = id,
         deviceLabel = deviceLabel,
         createdAt = "2026-07-01T00:00:00Z",
         lastUsedAt = "2026-07-07T00:00:00Z",
         current = current,
+    )
+
+    private fun response(rows: List<SessionRow>) = SessionsListResponse(
+        rows.map { SessionResponse(it.id, it.deviceLabel, it.createdAt, it.lastUsedAt, it.current) },
     )
 
     // --- 一覧取得 ---
@@ -51,7 +63,7 @@ class SessionsViewModelTest {
             session(id = "s2", deviceLabel = null, current = false),
         )
         val viewModel = newViewModel(
-            apiClient = FakeApiClient(onListSessions = { SessionsListResponse(sessions) }),
+            apiClient = FakeApiClient(onListSessions = { response(sessions) }),
         )
 
         viewModel.loadSessions()
@@ -78,7 +90,7 @@ class SessionsViewModelTest {
         // iOS SessionsViewModel.swift:32 準拠: 再読み込み時に一括失効のフィードバックを消す。
         val viewModel = newViewModel(
             apiClient = FakeApiClient(
-                onListSessions = { SessionsListResponse(listOf(session(id = "s1", current = true))) },
+                onListSessions = { response(listOf(session(id = "s1", current = true))) },
                 onRevokeOtherSessions = { RevokeSessionsResponse(revokedCount = 2) },
             ),
         )
@@ -98,7 +110,7 @@ class SessionsViewModelTest {
         val remaining = session(id = "keep", current = true)
         val viewModel = newViewModel(
             apiClient = FakeApiClient(
-                onListSessions = { SessionsListResponse(listOf(remaining, session(id = "remove"))) },
+                onListSessions = { response(listOf(remaining, session(id = "remove"))) },
                 onRevokeSession = { },
             ),
         )
@@ -115,7 +127,7 @@ class SessionsViewModelTest {
         val existing = listOf(session(id = "s1", current = true), session(id = "s2"))
         val viewModel = newViewModel(
             apiClient = FakeApiClient(
-                onListSessions = { SessionsListResponse(existing) },
+                onListSessions = { response(existing) },
                 onRevokeSession = { throw ApiException.HttpError(500) },
             ),
         )
@@ -127,23 +139,6 @@ class SessionsViewModelTest {
         assertTrue(viewModel.errorMessage.value != null)
     }
 
-    @Test
-    fun revokeSessionはcurrentセッションでもガードなくAPIを呼ぶ() = runTest {
-        // iOS SessionsViewModel.swift:48-63 準拠: VM 層に current ガードは無く、
-        // 失効ボタン非表示という UI 側の導線のみで防いでいる（AccountSettingsView.swift:194）。
-        val apiClient = FakeApiClient(
-            onListSessions = { SessionsListResponse(listOf(session(id = "s1", current = true))) },
-            onRevokeSession = { },
-        )
-        val viewModel = newViewModel(apiClient = apiClient)
-        viewModel.loadSessions()
-
-        viewModel.revokeSession(id = "s1")
-
-        assertEquals(1, apiClient.revokeSessionCallCount)
-        assertTrue(viewModel.sessions.value.isEmpty())
-    }
-
     // --- 一括失効 ---
 
     @Test
@@ -153,7 +148,7 @@ class SessionsViewModelTest {
             apiClient = FakeApiClient(
                 onListSessions = {
                     listCallCount++
-                    SessionsListResponse(listOf(session(id = "s1", current = true)))
+                    response(listOf(session(id = "s1", current = true)))
                 },
                 onRevokeOtherSessions = { RevokeSessionsResponse(revokedCount = 3) },
             ),
@@ -178,33 +173,28 @@ class SessionsViewModelTest {
         assertTrue(viewModel.errorMessage.value != null)
     }
 
-    // --- hasOtherSessions ---
+    // --- hasOtherSessions（SessionsView の判定を StateFlow へ反映する） ---
 
     @Test
-    fun hasOtherSessionsは非currentが無ければfalse() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(
-                onListSessions = { SessionsListResponse(listOf(session(id = "s1", current = true))) },
-            ),
-        )
-
-        viewModel.loadSessions()
-
-        assertFalse(viewModel.hasOtherSessions.value)
-    }
-
-    @Test
-    fun hasOtherSessionsは非currentがあればtrue() = runTest {
+    fun `android-dec-89 loadSessionsはSessionsViewのhasOtherSessionsをStateFlowへ反映する`() = runTest {
+        var listCallCount = 0
         val viewModel = newViewModel(
             apiClient = FakeApiClient(
                 onListSessions = {
-                    SessionsListResponse(listOf(session(id = "s1", current = true), session(id = "s2")))
+                    listCallCount++
+                    if (listCallCount == 1) {
+                        response(listOf(session(id = "s1", current = true)))
+                    } else {
+                        response(listOf(session(id = "s1", current = true), session(id = "s2")))
+                    }
                 },
             ),
         )
 
         viewModel.loadSessions()
+        assertFalse(viewModel.hasOtherSessions.value)
 
+        viewModel.loadSessions()
         assertTrue(viewModel.hasOtherSessions.value)
     }
 }

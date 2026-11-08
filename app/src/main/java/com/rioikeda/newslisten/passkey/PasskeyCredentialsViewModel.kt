@@ -1,8 +1,9 @@
 package com.rioikeda.newslisten.passkey
 
-import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.model.PasskeyCredential
-import com.rioikeda.newslisten.network.ApiClient
+import com.rioikeda.newslisten.account.app.AccountCommands
+import com.rioikeda.newslisten.account.app.SessionQueries
+import com.rioikeda.newslisten.passkey.app.CredentialsLoad
+import com.rioikeda.newslisten.passkey.app.PasskeyRow
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,11 +18,12 @@ import kotlinx.coroutines.withContext
  * （[com.rioikeda.newslisten.account.SessionsViewModel] と同じ設計判断・同型の一覧+削除構造）。
  */
 class PasskeyCredentialsViewModel(
-    private val apiClient: ApiClient,
+    private val sessionQueries: SessionQueries,
+    private val accountCommands: AccountCommands,
     private val dispatcher: CoroutineDispatcher,
 ) {
-    private val _credentials = MutableStateFlow<List<PasskeyCredential>>(emptyList())
-    val credentials: StateFlow<List<PasskeyCredential>> = _credentials.asStateFlow()
+    private val _credentials = MutableStateFlow<List<PasskeyRow>>(emptyList())
+    val credentials: StateFlow<List<PasskeyRow>> = _credentials.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -33,10 +35,13 @@ class PasskeyCredentialsViewModel(
     suspend fun loadCredentials(): Unit = withContext(dispatcher) {
         _isLoading.value = true
         try {
-            _credentials.value = apiClient.listPasskeyCredentials().credentials
-            _errorMessage.value = null
-        } catch (e: ApiException) {
-            _errorMessage.value = LIST_ERROR_MESSAGE
+            when (val load = sessionQueries.credentials()) {
+                is CredentialsLoad.Loaded -> {
+                    _credentials.value = load.credentials
+                    _errorMessage.value = null
+                }
+                is CredentialsLoad.Failed -> _errorMessage.value = LIST_ERROR_MESSAGE
+            }
         } finally {
             _isLoading.value = false
         }
@@ -48,10 +53,9 @@ class PasskeyCredentialsViewModel(
      * 不要な往復を避ける方針）。
      */
     suspend fun deleteCredential(credentialId: String): Unit = withContext(dispatcher) {
-        try {
-            apiClient.deletePasskeyCredential(credentialId)
+        if (accountCommands.deletePasskey(credentialId) == null) {
             _credentials.value = _credentials.value.filterNot { it.credentialId == credentialId }
-        } catch (e: ApiException) {
+        } else {
             _errorMessage.value = DELETE_ERROR_MESSAGE
         }
     }

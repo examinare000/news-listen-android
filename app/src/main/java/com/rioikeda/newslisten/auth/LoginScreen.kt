@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.rioikeda.newslisten.R
+import com.rioikeda.newslisten.auth.domain.LoginInput
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.NewsListenTheme
 import com.rioikeda.newslisten.passkey.PasskeyLoginViewModel
@@ -156,7 +157,7 @@ fun LoginScreen(viewModel: AuthViewModel, passkeyLoginViewModel: PasskeyLoginVie
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !isSubmitting && username.isNotEmpty() && password.isNotEmpty()
+                enabled = !isSubmitting && LoginInput.canSubmit(username, password)
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(

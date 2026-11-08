@@ -160,7 +160,6 @@
     <string name="settings_account_save_profile_button">更新</string>
     <string name="settings_account_current_password_label">現在のパスワード</string>
     <string name="settings_account_new_password_label">新しいパスワード</string>
-    <string name="settings_account_password_requirement">パスワードは12文字以上で、英大文字・英小文字・数字・記号のうち3種類以上を組み合わせてください</string>
     <string name="settings_account_change_password_button">パスワードを変更</string>
 
     <!-- ログイン中のデバイスセクション（issue #84） -->

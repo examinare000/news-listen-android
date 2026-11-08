@@ -1,5 +1,7 @@
 package com.rioikeda.newslisten.architecture
 
+import com.rioikeda.newslisten.account.app.PasskeyRecord
+import com.rioikeda.newslisten.account.app.SessionRecord
 import com.rioikeda.newslisten.auth.domain.AccountUser
 import com.rioikeda.newslisten.auth.domain.Role
 import com.rioikeda.newslisten.auth.domain.SubjectId
@@ -14,14 +16,10 @@ import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.LearningDashboardResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.OnboardingStatusResponse
-import com.rioikeda.newslisten.model.PasskeyCredential
-import com.rioikeda.newslisten.model.PasskeyCredentialsListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.QuizStatsResponse
 import com.rioikeda.newslisten.model.RssSource
 import com.rioikeda.newslisten.model.RssSourcesResponse
-import com.rioikeda.newslisten.model.SessionResponse
-import com.rioikeda.newslisten.model.SessionsListResponse
 import com.rioikeda.newslisten.model.VocabularyItemResponse
 import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.model.VocabularyTestItemResponse
@@ -114,26 +112,13 @@ internal object ProbeData {
 
     val onboardingStatus: OnboardingStatusResponse = OnboardingStatusResponse(onboardingCompleted = false)
 
-    val sessions: SessionsListResponse = SessionsListResponse(
-        sessions = listOf(
-            SessionResponse(id = "session-current", deviceLabel = "this device", createdAt = "2026-10-14T00:00:00Z", lastUsedAt = null, current = true),
-            SessionResponse(id = "session-other", deviceLabel = "other device", createdAt = "2026-10-13T00:00:00Z", lastUsedAt = null, current = false),
-        ),
+    val sessionRecords: List<SessionRecord> = listOf(
+        SessionRecord(id = "session-current", deviceLabel = "this device", createdAt = "2026-10-14T00:00:00Z", lastUsedAt = null, current = true),
+        SessionRecord(id = "session-other", deviceLabel = "other device", createdAt = "2026-10-13T00:00:00Z", lastUsedAt = null, current = false),
     )
 
-    val passkeyCredentials: PasskeyCredentialsListResponse = PasskeyCredentialsListResponse(
-        credentials = listOf(
-            PasskeyCredential(
-                credentialId = "credential-1",
-                username = "probe-user",
-                name = null,
-                transports = emptyList(),
-                aaguid = null,
-                signCount = 0,
-                createdAt = "2026-10-14T00:00:00Z",
-                lastUsedAt = null,
-            ),
-        ),
+    val passkeyRecords: List<PasskeyRecord> = listOf(
+        PasskeyRecord(credentialId = "credential-1", name = null, createdAt = "2026-10-14T00:00:00Z"),
     )
 
     /** 聴取日数が呼ぶたびに 1 日ずつ増える列（初回より 2 回目が大きい）。 */

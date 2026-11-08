@@ -82,6 +82,16 @@ data class EffectTypeCatalog(
                     propertyReads = emptySet(),
                 ),
                 PortRow(
+                    port = "AccountApi",
+                    interfaces = setOf("com.rioikeda.newslisten.account.app.AccountApi"),
+                    writes = setOf(
+                        "updateProfile", "changePassword", "revokeSession", "revokeOtherSessions", "deletePasskeyCredential",
+                        "passkeyRegisterOptions", "passkeyRegisterVerify", "passkeyLoginOptions", "passkeyLoginVerify",
+                    ),
+                    sequenceReads = setOf("listSessions", "listPasskeyCredentials"),
+                    propertyReads = emptySet(),
+                ),
+                PortRow(
                     port = "PreferencesApi",
                     interfaces = setOf("com.rioikeda.newslisten.preferences.app.PreferencesApi"),
                     writes = setOf("updateDefaultDifficulty", "updateDefaultPlaybackSpeed", "updateWeeklyGoalEpisodes"),
@@ -158,9 +168,9 @@ data class EffectTypeCatalog(
                 HookRow("AuthSession#onSubjectLeave", HookKind.WRITE, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("AuthSession#onSessionRestored", HookKind.WRITE, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("AuthSession#onAuthenticated", HookKind.WRITE, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
-                HookRow("PasskeyLoginViewModel#onLoginSuccess", HookKind.WRITE, HookShape.SUSPEND_ONE_ARG, HookWiring.CONSTRUCTOR),
+                HookRow("PasskeyCommands#onLoginSuccess", HookKind.WRITE, HookShape.SUSPEND_ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow(
-                    "PasskeyRegistrationViewModel#onRegistered", HookKind.WRITE, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR,
+                    "PasskeyCommands#onRegistered", HookKind.WRITE, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR,
                     reason = "規則どおり WRITE（中身は loadCredentials だが保守側に倒す）",
                 ),
                 HookRow("FeedViewModel#onStarConfirmed", HookKind.WRITE, HookShape.NO_ARG, HookWiring.SETTER),

@@ -53,6 +53,7 @@ import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.account.AccountViewModel
 import com.rioikeda.newslisten.account.SessionsViewModel
 import com.rioikeda.newslisten.auth.AuthViewModel
+import com.rioikeda.newslisten.auth.domain.PasswordRule
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.core.PlaybackSpeed
 import com.rioikeda.newslisten.designsystem.DSSpacing
@@ -1288,7 +1289,7 @@ private fun PasswordChangeSection(
             enabled = !isLoading
         )
         Text(
-            text = stringResource(R.string.settings_account_password_requirement),
+            text = PasswordRule.GUIDANCE,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

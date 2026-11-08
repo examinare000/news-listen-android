@@ -50,6 +50,11 @@ object OperationLedger {
     ) = LedgerRow(id, OperationKind.COMMAND, aliases = aliases, specId = specId, facade = facade, reason = reason)
 
     val rows: List<LedgerRow> = listOf(
+        command("AccountCommands#changePassword", "アカウントの情報を更新する command", specId = "android-cmd-account-03", facade = "android-slice-account-02"),
+        command("AccountCommands#deletePasskey", "パスキーを登録・削除する command", specId = "android-cmd-account-05", facade = "android-slice-account-02"),
+        command("AccountCommands#revokeOtherSessions", "セッションを失効させる command", specId = "android-cmd-account-04", facade = "android-slice-account-02"),
+        command("AccountCommands#revokeSession", "セッションを失効させる command", specId = "android-cmd-account-04", facade = "android-slice-account-02"),
+        command("AccountCommands#saveProfile", "アカウントの情報を更新する command", specId = "android-cmd-account-03", facade = "android-slice-account-02"),
         command("AccountViewModel#changePassword", "アカウントの情報を更新する command", specId = "android-cmd-account-03", facade = "android-slice-account-02"),
         query("AccountViewModel#getCurrentPassword", "StateFlow を公開する getter（投影を読むだけ）", facade = "android-slice-account-02"),
         query("AccountViewModel#getDisplayName", "StateFlow を公開する getter（投影を読むだけ）", facade = "android-slice-account-02"),
@@ -84,7 +89,6 @@ object OperationLedger {
         command("AuthSession#onUnauthorized", "adapter からの失効の通知を受ける command", specId = "android-cmd-account-02", facade = "android-slice-account-01"),
         command("AuthSession#refreshAuth", "認証の状態を変える command", specId = "android-cmd-account-01", facade = "android-slice-account-01"),
         command("AuthSession#retryRefreshAuth", "認証の状態を変える command", specId = "android-cmd-account-01", facade = "android-slice-account-01"),
-        command("AuthViewModel#applyProfileUpdate", "表示名の更新を認証の状態へ反映する command", specId = "android-cmd-account-03", facade = "android-slice-account-01"),
         command("AuthViewModel#completePasskeyLogin", "パスキーのログイン成功後にセッションを確立する command", specId = "android-cmd-account-01", facade = "android-slice-account-01"),
         query("AuthViewModel#getAuthState", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-account-01", facade = "android-slice-account-01"),
         query("AuthViewModel#getLastFailure", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-account-01", facade = "android-slice-account-01"),
@@ -174,6 +178,8 @@ object OperationLedger {
         query("OnboardingViewModel#load", "おすすめサイト・オンボーディングの状態を読む query", specId = "android-query-sources-01", facade = "android-slice-periphery-02"),
         query("OnboardingViewModel#refreshOnboardingStatus", "おすすめサイト・オンボーディングの状態を読む query", specId = "android-query-sources-01", facade = "android-slice-periphery-02"),
         command("OnboardingViewModel#subscribe", "購読の追加・オンボーディングの完了を送る command", specId = "android-cmd-sources-01", facade = "android-slice-periphery-02"),
+        command("PasskeyCommands#loginWithPasskey", "パスキーでログインする command", specId = "android-cmd-account-01", facade = "android-slice-account-02"),
+        command("PasskeyCommands#registerPasskey", "パスキーを登録・削除する command", specId = "android-cmd-account-05", facade = "android-slice-account-02"),
         command("PasskeyCredentialsViewModel#deleteCredential", "パスキーを登録・削除する command", specId = "android-cmd-account-05", facade = "android-slice-account-02"),
         query("PasskeyCredentialsViewModel#getCredentials", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-account-02", facade = "android-slice-account-02"),
         query("PasskeyCredentialsViewModel#getErrorMessage", "StateFlow を公開する getter（投影を読むだけ）", facade = "android-slice-account-02"),
@@ -251,6 +257,8 @@ object OperationLedger {
         command("PodcastViewModel#togglePlayPause", "再生の操作を player に送る command", specId = "android-cmd-playback-04", facade = "android-slice-playapp-01"),
         structural("QuizSheetKt#quizFeedbackVocabulary", "クイズの結果から音を決める純粋関数"),
         structural("RetestFeedback.Incorrect#getCorrectMeaning", "再テストの結果（値）"),
+        query("SessionQueries#credentials", "パスキーの一覧を読む query", specId = "android-query-account-02", facade = "android-slice-account-02"),
+        query("SessionQueries#sessions", "ログイン中のセッションを読む query", specId = "android-query-account-02", facade = "android-slice-account-02"),
         query("SessionsViewModel#getErrorMessage", "StateFlow を公開する getter（投影を読むだけ）", facade = "android-slice-account-02"),
         query("SessionsViewModel#getHasOtherSessions", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-account-02", facade = "android-slice-account-02"),
         query("SessionsViewModel#getRevokedOthersCount", "StateFlow を公開する getter（投影を読むだけ）", facade = "android-slice-account-02"),

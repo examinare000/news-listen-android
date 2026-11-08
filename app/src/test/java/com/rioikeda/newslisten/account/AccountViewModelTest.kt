@@ -1,12 +1,13 @@
 package com.rioikeda.newslisten.account
 
+import com.rioikeda.newslisten.account.app.AccountCommands
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.auth.app.AuthSession
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.PreferencesResponse
 import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.AuthApiAdapter
+import com.rioikeda.newslisten.network.AccountApiAdapter
 import com.rioikeda.newslisten.network.InMemorySessionStore
 import com.rioikeda.newslisten.network.toAccountUser
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -29,53 +30,34 @@ class AccountViewModelTest {
     private val user = UserResponse(username = "u", role = "member", displayName = "元の表示名")
 
     /**
-     * 認証済み状態の AuthViewModel を組み立てる（[AccountViewModel] のプリフィル・
-     * applyProfileUpdate 反映先として使う）。auth 層の FakeApiClient を再利用し、
-     * refreshAuth() で Authenticated に遷移させる。
+     * 認証済みにできる AuthSession を組み立てる。[AccountViewModel] の表示名プリフィルと
+     * [AccountCommands] の表示名反映は同じ AuthSession を共有する（refreshAuth() で Authenticated に遷移させる）。
      */
-    private fun TestScope.authenticatedAuthViewModel(
+    private fun TestScope.authenticatedAuthSession(
         initialUser: UserResponse = user,
-    ): AuthViewModel {
-        val viewModel = AuthViewModel(
-            authSession = newAuthSession(
-                apiClient = com.rioikeda.newslisten.auth.FakeApiClient(
-                    onMe = { initialUser },
-                    onFetchPreferences = {
-                        PreferencesResponse(
-                            defaultDifficulty = "toeic_800",
-                            defaultPlaybackSpeed = 1.0,
-                            digestEnabled = false,
-                            digestArticleCount = 0,
-                        )
-                    },
-                ),
-                sessionStore = InMemorySessionStore(initialToken = "token-abc"),
-            ),
-        )
-        return viewModel
-    }
-
-    /** hook 4 つは何もしない lambda を明示する（AuthSession の hook には既定値がない）。 */
-    private fun TestScope.newAuthSession(
-        apiClient: ApiClient,
-        sessionStore: InMemorySessionStore,
     ): AuthSession =
-        AuthSession(
-            authApi = AuthApiAdapter(apiClient),
-            sessionStore = sessionStore,
-            dispatcher = StandardTestDispatcher(testScheduler),
-            onSubjectLeave = {},
-            onSessionRestored = {},
-            onAuthenticated = {},
-            onSubjectResolved = {},
+        testAuthSession(
+            apiClient = com.rioikeda.newslisten.auth.FakeApiClient(
+                onMe = { initialUser },
+                onFetchPreferences = {
+                    PreferencesResponse(
+                        defaultDifficulty = "toeic_800",
+                        defaultPlaybackSpeed = 1.0,
+                        digestEnabled = false,
+                        digestArticleCount = 0,
+                    )
+                },
+            ),
+            sessionStore = InMemorySessionStore(initialToken = "token-abc"),
         )
 
     private fun TestScope.newViewModel(
         apiClient: ApiClient = FakeApiClient(),
-        authViewModel: AuthViewModel = authenticatedAuthViewModel(),
+        authSession: AuthSession = authenticatedAuthSession(),
+        authViewModel: AuthViewModel = AuthViewModel(authSession = authSession),
     ): AccountViewModel =
         AccountViewModel(
-            apiClient = apiClient,
+            accountCommands = AccountCommands(AccountApiAdapter(apiClient), authSession),
             authViewModel = authViewModel,
             dispatcher = StandardTestDispatcher(testScheduler),
         )
@@ -84,8 +66,9 @@ class AccountViewModelTest {
 
     @Test
     fun 認証後にprefillDisplayNameを呼ぶと表示名が反映される() = runTest {
-        val authViewModel = authenticatedAuthViewModel()
-        val viewModel = newViewModel(authViewModel = authViewModel)
+        val authSession = authenticatedAuthSession()
+        val authViewModel = AuthViewModel(authSession = authSession)
+        val viewModel = newViewModel(authSession = authSession, authViewModel = authViewModel)
         // 初期状態は Unknown なので空
         assertEquals("", viewModel.displayName.value)
 
@@ -97,13 +80,12 @@ class AccountViewModelTest {
 
     @Test
     fun 非AuthenticatedならprefillDisplayName後も空である() = runTest {
-        val authViewModel = AuthViewModel(
-            authSession = newAuthSession(
-                apiClient = com.rioikeda.newslisten.auth.FakeApiClient(),
-                sessionStore = InMemorySessionStore(initialToken = null),
-            ),
+        val authSession = testAuthSession(
+            apiClient = com.rioikeda.newslisten.auth.FakeApiClient(),
+            sessionStore = InMemorySessionStore(initialToken = null),
         )
-        val viewModel = newViewModel(authViewModel = authViewModel)
+        val authViewModel = AuthViewModel(authSession = authSession)
+        val viewModel = newViewModel(authSession = authSession, authViewModel = authViewModel)
         authViewModel.refreshAuth()
 
         viewModel.prefillDisplayName()
@@ -115,11 +97,13 @@ class AccountViewModelTest {
 
     @Test
     fun saveProfile成功でAuthViewModelのAuthStateへ反映されメッセージが表示される() = runTest {
-        val authViewModel = authenticatedAuthViewModel()
+        val authSession = authenticatedAuthSession()
+        val authViewModel = AuthViewModel(authSession = authSession)
         authViewModel.refreshAuth()
         val updatedUser = user.copy(displayName = "新しい表示名")
         val viewModel = newViewModel(
             apiClient = FakeApiClient(onUpdateProfile = { updatedUser }),
+            authSession = authSession,
             authViewModel = authViewModel,
         )
         viewModel.onDisplayNameChange("新しい表示名")
@@ -132,11 +116,13 @@ class AccountViewModelTest {
 
     @Test
     fun saveProfile失敗でエラーメッセージが表示されAuthStateは変わらない() = runTest {
-        val authViewModel = authenticatedAuthViewModel()
+        val authSession = authenticatedAuthSession()
+        val authViewModel = AuthViewModel(authSession = authSession)
         authViewModel.refreshAuth()
         val stateBeforeSave = authViewModel.authState.value
         val viewModel = newViewModel(
             apiClient = FakeApiClient(onUpdateProfile = { throw ApiException.HttpError(500) }),
+            authSession = authSession,
             authViewModel = authViewModel,
         )
         viewModel.onDisplayNameChange("新しい表示名")

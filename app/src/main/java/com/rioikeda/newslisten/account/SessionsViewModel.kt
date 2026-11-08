@@ -1,8 +1,11 @@
 package com.rioikeda.newslisten.account
 
-import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.model.SessionResponse
-import com.rioikeda.newslisten.network.ApiClient
+import com.rioikeda.newslisten.account.app.AccountCommands
+import com.rioikeda.newslisten.account.app.RevokedSessionsReceipt
+import com.rioikeda.newslisten.account.app.SessionQueries
+import com.rioikeda.newslisten.account.app.SessionRow
+import com.rioikeda.newslisten.account.app.SessionsLoad
+import com.rioikeda.newslisten.account.app.SessionsView
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,11 +22,12 @@ import kotlinx.coroutines.withContext
  * 行わない（着手前反証ゲートで確認済み）。
  */
 class SessionsViewModel(
-    private val apiClient: ApiClient,
+    private val sessionQueries: SessionQueries,
+    private val accountCommands: AccountCommands,
     private val dispatcher: CoroutineDispatcher,
 ) {
-    private val _sessions = MutableStateFlow<List<SessionResponse>>(emptyList())
-    val sessions: StateFlow<List<SessionResponse>> = _sessions.asStateFlow()
+    private val _sessions = MutableStateFlow<List<SessionRow>>(emptyList())
+    val sessions: StateFlow<List<SessionRow>> = _sessions.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -43,10 +47,10 @@ class SessionsViewModel(
     private val _hasOtherSessions = MutableStateFlow(false)
     val hasOtherSessions: StateFlow<Boolean> = _hasOtherSessions.asStateFlow()
 
-    /** [_sessions] と、そこから導出される [_hasOtherSessions] を同時に更新する内部ヘルパー。 */
-    private fun applySessions(list: List<SessionResponse>) {
-        _sessions.value = list
-        _hasOtherSessions.value = list.any { !it.current }
+    /** [_sessions] と、[SessionsView] が導出した [_hasOtherSessions] を同時に更新する内部ヘルパー。 */
+    private fun applyView(view: SessionsView) {
+        _sessions.value = view.sessions
+        _hasOtherSessions.value = view.hasOtherSessions
     }
 
     /** 有効セッション一覧をサーバから取得する。 */
@@ -64,16 +68,15 @@ class SessionsViewModel(
      * 導線のみで防いでいる。Android もこれに準拠し、ViewModel 層では current かどうかに
      * 関わらず失効を実行する（UI 側の導線設計は別タスクのスコープ）。
      *
-     * 404（既に失効済み）は冪等成功として扱う（backend/API 契約準拠）。これは [ApiClient.revokeSession]
+     * 404（既に失効済み）は冪等成功として扱う（backend/API 契約準拠）。これは `ApiClient.revokeSession`
      * で既に処理されるため、ViewModel では 404 を個別に処理する必要はない（ApiClient 層の保証）。
      * 成功時はサーバ再取得ではなくローカル除去のみ行う（iOS:56 と同じ、不要な往復を避ける）。
      */
     suspend fun revokeSession(id: String): Unit = withContext(dispatcher) {
         _revokedOthersCount.value = null // 個別操作時は一括失効のフィードバックを消す（iOS:53 準拠）。
-        try {
-            apiClient.revokeSession(id)
-            applySessions(_sessions.value.filterNot { it.id == id })
-        } catch (e: ApiException) {
+        if (accountCommands.revokeSession(id) == null) {
+            applyView(SessionsView(_sessions.value.filterNot { it.id == id }))
+        } else {
             _errorMessage.value = REVOKE_ERROR_MESSAGE
         }
     }
@@ -90,22 +93,21 @@ class SessionsViewModel(
      * revokedOthersCount は保持したまま一覧だけを更新する。
      */
     suspend fun revokeOtherSessions(): Unit = withContext(dispatcher) {
-        try {
-            val response = apiClient.revokeOtherSessions()
-            _revokedOthersCount.value = response.revokedCount
-            fetchAndApplySessions()
-        } catch (e: ApiException) {
-            _errorMessage.value = REVOKE_OTHERS_ERROR_MESSAGE
+        when (val receipt = accountCommands.revokeOtherSessions()) {
+            is RevokedSessionsReceipt.Revoked -> {
+                _revokedOthersCount.value = receipt.revokedCount
+                fetchAndApplySessions()
+            }
+            is RevokedSessionsReceipt.Failed -> _errorMessage.value = REVOKE_OTHERS_ERROR_MESSAGE
         }
     }
 
-    /** セッション一覧を取得して [applySessions] に反映する共通処理（成否に関わらず isLoading を管理）。 */
+    /** セッション一覧を取得して [applyView] に反映する共通処理（成否に関わらず isLoading を管理）。 */
     private suspend fun fetchAndApplySessions() {
         _isLoading.value = true
-        try {
-            applySessions(apiClient.listSessions().sessions)
-        } catch (e: ApiException) {
-            _errorMessage.value = LIST_ERROR_MESSAGE
+        when (val load = sessionQueries.sessions()) {
+            is SessionsLoad.Loaded -> applyView(load.view)
+            is SessionsLoad.Failed -> _errorMessage.value = LIST_ERROR_MESSAGE
         }
         _isLoading.value = false
     }

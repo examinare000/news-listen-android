@@ -1,14 +1,17 @@
 package com.rioikeda.newslisten.account
 
+import com.rioikeda.newslisten.account.app.AccountCommands
+import com.rioikeda.newslisten.account.app.SessionQueries
 import com.rioikeda.newslisten.architecture.CallSpec
 import com.rioikeda.newslisten.architecture.ProbeData
 import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
+import com.rioikeda.newslisten.auth.probeAuthSession
 
 /** `SessionsViewModel` の query は一覧の読み。warm-up で失効の command を済ませた状態で観測する。 */
 internal val sessionsViewModelQueryProbes: QueryProbeSet = run {
-    val canned = mapOf("ApiClient#listSessions" to ProbeData.repeated(ProbeData.sessions))
+    val canned = mapOf("AccountApi#listSessions" to ProbeData.repeated(ProbeData.sessionRecords))
     val warmUp: suspend (Any, ProbeEnvironment) -> Unit = { owner, _ ->
         val viewModel = owner as SessionsViewModel
         viewModel.loadSessions()
@@ -19,5 +22,11 @@ internal val sessionsViewModelQueryProbes: QueryProbeSet = run {
         owner = "SessionsViewModel",
         scenarios = listOf(ProbeData.readSuccess(canned, warmUp), ProbeData.readFailure(warmUp = warmUp)),
         calls = listOf(CallSpec("SessionsViewModel#loadSessions")),
-    ) { env -> SessionsViewModel(env.apiClient, env.newDispatcher()) }
+    ) { env ->
+        SessionsViewModel(
+            sessionQueries = SessionQueries(env.accountApi),
+            accountCommands = AccountCommands(env.accountApi, probeAuthSession(env)),
+            dispatcher = env.newDispatcher(),
+        )
+    }
 }

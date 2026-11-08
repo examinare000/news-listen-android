@@ -1,9 +1,10 @@
 package com.rioikeda.newslisten.account
 
+import com.rioikeda.newslisten.account.app.AccountCommands
 import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
+import com.rioikeda.newslisten.auth.domain.PasswordRule
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.network.ApiClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,13 +19,12 @@ import kotlinx.coroutines.withContext
  * androidx.lifecycle.ViewModel は継承しない（[AuthViewModel]/[SettingsViewModel] と同じ設計判断。
  * Dispatcher をコンストラクタ注入し Compose 側の viewModelScope.launch { } から suspend 関数を呼ぶ）。
  *
- * WHY authViewModel を直接注入する（onSubjectLeave 等の関数注入パターンにしない）: 表示名更新の
- * 成否は AuthState そのものを書き換える必要があり、「認証層の型を知らずに済ませる」抽象化よりも
- * 「表示名更新は認証状態の一部を変更する操作である」という事実を素直に表現する方が単純になる
- * （SettingsViewModel の isAdminProvider は読み取り専用の問い合わせだが、こちらは書き込みが本質）。
+ * WHY authViewModel を受ける: 表示名の入力欄を認証済みユーザーの表示名でプリフィルするため、
+ * [AuthViewModel.authState] を読むだけに使う。表示名更新の成否の反映（AuthState の書き換え）は
+ * [AccountCommands.saveProfile] が AuthSession へ直接行うので、ここでは呼ばない。
  */
 class AccountViewModel(
-    private val apiClient: ApiClient,
+    private val accountCommands: AccountCommands,
     private val authViewModel: AuthViewModel,
     private val dispatcher: CoroutineDispatcher,
 ) {
@@ -84,16 +84,14 @@ class AccountViewModel(
     /**
      * 表示名をサーバへ保存する（iOS の「更新」ボタン = AccountSettingsView.swift:57 相当。
      * 即時 PATCH ではなく明示的な submit 操作）。
-     * 成功時は [AuthViewModel.applyProfileUpdate] へ更新後の表示名を渡し AuthState へ反映する。
+     * 成功時の AuthState への反映は [AccountCommands.saveProfile] が行う。
      */
     suspend fun saveProfile(): Unit = withContext(dispatcher) {
         _isLoading.value = true
-        try {
-            val updated = apiClient.updateProfile(_displayName.value)
-            authViewModel.applyProfileUpdate(updated.displayName)
+        if (accountCommands.saveProfile(_displayName.value) == null) {
             _profileMessage.value = "表示名を更新しました"
             _profileMessageIsError.value = false
-        } catch (e: ApiException) {
+        } else {
             _profileMessage.value = "表示名の更新に失敗しました"
             _profileMessageIsError.value = true
         }
@@ -112,21 +110,25 @@ class AccountViewModel(
      */
     suspend fun changePassword(): Unit = withContext(dispatcher) {
         _isLoading.value = true
-        try {
-            apiClient.changePassword(_currentPassword.value, _newPassword.value)
-            _currentPassword.value = ""
-            _newPassword.value = ""
-            _passwordMessage.value = "パスワードを変更しました"
-            _passwordMessageIsError.value = false
-        } catch (e: ApiException.InvalidInput) {
-            _passwordMessage.value = "現在のパスワードが正しくありません"
-            _passwordMessageIsError.value = true
-        } catch (e: ApiException.UnprocessableInput) {
-            _passwordMessage.value = PASSWORD_STRENGTH_ERROR_MESSAGE
-            _passwordMessageIsError.value = true
-        } catch (e: ApiException) {
-            _passwordMessage.value = GENERIC_PASSWORD_ERROR_MESSAGE
-            _passwordMessageIsError.value = true
+        when (accountCommands.changePassword(_currentPassword.value, _newPassword.value)) {
+            null -> {
+                _currentPassword.value = ""
+                _newPassword.value = ""
+                _passwordMessage.value = "パスワードを変更しました"
+                _passwordMessageIsError.value = false
+            }
+            is ApiException.InvalidInput -> {
+                _passwordMessage.value = "現在のパスワードが正しくありません"
+                _passwordMessageIsError.value = true
+            }
+            is ApiException.UnprocessableInput -> {
+                _passwordMessage.value = PASSWORD_STRENGTH_ERROR_MESSAGE
+                _passwordMessageIsError.value = true
+            }
+            else -> {
+                _passwordMessage.value = GENERIC_PASSWORD_ERROR_MESSAGE
+                _passwordMessageIsError.value = true
+            }
         }
         _isLoading.value = false
     }
@@ -135,8 +137,7 @@ class AccountViewModel(
         (authViewModel.authState.value as? AuthState.Authenticated)?.user?.displayName ?: ""
 
     private companion object {
-        const val PASSWORD_STRENGTH_ERROR_MESSAGE =
-            "パスワードは12文字以上で、英大文字・英小文字・数字・記号のうち3種類以上を組み合わせてください"
+        const val PASSWORD_STRENGTH_ERROR_MESSAGE = PasswordRule.GUIDANCE
         const val GENERIC_PASSWORD_ERROR_MESSAGE = "パスワードの変更に失敗しました"
     }
 }

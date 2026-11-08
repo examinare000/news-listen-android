@@ -1,15 +1,12 @@
 package com.rioikeda.newslisten.passkey
 
-import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.model.LoginResponse
-import com.rioikeda.newslisten.model.NewsListenJson
-import com.rioikeda.newslisten.network.ApiClient
+import com.rioikeda.newslisten.passkey.app.PasskeyCommands
+import com.rioikeda.newslisten.passkey.app.PasskeyLoginOutcome
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.jsonObject
 
 /**
  * ログイン画面「パスキーでログイン」フローの状態とロジックを担う ViewModel
@@ -19,18 +16,11 @@ import kotlinx.serialization.json.jsonObject
  * username 不要）・login/verify。androidx.lifecycle.ViewModel は継承しない
  * （[com.rioikeda.newslisten.auth.AuthViewModel] と同じ設計判断）。
  *
- * WHY [onLoginSuccess] を注入する（AuthViewModel を直接持たない）: セッション確立
- * （sessionStore.save・authState 遷移）は auth 層（[com.rioikeda.newslisten.auth.AuthViewModel]）が
- * 正本という既存の責務分担を保つため、verify 成功で得た [LoginResponse] を渡すだけの
- * フック注入パターン（[com.rioikeda.newslisten.auth.AuthViewModel] の onSubjectLeave/
- * onAuthenticated と同型）にした。AppContainer が
- * `{ response -> authViewModel.completePasskeyLogin(response) }` を注入する。
+ * セレモニーの手順とセッション確立への引き渡しは [PasskeyCommands] が持つ。ここは結果から文言を選ぶだけ。
  */
 class PasskeyLoginViewModel(
-    private val apiClient: ApiClient,
-    private val passkeyProvider: PasskeyProvider,
+    private val passkeyCommands: PasskeyCommands,
     private val dispatcher: CoroutineDispatcher,
-    private val onLoginSuccess: suspend (LoginResponse) -> Unit = {},
 ) {
     private val _isLoggingIn = MutableStateFlow(false)
     val isLoggingIn: StateFlow<Boolean> = _isLoggingIn.asStateFlow()
@@ -48,19 +38,12 @@ class PasskeyLoginViewModel(
         _errorMessage.value = null
         _isLoggingIn.value = true
         try {
-            // username は常に null（discoverable credential フロー。backend コメント参照:
-            // ユーザー列挙 oracle 防止のため username は credential 列挙に使われない）。
-            val options = apiClient.passkeyLoginOptions(null)
-            val responseJson = passkeyProvider.getCredential(options.options)
-            val credential = NewsListenJson.parseToJsonElement(responseJson).jsonObject
-            val loginResponse = apiClient.passkeyLoginVerify(options.challengeId, credential)
-            onLoginSuccess(loginResponse)
-        } catch (e: PasskeyCancellationException) {
-            // ユーザーがシステム UI をキャンセルしただけなので何もしない（エラー表示しない）。
-        } catch (e: ApiException) {
-            _errorMessage.value = GENERIC_MESSAGE
-        } catch (e: PasskeyProviderException) {
-            _errorMessage.value = GENERIC_MESSAGE
+            when (passkeyCommands.loginWithPasskey()) {
+                // ユーザーがシステム UI をキャンセルしただけなので何も出さない。
+                PasskeyLoginOutcome.LoggedIn, PasskeyLoginOutcome.Cancelled -> Unit
+                is PasskeyLoginOutcome.Failed, is PasskeyLoginOutcome.ProviderFailed ->
+                    _errorMessage.value = GENERIC_MESSAGE
+            }
         } finally {
             _isLoggingIn.value = false
         }
