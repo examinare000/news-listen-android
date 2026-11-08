@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.podcast
 
+import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.engagement.ListeningStreakStore
 import com.rioikeda.newslisten.model.PodcastResponse
@@ -64,6 +65,30 @@ class PodcastViewModelTest {
         ),
     )
 
+    // Coordinator と OfflineLibrary に同じ lookup を渡す。呼出の直前に使う Episode を登録する
+    // （一覧に無い値の再生やダウンロードも、lookup 経由で解決される）。
+    private val lookup = FakeEpisodeLookup()
+
+    private suspend fun PodcastViewModel.playNow(episode: Episode) {
+        lookup.register(episode)
+        playNow(episode.id)
+    }
+
+    private suspend fun PodcastViewModel.playNext(episode: Episode) {
+        lookup.register(episode)
+        playNext(episode.id)
+    }
+
+    private suspend fun PodcastViewModel.addToQueue(episode: Episode) {
+        lookup.register(episode)
+        addToQueue(episode.id)
+    }
+
+    private suspend fun PodcastViewModel.download(episode: Episode) {
+        lookup.register(episode)
+        download(episode.id)
+    }
+
     private fun TestScope.newViewModel(
         apiClient: FakePodcastApiClient,
         playerController: FakePlayerController,
@@ -73,11 +98,10 @@ class PodcastViewModelTest {
         preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
         currentSubject: () -> String? = { "u1" },
     ): PodcastViewModel {
-        val offlineLibrary = OfflineLibrary(cacheManager, apiClient, currentSubject, StandardTestDispatcher(testScheduler))
+        val offlineLibrary = OfflineLibrary(cacheManager, apiClient, lookup, currentSubject, StandardTestDispatcher(testScheduler))
         // 現行は 1 つの dispatcher が再生と一覧の両方を直列化する。Coordinator と ViewModel で同じ値を共有して範囲を保つ。
         val dispatcher = StandardTestDispatcher(testScheduler)
         return PodcastViewModel(
-            podcastApi = apiClient,
             apiClient = apiClient.learning,
             coordinator = PlaybackCoordinator(
                 podcastApi = apiClient,
@@ -88,7 +112,9 @@ class PodcastViewModelTest {
                 listeningStreakStore = listeningStreakStore,
                 dispatcher = dispatcher,
                 currentSubject = currentSubject,
+                episodeLookup = lookup,
             ),
+            catalog = EpisodeCatalog(apiClient, dispatcher) { offlineLibrary.syncDownloadedState(it) },
             offlineLibrary = offlineLibrary,
             dispatcher = dispatcher,
         )
@@ -104,7 +130,7 @@ class PodcastViewModelTest {
 
         viewModel.fetchPodcasts()
 
-        assertEquals(podcasts, viewModel.podcasts.value)
+        assertEquals(listOf("1", "2"), viewModel.episodes.value.map { it.row.episodeId })
         assertNull(viewModel.errorMessage.value)
         assertFalse(viewModel.isLoading.value)
     }
@@ -118,7 +144,7 @@ class PodcastViewModelTest {
         viewModel.fetchPodcasts()
 
         assertEquals(exception.message, viewModel.errorMessage.value)
-        assertTrue(viewModel.podcasts.value.isEmpty())
+        assertTrue(viewModel.episodes.value.isEmpty())
     }
 
     @Test
@@ -306,10 +332,9 @@ class PodcastViewModelTest {
             onDownloadAudio = { byteArrayOf(1) },
         )
         val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
-        val offlineLibrary = OfflineLibrary(cacheManager, apiClient, { "u1" }, StandardTestDispatcher(testScheduler))
+        val offlineLibrary = OfflineLibrary(cacheManager, apiClient, lookup, { "u1" }, StandardTestDispatcher(testScheduler))
         val dispatcher = StandardTestDispatcher(testScheduler)
         val viewModel = PodcastViewModel(
-            podcastApi = apiClient,
             apiClient = apiClient.learning,
             coordinator = PlaybackCoordinator(
                 podcastApi = apiClient,
@@ -320,7 +345,9 @@ class PodcastViewModelTest {
                 listeningStreakStore = null,
                 dispatcher = dispatcher,
                 currentSubject = { "u1" },
+                episodeLookup = lookup,
             ),
+            catalog = EpisodeCatalog(apiClient, dispatcher) { offlineLibrary.syncDownloadedState(it) },
             offlineLibrary = offlineLibrary,
             dispatcher = dispatcher,
         )
@@ -548,7 +575,7 @@ class PodcastViewModelTest {
 
         viewModel.fetchPodcasts()
 
-        assertEquals(1, viewModel.podcasts.value.size)
+        assertEquals(1, viewModel.episodes.value.size)
         assertEquals("生成中のため再生できません", viewModel.errorMessage.value)
     }
 
@@ -588,5 +615,78 @@ class PodcastViewModelTest {
         runCurrent()
 
         assertEquals(listOf(null, "生成中のため再生できません", exception.message, null), recorded)
+    }
+
+    @Test
+    fun `android-dec-63 errorMessageは自前の失敗を最優先しCatalogの失敗が次で再生の失敗が最後でclearErrorで3つとも消える`() = runTest {
+        val fetchFailure = ApiException.NetworkError(RuntimeException("offline"))
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcasts = { throw fetchFailure },
+            onSaveVocabulary = { _, _ -> throw ApiException.NetworkError(RuntimeException("save")) },
+        )
+        val viewModel = newViewModel(apiClient, FakePlayerController())
+
+        viewModel.playNow(podcast(status = "processing")) // 再生の失敗だけがある
+        assertEquals("生成中のため再生できません", viewModel.errorMessage.value)
+
+        viewModel.fetchPodcasts() // Catalog の失敗が重なると、再生の失敗より優先される
+        assertEquals(fetchFailure.message, viewModel.errorMessage.value)
+
+        viewModel.saveVocabulary("p1", "term") // 自前の失敗が重なると、自前の値が見える
+        val own = viewModel.errorMessage.value
+        assertNotNull(own)
+        assertTrue(own != fetchFailure.message && own != "生成中のため再生できません")
+
+        viewModel.clearError() // 3 つの持ち主のどれか 1 つでも残れば、次の assert で見える
+        assertNull(viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `android-dec-63 fetchPodcastsが成功してもVM自身の失敗は消えない`() = runTest {
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcasts = { listOf(podcast("1")) },
+            onSaveVocabulary = { _, _ -> throw ApiException.NetworkError(RuntimeException("save")) },
+        )
+        val viewModel = newViewModel(apiClient, FakePlayerController())
+        viewModel.saveVocabulary("p1", "term")
+        val own = viewModel.errorMessage.value
+        assertNotNull(own)
+
+        viewModel.fetchPodcasts()
+
+        assertEquals(own, viewModel.errorMessage.value)
+        assertEquals(1, viewModel.episodes.value.size)
+    }
+
+    @Test
+    fun `episodesは一覧と再生中を突き合わせてisNowPlayingを付けcollectは変化ごとに届く`() = runTest {
+        val a = podcast("a")
+        val b = podcast("b")
+        val byId = listOf(a, b).associateBy { it.id }
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcasts = { listOf(a, b) },
+            onFetchPodcast = { id -> byId.getValue(id) },
+            onUpdatePlaybackPosition = { id, _ -> byId.getValue(id) },
+        )
+        val viewModel = newViewModel(apiClient, FakePlayerController())
+        val recorded = mutableListOf<Set<String>>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.episodes.collect { items -> recorded += items.filter { it.isNowPlaying }.map { it.row.episodeId }.toSet() }
+        }
+        runCurrent()
+
+        viewModel.fetchPodcasts()
+        assertEquals(listOf("a", "b"), viewModel.episodes.value.map { it.row.episodeId })
+        assertTrue(viewModel.episodes.value.none { it.isNowPlaying })
+
+        viewModel.playNow(a)
+        assertEquals(listOf(true, false), viewModel.episodes.value.map { it.isNowPlaying })
+
+        viewModel.playNow(b)
+        assertEquals(listOf(false, true), viewModel.episodes.value.map { it.isNowPlaying })
+        runCurrent()
+
+        assertEquals(listOf(emptySet(), setOf("a"), setOf("b")), recorded.distinct())
+        viewModel.stopForSubjectLeave()
     }
 }

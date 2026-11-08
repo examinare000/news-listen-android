@@ -9,6 +9,7 @@ import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
+import com.rioikeda.newslisten.podcast.FakeEpisodeLookup
 import com.rioikeda.newslisten.podcast.FakePlayerController
 import com.rioikeda.newslisten.podcast.FakePodcastApiClient
 import com.rioikeda.newslisten.podcast.OfflineLibrary
@@ -84,6 +85,24 @@ class PlaybackCoordinatorTest {
         ),
     )
 
+    // 呼出の直前に使う Episode を登録する（android-dec-64: command は id を受け、解決は lookup が行う）。
+    private val lookup = FakeEpisodeLookup()
+
+    private suspend fun PlaybackCoordinator.playNow(episode: Episode) {
+        lookup.register(episode)
+        playNow(episode.id)
+    }
+
+    private suspend fun PlaybackCoordinator.playNext(episode: Episode) {
+        lookup.register(episode)
+        playNext(episode.id)
+    }
+
+    private suspend fun PlaybackCoordinator.addToQueue(episode: Episode) {
+        lookup.register(episode)
+        addToQueue(episode.id)
+    }
+
     private fun TestScope.newCoordinator(
         apiClient: FakePodcastApiClient,
         playerController: FakePlayerController,
@@ -96,7 +115,8 @@ class PlaybackCoordinatorTest {
         PlaybackCoordinator(
             podcastApi = apiClient,
             playerController = playerController,
-            offlineLibrary = OfflineLibrary(cacheManager, apiClient, currentSubject, StandardTestDispatcher(testScheduler)),
+            offlineLibrary = OfflineLibrary(cacheManager, apiClient, lookup, currentSubject, StandardTestDispatcher(testScheduler)),
+            episodeLookup = lookup,
             networkMonitor = networkMonitor,
             preferencesStore = preferencesStore,
             listeningStreakStore = listeningStreakStore,
@@ -787,7 +807,7 @@ class PlaybackCoordinatorTest {
         coordinator.playNext(p2)
         coordinator.playNext(p3) // 現在の直後へ挿入: キュー = [p1*, p3, p2]
 
-        coordinator.moveUpNext(from = 1, toOffset = 0)
+        coordinator.moveUp(p2.id)
 
         assertEquals(listOf(p2, p3), coordinator.queue.value.upNext)
 
@@ -1859,12 +1879,124 @@ class PlaybackCoordinatorTest {
         coordinator.playNext(pB)
         coordinator.playNext(pC)
 
-        coordinator.moveUpNext(from = 1, toOffset = 0)
+        coordinator.moveUp(pB.id)
         assertSharedInv01(coordinator)
         coordinator.removeFromQueue(pC.id)
 
         assertSharedInv01(coordinator)
         assertEquals(pA, coordinator.queue.value.current)
+        coordinator.stopForSubjectLeave()
+    }
+
+    // --- id を受ける command（android-dec-64: 未知の id は何もしない。moveUp・moveDown は id で位置を引く） ---
+
+    @Test
+    fun `android-dec-64 未知のidのplayNowはsessionもキューもplayerも通信も変えない`() = runTest {
+        val apiClient = FakePodcastApiClient()
+        val player = FakePlayerController()
+        val coordinator = newCoordinator(apiClient, player)
+
+        coordinator.playNow("unknown")
+
+        assertEquals(NothingPlaying, coordinator.session.value)
+        assertTrue(coordinator.queue.value.items.isEmpty())
+        assertNull(coordinator.errorMessage.value)
+        assertNull(coordinator.nowPlaying.value)
+        assertTrue(player.prepareCalls.isEmpty())
+        assertEquals(0, apiClient.fetchPodcastsCallCount)
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+    }
+
+    @Test
+    fun `android-dec-64 未知のidのplayNextとaddToQueueはキューもsessionも通信も変えず既知のidでは積まれる`() = runTest {
+        val pA = podcast(id = "pA")
+        val pB = podcast(id = "pB")
+        val apiClient = queueApiClient(pA, pB)
+        val player = FakePlayerController()
+        val coordinator = newCoordinator(apiClient, player)
+
+        coordinator.playNext("unknown")
+        coordinator.addToQueue("unknown")
+
+        assertEquals(NothingPlaying, coordinator.session.value)
+        assertTrue(coordinator.queue.value.items.isEmpty())
+        assertNull(coordinator.errorMessage.value)
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+
+        // 正方向の対照: 既知の id は NothingPlaying なら開始し、続く addToQueue は待機列へ積む。
+        coordinator.addToQueue(pA)
+        coordinator.addToQueue(pB)
+        assertEquals(pA, coordinator.queue.value.current)
+        assertEquals(listOf(pB), coordinator.queue.value.upNext)
+
+        coordinator.stopForSubjectLeave()
+    }
+
+    @Test
+    fun `android-dec-64 未知のidのcommandは待っている自動の前進を捨てない`() = runTest {
+        // 世代を解決の前に進める誤った実装では、取得を待つ前進が捨てられて Completed(pA) のままになる。
+        val (pA, pC) = listOf("pA", "pC").map { podcast(id = it) }
+        val gateC = CompletableDeferred<Unit>()
+        val apiClient = gatedApiClient(listOf(pA, pC), fetchGates = mapOf("pC" to gateC))
+        val player = FakePlayerController()
+        val coordinator = newCoordinator(apiClient, player)
+        coordinator.playNow(pA)
+        coordinator.addToQueue(pC)
+        emitPlaying(player)
+
+        emit(player, PlaybackState.Ended(300.0)) // 自動の前進が pC の取得で待たされる
+        assertEquals(Completed(playable(pA)), coordinator.session.value)
+
+        coordinator.playNow("unknown")
+        coordinator.playNext("unknown")
+        coordinator.addToQueue("unknown")
+        gateC.complete(Unit)
+        runCurrent()
+
+        assertEquals(starting(pC), coordinator.session.value)
+        assertEquals(listOf(playable(pA).audioUrl, playable(pC).audioUrl), player.prepareCalls)
+        assertEquals(listOf("pA", "pC"), coordinator.queue.value.items.map { it.id })
+
+        coordinator.stopForSubjectLeave()
+    }
+
+    @Test
+    fun `moveUpとmoveDownはidの待機列の位置を一つ前後へ動かす`() = runTest {
+        val (p, a, b, c) = listOf("p", "a", "b", "c").map { podcast(id = it) }
+        val coordinator = newCoordinator(queueApiClient(p, a, b, c), FakePlayerController())
+        coordinator.playNow(p)
+        coordinator.addToQueue(a)
+        coordinator.addToQueue(b)
+        coordinator.addToQueue(c)
+
+        coordinator.moveUp(b.id)
+        assertEquals(listOf("b", "a", "c"), coordinator.queue.value.upNext.map { it.id })
+
+        coordinator.moveDown(b.id)
+        assertEquals(listOf("a", "b", "c"), coordinator.queue.value.upNext.map { it.id })
+
+        coordinator.stopForSubjectLeave()
+    }
+
+    @Test
+    fun `moveUpとmoveDownは先頭と末尾と待機列に無いidと現在再生中のidでキューを変えない`() = runTest {
+        val (p, a, b) = listOf("p", "a", "b").map { podcast(id = it) }
+        val coordinator = newCoordinator(queueApiClient(p, a, b), FakePlayerController())
+        coordinator.playNow(p)
+        coordinator.addToQueue(a)
+        coordinator.addToQueue(b)
+        val before = coordinator.queue.value
+
+        coordinator.moveUp(a.id)
+        coordinator.moveDown(b.id)
+        coordinator.moveUp("x")
+        coordinator.moveDown("x")
+        coordinator.moveUp(p.id)
+        coordinator.moveDown(p.id)
+
+        assertEquals(before, coordinator.queue.value)
+        assertEquals(listOf("a", "b"), coordinator.queue.value.upNext.map { it.id })
+
         coordinator.stopForSubjectLeave()
     }
 

@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.podcast
 
+import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.catalog.domain.EpisodeGlossaryEntry
 import com.rioikeda.newslisten.catalog.domain.EpisodeKind
@@ -9,6 +10,7 @@ import com.rioikeda.newslisten.catalog.domain.EpisodeTranscriptSegment
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
+import com.rioikeda.newslisten.podcast.app.NowPlaying
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -61,33 +63,37 @@ internal fun playableWithContent(id: String): Episode.Playable = Episode.Playabl
 @OptIn(ExperimentalCoroutinesApi::class)
 class NowPlayingEncapsulationTest {
 
-    private suspend fun TestScope.startPlaying(episode: Episode.Playable): PodcastViewModel {
+    private suspend fun TestScope.startPlaying(episode: Episode.Playable): Pair<PodcastViewModel, PlaybackCoordinator> {
+        val lookup = FakeEpisodeLookup().also { it.register(episode) }
         val apiClient = FakePodcastApiClient(onFetchPodcast = { episode }, onUpdatePlaybackPosition = { _, _ -> episode })
         val offlineLibrary = OfflineLibrary(
             AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
             apiClient,
+            lookup,
             { null },
             StandardTestDispatcher(testScheduler),
         )
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val viewModel = PodcastViewModel(
+        val coordinator = PlaybackCoordinator(
             podcastApi = apiClient,
+            playerController = FakePlayerController(),
+            offlineLibrary = offlineLibrary,
+            networkMonitor = StubNetworkMonitor(initialIsOnline = true),
+            preferencesStore = InMemoryPreferencesStore(),
+            listeningStreakStore = null,
+            dispatcher = dispatcher,
+            currentSubject = { null },
+            episodeLookup = lookup,
+        )
+        val viewModel = PodcastViewModel(
             apiClient = apiClient.learning,
-            coordinator = PlaybackCoordinator(
-                podcastApi = apiClient,
-                playerController = FakePlayerController(),
-                offlineLibrary = offlineLibrary,
-                networkMonitor = StubNetworkMonitor(initialIsOnline = true),
-                preferencesStore = InMemoryPreferencesStore(),
-                listeningStreakStore = null,
-                dispatcher = dispatcher,
-                currentSubject = { null },
-            ),
+            coordinator = coordinator,
+            catalog = EpisodeCatalog(apiClient, dispatcher) { offlineLibrary.syncDownloadedState(it) },
             offlineLibrary = offlineLibrary,
             dispatcher = dispatcher,
         )
-        viewModel.playNow(episode)
-        return viewModel
+        viewModel.playNow(episode.id)
+        return viewModel to coordinator
     }
 
     /** 書き換えを試みる。読み取り専用なら [UnsupportedOperationException] で弾かれるので握って次へ進む。 */
@@ -105,7 +111,7 @@ class NowPlayingEncapsulationTest {
         extra: T,
     ) {
         val episode = playableWithContent("pA")
-        val viewModel = startPlaying(episode)
+        val (viewModel, coordinator) = startPlaying(episode)
         val before = viewModel.nowPlaying.value
         assertNotNull(before)
         val snapshot = select(before!!)!!.toList()
@@ -115,7 +121,7 @@ class NowPlayingEncapsulationTest {
         attemptWrite(select(before), extra)
 
         assertEquals(snapshot, select(viewModel.nowPlaying.value!!))
-        assertEquals(snapshot, selectFromEpisode((viewModel.session.value as PlaybackSession.Starting).episode))
+        assertEquals(snapshot, selectFromEpisode((coordinator.session.value as PlaybackSession.Starting).episode))
         viewModel.stopForSubjectLeave()
     }
 

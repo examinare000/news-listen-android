@@ -59,43 +59,52 @@ class NoThrowingDefaultStructureTest {
     }
 
     @Test
-    fun PodcastViewModelの再生5操作はpodcastApi経由で語彙_クイズ3操作はapiClient経由で呼ぶ() {
+    fun EpisodeCatalogは再生5操作をpodcastApi経由で呼びPodcastViewModelはpodcastApiを呼ばず語彙_クイズ3操作だけをapiClient経由で呼ぶ() {
         // verifies: android-contract-18
         val root = resolveMainSourceRoot()
-        val file = root.walkTopDown().firstOrNull { it.name == "PodcastViewModel.kt" }
+        val catalogFile = root.walkTopDown().firstOrNull { it.name == "EpisodeCatalog.kt" }
+            ?: error("走査ルート $root に EpisodeCatalog.kt が見つからない")
+        val viewModelFile = root.walkTopDown().firstOrNull { it.name == "PodcastViewModel.kt" }
             ?: error("走査ルート $root に PodcastViewModel.kt が見つからない")
-        val text = file.readText()
+        val catalogText = catalogFile.readText()
+        val viewModelText = viewModelFile.readText()
 
         val playbackOps = setOf(
             "fetchPodcasts", "fetchPodcast", "updatePlaybackPosition", "markCompleted", "downloadAudio",
         )
         val vocabQuizOps = setOf("fetchVocabulary", "saveVocabulary", "submitQuizAnswers")
 
-        val apiClientCalls = Regex("""\bapiClient\.(\w+)\(""")
-            .findAll(text).map { it.groupValues[1] }.toSet()
-        val podcastApiCalls = Regex("""\bpodcastApi\.(\w+)\(""")
-            .findAll(text).map { it.groupValues[1] }.toSet()
+        val catalogPodcastApiCalls = Regex("""\bpodcastApi\.(\w+)\(""")
+            .findAll(catalogText).map { it.groupValues[1] }.toSet()
+        val viewModelPodcastApiCalls = Regex("""\bpodcastApi\.(\w+)\(""")
+            .findAll(viewModelText).map { it.groupValues[1] }.toSet()
+        val viewModelApiClientCalls = Regex("""\bapiClient\.(\w+)\(""")
+            .findAll(viewModelText).map { it.groupValues[1] }.toSet()
 
         assertTrue(
-            "apiClient 経由の呼出は語彙・クイズ3操作のみであるべき（実際: $apiClientCalls）",
-            apiClientCalls.all { it in vocabQuizOps },
+            "EpisodeCatalog の podcastApi 経由の呼出は空でなく再生5操作のみであるべき（実際: $catalogPodcastApiCalls）",
+            catalogPodcastApiCalls.isNotEmpty() && catalogPodcastApiCalls.all { it in playbackOps },
         )
         assertTrue(
-            "podcastApi 経由の呼出は空でなく再生5操作のみであるべき（実際: $podcastApiCalls）",
-            podcastApiCalls.isNotEmpty() && podcastApiCalls.all { it in playbackOps },
+            "PodcastViewModel は podcastApi を呼ばない（実際: $viewModelPodcastApiCalls）",
+            viewModelPodcastApiCalls.isEmpty(),
+        )
+        assertTrue(
+            "PodcastViewModel の apiClient 経由の呼出は語彙・クイズ3操作のみであるべき（実際: $viewModelApiClientCalls）",
+            viewModelApiClientCalls.all { it in vocabQuizOps },
         )
     }
 
     @Test
-    fun AppContainerはPodcastViewModelのpodcastApiへPodcastApiAdapterを渡す() {
+    fun AppContainerはEpisodeCatalogのpodcastApiへPodcastApiAdapterを渡す() {
         // verifies: android-contract-18
         val root = resolveMainSourceRoot()
         val file = root.walkTopDown().firstOrNull { it.name == "AppContainer.kt" }
             ?: error("走査ルート $root に AppContainer.kt が見つからない")
         val text = file.readText()
 
-        val callStart = text.indexOf("PodcastViewModel(")
-        check(callStart >= 0) { "${file.path} に PodcastViewModel( の呼び出しが見つからない（vacuous pass ガード）" }
+        val callStart = text.indexOf("EpisodeCatalog(")
+        check(callStart >= 0) { "${file.path} に EpisodeCatalog( の呼び出しが見つからない（vacuous pass ガード）" }
         val call = text.substring(callStart)
         val podcastApiArg = Regex("""podcastApi\s*=\s*(\w+)\(""").find(call)
         assertTrue(

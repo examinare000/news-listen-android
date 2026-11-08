@@ -58,12 +58,59 @@ class OfflineLibraryTest {
         ),
     )
 
+    // 呼出の直前に使う Episode を登録する（android-dec-64: download は id を受け、解決は lookup が行う）。
+    private val lookup = FakeEpisodeLookup()
+
+    private suspend fun OfflineLibrary.download(episode: Episode) {
+        lookup.register(episode)
+        download(episode.id)
+    }
+
     private fun TestScope.newLibrary(
         apiClient: FakePodcastApiClient,
         cacheManager: AudioStore = AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
         currentSubject: () -> String? = { "u1" },
     ): OfflineLibrary =
-        OfflineLibrary(cacheManager, apiClient, currentSubject, StandardTestDispatcher(testScheduler))
+        OfflineLibrary(cacheManager, apiClient, lookup, currentSubject, StandardTestDispatcher(testScheduler))
+
+    @Test
+    fun `android-dec-64 未知のidのdownloadは保存庫もダウンロード状態も通信も変えずlastErrorはnull`() = runTest {
+        val apiClient = FakePodcastApiClient(onFetchPodcast = { error("呼ばれてはならない") })
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val library = newLibrary(apiClient, cacheManager)
+
+        library.download("unknown")
+
+        assertTrue(library.downloadingIds.value.isEmpty())
+        assertTrue(library.downloadedIds.value.isEmpty())
+        assertFalse(cacheManager.isCached("u1", "unknown"))
+        assertTrue(apiClient.fetchPodcastCalls.isEmpty())
+        assertTrue(apiClient.downloadAudioCalls.isEmpty())
+        assertNull(library.lastError.value)
+    }
+
+    @Test
+    fun `android-dec-64 未知のidのdownloadは直前の失敗を消し既知のidでは保存される`() = runTest {
+        val p1 = podcast(id = "p1")
+        var fetched: Episode = podcast(id = "p1", status = "processing")
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { fetched },
+            onDownloadAudio = { byteArrayOf(1, 2, 3) },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val library = newLibrary(apiClient, cacheManager)
+        library.download(p1) // 取り直した値が生成中なので、失敗の文言が lastError に残る
+        assertNotNull(library.lastError.value)
+
+        library.download("unknown") // 冒頭で lastError を初期化した後に何もしない
+        assertNull(library.lastError.value)
+        assertTrue(library.downloadedIds.value.isEmpty())
+
+        fetched = p1 // 正方向の対照
+        library.download("p1")
+        assertTrue(cacheManager.isCached("u1", "p1"))
+        assertEquals(setOf("p1"), library.downloadedIds.value)
+    }
 
     /**
      * fetchPodcast を id ごとに止める double。[arm] した時点の gate を、呼ばれたときに待つ。

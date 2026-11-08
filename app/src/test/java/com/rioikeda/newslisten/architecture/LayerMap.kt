@@ -59,6 +59,8 @@ object LayerMap {
         "notification/FcmTokenRegistrar.kt",
         "podcast/OfflineLibrary.kt",
         "podcast/app/PlaybackCoordinator.kt",
+        "podcast/app/EpisodeLookup.kt",
+        "catalog/app/EpisodeCatalog.kt",
     )
 
     private val port = listOf(
@@ -75,6 +77,8 @@ object LayerMap {
 
     private val readModel = listOf(
         "podcast/PlaybackMetadata.kt",
+        "podcast/app/PlaybackReadModels.kt",
+        "catalog/app/EpisodeRow.kt",
     )
 
     private val adapter = listOf(
@@ -205,7 +209,7 @@ object LayerMap {
 
     /** `NowPlaying` は android-slice-playback-03 が `PlaybackSession.kt` に足す。宣言が無い間は検査を skip する（CI-13）。 */
     val typeRows: List<TypeRow> = listOf(
-        TypeRow("podcast/PlaybackSession.kt", "NowPlaying", Layer.READ_MODEL, "android-slice-playback-03"),
+        TypeRow("podcast/app/PlaybackReadModels.kt", "NowPlaying", Layer.READ_MODEL, "android-slice-playapp-02"),
     )
 
     val permanentExceptions: List<PermanentException> = listOf(

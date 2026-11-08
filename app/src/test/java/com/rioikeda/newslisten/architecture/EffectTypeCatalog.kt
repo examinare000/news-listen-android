@@ -165,6 +165,7 @@ data class EffectTypeCatalog(
                 HookRow("DSFeedback#sfxEnabled", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("DSFeedback#hapticsEnabled", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("DSFeedback#nowMillis", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
+                HookRow("EpisodeCatalog#afterRefresh", HookKind.WRITE, HookShape.SUSPEND_ONE_ARG, HookWiring.CONSTRUCTOR),
             ),
             addedTypes = listOf(
                 ClassifiedTypeRow(

@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.podcast
 
+import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.network.AudioCacheManager
@@ -46,12 +47,12 @@ class PodcastViewModelPortTest {
         val offlineLibrary = OfflineLibrary(
             AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
             podcastApi,
+            FakeEpisodeLookup(),
             { null },
             StandardTestDispatcher(testScheduler),
         )
         val dispatcher = StandardTestDispatcher(testScheduler)
         val viewModel = PodcastViewModel(
-            podcastApi = podcastApi,
             apiClient = apiClient,
             coordinator = PlaybackCoordinator(
                 podcastApi = podcastApi,
@@ -62,7 +63,9 @@ class PodcastViewModelPortTest {
                 listeningStreakStore = null,
                 dispatcher = dispatcher,
                 currentSubject = { null },
+                episodeLookup = FakeEpisodeLookup(),
             ),
+            catalog = EpisodeCatalog(podcastApi, dispatcher) { offlineLibrary.syncDownloadedState(it) },
             offlineLibrary = offlineLibrary,
             dispatcher = dispatcher,
         )
@@ -70,7 +73,7 @@ class PodcastViewModelPortTest {
         viewModel.fetchPodcasts()
 
         assertEquals(1, podcastApi.fetchPodcastsCallCount)
-        assertEquals(listOf(podcast("p1")), viewModel.podcasts.value)
+        assertEquals(listOf("p1"), viewModel.episodes.value.map { it.row.episodeId })
         assertNull(viewModel.errorMessage.value)
     }
 }
