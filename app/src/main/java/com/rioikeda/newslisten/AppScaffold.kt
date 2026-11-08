@@ -52,7 +52,6 @@ import com.rioikeda.newslisten.passkey.PasskeyCredentialsViewModel
 import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
 import com.rioikeda.newslisten.podcast.PodcastScreen
 import com.rioikeda.newslisten.podcast.PodcastViewModel
-import com.rioikeda.newslisten.preferences.PreferencesStore
 import com.rioikeda.newslisten.settings.SettingsScreen
 import com.rioikeda.newslisten.settings.SettingsViewModel
 
@@ -65,7 +64,6 @@ import com.rioikeda.newslisten.settings.SettingsViewModel
  * @param feedViewModel フィード タブの ViewModel（AppContainer.getFeedViewModel() から供給）。
  * @param podcastViewModel Podcast タブの ViewModel（AppContainer.getPodcastViewModel() から供給）。
  * @param settingsViewModel 設定 タブの ViewModel（AppContainer.getSettingsViewModel() から供給）。
- * @param preferencesStore ユーザー設定値の永続化層（AppContainer.getPreferencesStore() から供給）。
  * @param authViewModel 認証状態 ViewModel（SettingsScreen の admin ゲート判定用）。
  * @param accountViewModel アカウント管理 ViewModel（AppContainer.getAccountViewModel() から供給・フェーズ11 P11 T3）。
  * @param sessionsViewModel デバイス管理 ViewModel（AppContainer.getSessionsViewModel() から供給・フェーズ11 P11 T4）。
@@ -80,7 +78,6 @@ fun AppScaffold(
     podcastViewModel: PodcastViewModel,
     learningViewModel: LearningViewModel,
     settingsViewModel: SettingsViewModel,
-    preferencesStore: PreferencesStore,
     authViewModel: AuthViewModel,
     accountViewModel: AccountViewModel,
     sessionsViewModel: SessionsViewModel,
@@ -90,7 +87,7 @@ fun AppScaffold(
     appContainer: com.rioikeda.newslisten.di.AppContainer? = null,
 ) {
     var selectedTab by remember { mutableStateOf(0) }
-    val feedback = rememberDSFeedback(preferencesStore)
+    val feedback = rememberDSFeedback(settingsViewModel.preferences)
     val listeningStreak by listeningStreakStore.listeningStreak.collectAsStateWithLifecycle()
 
     // 要件4: streak 増加検知の一本化。AppContainer で onStreakIncreased へ feedback を配線。
@@ -136,7 +133,6 @@ fun AppScaffold(
             screen = {
                 SettingsScreen(
                     settingsViewModel,
-                    preferencesStore,
                     authViewModel,
                     accountViewModel,
                     sessionsViewModel,

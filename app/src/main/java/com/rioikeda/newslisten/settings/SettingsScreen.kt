@@ -54,15 +54,15 @@ import com.rioikeda.newslisten.account.AccountViewModel
 import com.rioikeda.newslisten.account.SessionsViewModel
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.core.Difficulty
+import com.rioikeda.newslisten.core.PlaybackSpeed
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.model.FeaturedCategory
 import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.passkey.PasskeyCredentialsViewModel
 import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
-import com.rioikeda.newslisten.podcast.PlaybackConstants
 import com.rioikeda.newslisten.preferences.ArticleOpenMode
-import com.rioikeda.newslisten.preferences.PreferencesStore
 import com.rioikeda.newslisten.preferences.TimeFormat
+import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import kotlinx.coroutines.launch
 
 /**
@@ -72,7 +72,6 @@ import kotlinx.coroutines.launch
  * 記事の開き方・日付表記・アカウント（表示名/パスワード）・ログイン中デバイス管理を扱う。
  *
  * @param viewModel SettingsViewModel（RSS ソース・おすすめサイト・クォータ・ストリーク管理）
- * @param preferencesStore PreferencesStore（難易度・再生速度・記事開き方・日付表記）
  * @param authViewModel AuthViewModel（アカウント操作時の認証状態反映）
  * @param accountViewModel AccountViewModel（表示名/パスワード変更）
  * @param sessionsViewModel SessionsViewModel（デバイス一覧・失効管理）
@@ -83,7 +82,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    preferencesStore: PreferencesStore,
     authViewModel: AuthViewModel,
     accountViewModel: AccountViewModel,
     sessionsViewModel: SessionsViewModel,
@@ -126,14 +124,8 @@ fun SettingsScreen(
     // SettingsViewModel state（取り込みの失敗）
     val preferencesSyncFailed by viewModel.preferencesSyncFailed.collectAsStateWithLifecycle()
 
-    // PreferencesStore state
-    val defaultDifficulty by preferencesStore.defaultDifficulty.collectAsStateWithLifecycle()
-    val defaultPlaybackSpeed by preferencesStore.defaultPlaybackSpeed.collectAsStateWithLifecycle()
-    val articleOpenMode by preferencesStore.articleOpenMode.collectAsStateWithLifecycle()
-    val timeFormat by preferencesStore.timeFormat.collectAsStateWithLifecycle()
-    val sfxEnabled by preferencesStore.sfxEnabled.collectAsStateWithLifecycle()
-    val hapticsEnabled by preferencesStore.hapticsEnabled.collectAsStateWithLifecycle()
-    val weeklyGoalEpisodes by preferencesStore.weeklyGoalEpisodes.collectAsStateWithLifecycle()
+    // SettingsViewModel state（設定の現在値と選択肢）
+    val preferences by viewModel.preferences.collectAsStateWithLifecycle()
 
     // AccountViewModel state
     val displayName by accountViewModel.displayName.collectAsStateWithLifecycle()
@@ -177,14 +169,14 @@ fun SettingsScreen(
     var showRevokeOthersConfirmDialog by remember { mutableStateOf(false) }
 
     // Initialize selected indices
-    LaunchedEffect(defaultDifficulty, defaultPlaybackSpeed, articleOpenMode, timeFormat, weeklyGoalEpisodes) {
-        selectedDifficultyIndex = Difficulty.entries.indexOfFirst { it == defaultDifficulty }
+    LaunchedEffect(preferences.defaultDifficulty, preferences.defaultPlaybackSpeed, preferences.articleOpenMode, preferences.timeFormat, preferences.weeklyGoal) {
+        selectedDifficultyIndex = preferences.difficultyOptions.indexOf(preferences.defaultDifficulty)
             .takeIf { it >= 0 } ?: 0
-        selectedSpeedIndex = PlaybackConstants.speeds.indexOfFirst { it == defaultPlaybackSpeed.multiplier }
-            .takeIf { it >= 0 } ?: PlaybackConstants.speeds.indexOfFirst { it == 1.0 }
-        selectedArticleOpenModeIndex = ArticleOpenMode.entries.indexOf(articleOpenMode)
-        selectedTimeFormatIndex = TimeFormat.entries.indexOf(timeFormat)
-        selectedWeeklyGoalIndex = WEEKLY_GOAL_OPTIONS.indexOf(weeklyGoalEpisodes.episodes).coerceAtLeast(0)
+        selectedSpeedIndex = preferences.speedOptions.indexOf(preferences.defaultPlaybackSpeed)
+            .takeIf { it >= 0 } ?: preferences.speedOptions.indexOf(PlaybackSpeed.DEFAULT)
+        selectedArticleOpenModeIndex = ArticleOpenMode.entries.indexOf(preferences.articleOpenMode)
+        selectedTimeFormatIndex = TimeFormat.entries.indexOf(preferences.timeFormat)
+        selectedWeeklyGoalIndex = preferences.weeklyGoalOptions.indexOf(preferences.weeklyGoal).coerceAtLeast(0)
     }
 
     LazyColumn(
@@ -243,7 +235,7 @@ fun SettingsScreen(
                 onSelectionChange = { index ->
                     selectedArticleOpenModeIndex = index
                     coroutineScope.launch {
-                        preferencesStore.setArticleOpenMode(ArticleOpenMode.entries[index])
+                        viewModel.setArticleOpenMode(ArticleOpenMode.entries[index])
                     }
                 }
             )
@@ -257,7 +249,7 @@ fun SettingsScreen(
                 onSelectionChange = { index ->
                     selectedTimeFormatIndex = index
                     coroutineScope.launch {
-                        preferencesStore.setTimeFormat(TimeFormat.entries[index])
+                        viewModel.setTimeFormat(TimeFormat.entries[index])
                     }
                 }
             )
@@ -267,16 +259,16 @@ fun SettingsScreen(
             SettingsSectionHeader("フィードバック")
             FeedbackToggleRow(
                 label = "効果音",
-                checked = sfxEnabled,
+                checked = preferences.sfxEnabled,
                 onCheckedChange = { enabled ->
-                    coroutineScope.launch { preferencesStore.setSfxEnabled(enabled) }
+                    coroutineScope.launch { viewModel.setSfxEnabled(enabled) }
                 },
             )
             FeedbackToggleRow(
                 label = "ハプティクス",
-                checked = hapticsEnabled,
+                checked = preferences.hapticsEnabled,
                 onCheckedChange = { enabled ->
-                    coroutineScope.launch { preferencesStore.setHapticsEnabled(enabled) }
+                    coroutineScope.launch { viewModel.setHapticsEnabled(enabled) }
                 },
             )
         }
@@ -289,12 +281,13 @@ fun SettingsScreen(
                 modifier = Modifier.padding(bottom = DSSpacing.s),
             )
             LearningGoalChipRow(
+                options = preferences.weeklyGoalOptions,
                 selectedIndex = selectedWeeklyGoalIndex,
                 onSelectionChange = { index ->
                     val previous = selectedWeeklyGoalIndex
                     selectedWeeklyGoalIndex = index
                     coroutineScope.launch {
-                        if (viewModel.syncWeeklyGoalEpisodes(WEEKLY_GOAL_OPTIONS[index]) == SelectionAfterSave.Revert) {
+                        if (viewModel.syncWeeklyGoalEpisodes(preferences.weeklyGoalOptions[index].episodes) == SelectionAfterSave.Revert) {
                             selectedWeeklyGoalIndex = previous
                         }
                     }
@@ -303,7 +296,7 @@ fun SettingsScreen(
             Text(
                 text = stringResource(
                     R.string.settings_weekly_goal_daily_average,
-                    weeklyGoalEpisodes.episodes / 7.0,
+                    preferences.weeklyGoal.perDay,
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -628,14 +621,15 @@ fun SettingsScreen(
         item {
             SettingsSectionHeader(stringResource(R.string.settings_section_difficulty))
             SettingsDifficultyDropdown(
+                options = preferences.difficultyOptions,
                 selectedIndex = selectedDifficultyIndex,
                 onSelectionChange = { index ->
                     selectedDifficultyIndex = index
                     coroutineScope.launch {
-                        val newValue = Difficulty.entries[index].code
+                        val newValue = preferences.difficultyOptions[index].code
                         if (viewModel.syncDefaultDifficulty(newValue) == SelectionAfterSave.Revert) {
                             // Revert on failure
-                            selectedDifficultyIndex = Difficulty.entries.indexOfFirst { it == defaultDifficulty }
+                            selectedDifficultyIndex = preferences.difficultyOptions.indexOf(preferences.defaultDifficulty)
                                 .takeIf { it >= 0 } ?: 0
                         }
                     }
@@ -647,15 +641,16 @@ fun SettingsScreen(
         item {
             SettingsSectionHeader(stringResource(R.string.settings_section_playback_speed))
             SettingsPlaybackSpeedDropdown(
+                options = preferences.speedOptions,
                 selectedIndex = selectedSpeedIndex,
                 onSelectionChange = { index ->
                     selectedSpeedIndex = index
                     coroutineScope.launch {
-                        val newValue = PlaybackConstants.speeds[index]
+                        val newValue = preferences.speedOptions[index].multiplier
                         if (viewModel.syncDefaultPlaybackSpeed(newValue) == SelectionAfterSave.Revert) {
                             // Revert on failure
-                            selectedSpeedIndex = PlaybackConstants.speeds.indexOfFirst { it == defaultPlaybackSpeed.multiplier }
-                                .takeIf { it >= 0 } ?: PlaybackConstants.speeds.indexOfFirst { it == 1.0 }
+                            selectedSpeedIndex = preferences.speedOptions.indexOf(preferences.defaultPlaybackSpeed)
+                                .takeIf { it >= 0 } ?: preferences.speedOptions.indexOf(PlaybackSpeed.DEFAULT)
                         }
                     }
                 }
@@ -1171,34 +1166,35 @@ private fun SettingsDropdown(
 
 @Composable
 private fun SettingsDifficultyDropdown(
+    options: List<Difficulty>,
     selectedIndex: Int,
     onSelectionChange: (Int) -> Unit,
 ) {
-    val difficulties = Difficulty.entries
-    val difficultyLabels = listOf(
-        stringResource(R.string.settings_difficulty_toeic_600),
-        stringResource(R.string.settings_difficulty_toeic_900),
-        stringResource(R.string.settings_difficulty_ielts_55),
-        stringResource(R.string.settings_difficulty_ielts_7),
-        stringResource(R.string.settings_difficulty_eiken_2),
-        stringResource(R.string.settings_difficulty_eiken_p1),
-    )
-
     SettingsDropdown(
         label = stringResource(R.string.settings_difficulty_label),
-        options = difficultyLabels,
+        options = options.map { difficulty -> stringResource(difficultyLabelRes(difficulty)) },
         selectedIndex = selectedIndex,
         onSelectionChange = onSelectionChange
     )
 }
 
+private fun difficultyLabelRes(difficulty: Difficulty): Int = when (difficulty) {
+    Difficulty.TOEIC_600 -> R.string.settings_difficulty_toeic_600
+    Difficulty.TOEIC_900 -> R.string.settings_difficulty_toeic_900
+    Difficulty.IELTS_55 -> R.string.settings_difficulty_ielts_55
+    Difficulty.IELTS_7 -> R.string.settings_difficulty_ielts_7
+    Difficulty.EIKEN_2 -> R.string.settings_difficulty_eiken_2
+    Difficulty.EIKEN_P1 -> R.string.settings_difficulty_eiken_p1
+}
+
 @Composable
 private fun SettingsPlaybackSpeedDropdown(
+    options: List<PlaybackSpeed>,
     selectedIndex: Int,
     onSelectionChange: (Int) -> Unit,
 ) {
-    val speedLabels = PlaybackConstants.speeds.map { speed ->
-        stringResource(R.string.settings_playback_speed_format, speed)
+    val speedLabels = options.map { speed ->
+        stringResource(R.string.settings_playback_speed_format, speed.multiplier)
     }
 
     SettingsDropdown(
@@ -1333,6 +1329,7 @@ private fun formatSessionDateLine(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LearningGoalChipRow(
+    options: List<WeeklyGoal>,
     selectedIndex: Int,
     onSelectionChange: (Int) -> Unit
 ) {
@@ -1343,17 +1340,15 @@ private fun LearningGoalChipRow(
             .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(DSSpacing.s),
     ) {
-        WEEKLY_GOAL_OPTIONS.forEachIndexed { index, goal ->
+        options.forEachIndexed { index, goal ->
             FilterChip(
                 selected = selectedIndex == index,
                 onClick = { onSelectionChange(index) },
                 modifier = Modifier.semantics { role = Role.RadioButton },
                 label = {
-                    Text(stringResource(R.string.settings_weekly_goal_option, goal))
+                    Text(stringResource(R.string.settings_weekly_goal_option, goal.episodes))
                 },
             )
         }
     }
 }
-
-private val WEEKLY_GOAL_OPTIONS = listOf(3, 5, 7, 10)

@@ -12,7 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.preferences.app.PreferencesView
+import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.sin
@@ -162,16 +163,16 @@ class AndroidFeedbackPlayer(
     }
 }
 
-/** Compose の現在 View を触覚境界へ渡し、DataStore 設定を常に参照する。 */
+/** Compose の現在 View を触覚境界へ渡し、設定の現在値を、鳴らすたびに読む。 */
 @Composable
-fun rememberDSFeedback(preferencesStore: PreferencesStore): DSFeedback {
+fun rememberDSFeedback(preferences: StateFlow<PreferencesView>): DSFeedback {
     val context = LocalContext.current
     val view = LocalView.current
-    return remember(context, view, preferencesStore) {
+    return remember(context, view, preferences) {
         DSFeedback(
             player = AndroidFeedbackPlayer(context, view),
-            sfxEnabled = { preferencesStore.sfxEnabled.value },
-            hapticsEnabled = { preferencesStore.hapticsEnabled.value },
+            sfxEnabled = { preferences.value.sfxEnabled },
+            hapticsEnabled = { preferences.value.hapticsEnabled },
         )
     }
 }

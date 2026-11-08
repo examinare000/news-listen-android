@@ -243,8 +243,6 @@ class AppContainer(context: Context) {
         scope = preferencesScope,
     )
 
-    fun getPreferencesStore(): PreferencesStore = preferencesStore
-
     /**
      * 設定の同期の入口。`_authViewModel` のラムダと後始末の手順がこの値を読むので `by lazy` にする。
      * `_authViewModel` は構築時にこの値を評価しないため、初期化は `preferencesSync` → `_authViewModel` の一方向で、循環しない。
