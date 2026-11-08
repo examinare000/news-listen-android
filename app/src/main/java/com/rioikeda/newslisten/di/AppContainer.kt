@@ -14,6 +14,7 @@ import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.auth.CleanupStep
 import com.rioikeda.newslisten.auth.SubjectCleanup
+import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.feed.FeedViewModel
 import com.rioikeda.newslisten.engagement.ApiListeningStreakStore
 import com.rioikeda.newslisten.engagement.ListeningStreakStore
@@ -133,6 +134,7 @@ class AppContainer(context: Context) {
         OfflineLibrary(
             audioStore = audioCacheManager,
             podcastApi = PodcastApiAdapter(apiClient),
+            episodeLookup = _episodeCatalog,
             currentSubject = _authViewModel::currentSubjectId,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
         )
@@ -347,6 +349,18 @@ class AppContainer(context: Context) {
     private val podcastDispatcher: CoroutineDispatcher = Dispatchers.Default.limitedParallelism(1)
 
     /**
+     * Podcast 一覧の取得を持つ Catalog。Coordinator・OfflineLibrary（id の解決）と PodcastViewModel（一覧）が同じ 1 つを共有する。
+     * 取得の後の保存済み集合の再計算は、束縛参照にせず lambda で包む: 束縛参照は構築時に offlineLibrary を評価し、lazy が循環する。
+     */
+    private val _episodeCatalog: EpisodeCatalog by lazy {
+        EpisodeCatalog(
+            podcastApi = PodcastApiAdapter(apiClient),
+            dispatcher = podcastDispatcher,
+            afterRefresh = { offlineLibrary.syncDownloadedState(it) },
+        )
+    }
+
+    /**
      * 再生の use case を持つ Coordinator。PodcastViewModel はこれへ中継する。
      * `_authViewModel` のラムダを読むので `by lazy` にし、構築時に `_authViewModel` を評価しない。
      */
@@ -360,6 +374,7 @@ class AppContainer(context: Context) {
             listeningStreakStore = _listeningStreakStore,
             dispatcher = podcastDispatcher,
             currentSubject = _authViewModel::currentSubjectId,
+            episodeLookup = _episodeCatalog,
         )
     }
 
@@ -377,9 +392,9 @@ class AppContainer(context: Context) {
      */
     private val _podcastViewModel: PodcastViewModel by lazy {
         PodcastViewModel(
-            podcastApi = PodcastApiAdapter(apiClient),
             apiClient = apiClient,
             coordinator = _playbackCoordinator,
+            catalog = _episodeCatalog,
             offlineLibrary = offlineLibrary,
             dispatcher = podcastDispatcher,
         )

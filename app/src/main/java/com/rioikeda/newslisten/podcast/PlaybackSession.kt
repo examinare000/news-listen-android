@@ -1,9 +1,6 @@
 package com.rioikeda.newslisten.podcast
 
 import com.rioikeda.newslisten.catalog.domain.Episode
-import com.rioikeda.newslisten.catalog.domain.EpisodeGlossaryEntry
-import com.rioikeda.newslisten.catalog.domain.EpisodeQuizQuestion
-import com.rioikeda.newslisten.catalog.domain.EpisodeTranscriptSegment
 
 /**
  * 再生セッションの状態。遷移関数は新しい値を返し、受信側は変えない。
@@ -88,20 +85,6 @@ sealed class PlaybackSession {
     private fun rejected(operation: String): Nothing =
         throw IllegalStateException("$operation は ${this::class.simpleName} から呼べません")
 }
-
-/**
- * 「何が再生中か」の読み取り用の値。list は [Episode.Playable] の読み取り専用 list をそのまま持つ（再複製しない）。
- * NothingPlaying と Errored では持たない。
- */
-data class NowPlaying(
-    val episodeId: String,
-    val displayTitle: String,
-    val japaneseIntroText: String,
-    val segments: List<EpisodeTranscriptSegment>?,
-    val vocabulary: List<EpisodeGlossaryEntry>?,
-    val quiz: List<EpisodeQuizQuestion>?,
-    val difficulty: String,
-)
 
 /** Errored が指すエピソード。Episode を取得済みか、id だけ分かっているかを区別する。 */
 sealed interface SessionEpisodeRef {

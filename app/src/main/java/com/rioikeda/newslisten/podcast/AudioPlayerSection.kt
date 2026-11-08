@@ -46,6 +46,7 @@ import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.DSFeedback
 import com.rioikeda.newslisten.catalog.domain.EpisodeGlossaryEntry
 import com.rioikeda.newslisten.catalog.domain.EpisodeTranscriptSegment
+import com.rioikeda.newslisten.podcast.app.NowPlaying
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 

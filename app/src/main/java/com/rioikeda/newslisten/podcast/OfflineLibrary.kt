@@ -4,6 +4,7 @@ import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.PodcastApi
 import com.rioikeda.newslisten.podcast.app.AudioStore
+import com.rioikeda.newslisten.podcast.app.EpisodeLookup
 import java.util.Collections
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +35,7 @@ import kotlinx.coroutines.withContext
 class OfflineLibrary(
     private val audioStore: AudioStore,
     private val podcastApi: PodcastApi,
+    private val episodeLookup: EpisodeLookup,
     private val currentSubject: () -> String?,
     private val dispatcher: CoroutineDispatcher,
 ) {
@@ -69,8 +71,10 @@ class OfflineLibrary(
      * 再生できない値、主体が `null`、既にダウンロード中・済みのときは何もしない。
      * 取り直した値が再生できなければ保存せず [lastError] に文言を出す（android-deriv-17）。
      */
-    suspend fun download(episode: Episode) {
+    suspend fun download(episodeId: String) {
         _lastError.value = null
+        // 未知の id は何もしない（android-dec-64）。直前の失敗は上で消し済み。
+        val episode = episodeLookup.find(episodeId) ?: return
         if (episode !is Episode.Playable) return
         val subject = currentSubject() ?: return
         val id = episode.id
