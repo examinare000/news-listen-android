@@ -8,8 +8,8 @@ import kotlinx.serialization.Serializable
  *
  * 正本: backend/api/schemas.py（PasswordChangeRequest）。
  * 現パスワード誤りは 400、新パスワード強度不足は 422 で backend が区別して返す
- * （OkHttpApiClient.changePassword 側は ApiException.HttpError.code をそのまま伝播し、
- * 呼び出し側で 400/422 を判別する）。
+ * （OkHttpApiClient.changePassword 側は ApiException.InvalidInput・ApiException.UnprocessableInput を
+ * そのまま伝播し、呼び出し側で型により 400/422 を判別する）。
  */
 @Serializable
 data class PasswordChangeRequest(

@@ -1,7 +1,7 @@
 package com.rioikeda.newslisten.catalog.app
 
 import com.rioikeda.newslisten.catalog.domain.Episode
-import com.rioikeda.newslisten.network.ApiException
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.network.PodcastApi
 import com.rioikeda.newslisten.podcast.app.EpisodeLookup
 import com.rioikeda.newslisten.podcast.app.PlaybackNotice

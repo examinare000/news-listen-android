@@ -1,8 +1,8 @@
 package com.rioikeda.newslisten.vocabulary
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.VocabularyTestItemResponse
 import com.rioikeda.newslisten.model.VocabularyTestResultItemRequest
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.VocabularyTestApi
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay

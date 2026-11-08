@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.architecture
 
 import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.AchievementResponse
 import com.rioikeda.newslisten.model.ArticleResponse
 import com.rioikeda.newslisten.model.FeaturedSite
@@ -23,7 +24,6 @@ import com.rioikeda.newslisten.model.VocabularyItemResponse
 import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.model.VocabularyTestItemResponse
 import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.EpisodeDecoder
 
 /**

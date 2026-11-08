@@ -1,10 +1,10 @@
 package com.rioikeda.newslisten.auth
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.LoginResponse
 import com.rioikeda.newslisten.model.PreferencesResponse
 import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.InMemorySessionStore
 import com.rioikeda.newslisten.network.SessionStore
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore

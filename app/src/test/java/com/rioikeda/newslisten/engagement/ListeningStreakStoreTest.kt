@@ -1,7 +1,7 @@
 package com.rioikeda.newslisten.engagement
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.ListeningStreakResponse
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -51,7 +51,7 @@ class ListeningStreakStoreTest {
     @Test
     fun `404エラーの場合loadFailedはfalse（実装との符合確認）`() = runTest {
         val store = ApiListeningStreakStore(
-            fetchListeningStreak = { throw ApiException.HttpError(404) },
+            fetchListeningStreak = { throw ApiException.NotFound() },
             dispatcher = StandardTestDispatcher(testScheduler),
         )
 

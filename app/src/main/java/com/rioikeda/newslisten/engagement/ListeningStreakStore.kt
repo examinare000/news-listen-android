@@ -1,8 +1,8 @@
 package com.rioikeda.newslisten.engagement
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -51,9 +51,9 @@ class ApiListeningStreakStore(
             if (previous != null && refreshed.currentStreakDays > previous.currentStreakDays) {
                 onStreakIncreased()
             }
-        } catch (e: ApiException.HttpError) {
+        } catch (_: ApiException.NotFound) {
             _listeningStreak.value = null
-            _loadFailed.value = e.code != 404
+            _loadFailed.value = false
         } catch (e: ApiException) {
             _listeningStreak.value = null
             _loadFailed.value = true

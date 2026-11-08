@@ -1,6 +1,6 @@
 package com.rioikeda.newslisten.notification
 
-import com.rioikeda.newslisten.network.ApiException
+import com.rioikeda.newslisten.core.ApiException
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest

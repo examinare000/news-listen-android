@@ -1,8 +1,8 @@
 package com.rioikeda.newslisten.passkey
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.NewsListenJson
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -50,8 +50,8 @@ class PasskeyRegistrationViewModel(
             onRegistered()
         } catch (e: PasskeyCancellationException) {
             // ユーザーがシステム UI をキャンセルしただけなので何もしない（エラー表示しない）。
-        } catch (e: ApiException.HttpError) {
-            _errorMessage.value = if (e.code == 409) CONFLICT_MESSAGE else GENERIC_MESSAGE
+        } catch (_: ApiException.Conflict) {
+            _errorMessage.value = CONFLICT_MESSAGE
         } catch (e: ApiException) {
             _errorMessage.value = GENERIC_MESSAGE
         } catch (e: PasskeyProviderException) {

@@ -1,10 +1,10 @@
 package com.rioikeda.newslisten.feed
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.ActionResponse
 import com.rioikeda.newslisten.model.ArticleResponse
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.StarRequest
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.preferences.ArticleOpenMode
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore

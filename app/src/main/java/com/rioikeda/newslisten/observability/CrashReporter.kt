@@ -1,9 +1,9 @@
 package com.rioikeda.newslisten.observability
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.NewsListenJson
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext

@@ -1,7 +1,7 @@
 package com.rioikeda.newslisten.passkey
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.PasskeyOptionsResponse
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -109,7 +109,7 @@ class PasskeyRegistrationViewModelTest {
     fun verifyが409なら重複登録のエラー文言を表示する() = runTest {
         val apiClient = FakeApiClient(
             onPasskeyRegisterOptions = { PasskeyOptionsResponse(challengeId = "c-1", options = "opts") },
-            onPasskeyRegisterVerify = { _, _ -> throw ApiException.HttpError(409) },
+            onPasskeyRegisterVerify = { _, _ -> throw ApiException.Conflict() },
         )
         val passkeyProvider = FakePasskeyProvider(onCreateCredential = { """{"id":"cred-1"}""" })
         val viewModel = newViewModel(apiClient = apiClient, passkeyProvider = passkeyProvider)

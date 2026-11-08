@@ -1,8 +1,8 @@
 package com.rioikeda.newslisten.observability
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.NewsListenJson
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest

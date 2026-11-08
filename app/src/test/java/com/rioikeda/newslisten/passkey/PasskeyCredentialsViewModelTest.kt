@@ -1,8 +1,8 @@
 package com.rioikeda.newslisten.passkey
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.PasskeyCredential
 import com.rioikeda.newslisten.model.PasskeyCredentialsListResponse
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest

@@ -1,5 +1,6 @@
 package com.rioikeda.newslisten.network
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.ActionResponse
 import com.rioikeda.newslisten.model.ClientErrorReport
 import com.rioikeda.newslisten.model.FeaturedSitesResponse
@@ -148,8 +149,8 @@ interface ApiClient : LearningApi, VocabularyTestApi {
      * パスワードを変更する（フェーズ11 P11）。
      *
      * 現パスワード誤りは 400、新パスワード強度不足は 422 で backend が区別する
-     * （[ApiException.HttpError.code] をそのまま伝播するため、呼び出し側は catch した
-     * 例外の code で判別する）。
+     * （それぞれ [ApiException.InvalidInput]・[ApiException.UnprocessableInput] として伝播するため、
+     * 呼び出し側は catch した例外の型で判別する）。
      */
     suspend fun changePassword(currentPassword: String, newPassword: String)
 

@@ -2,6 +2,7 @@
 
 package com.rioikeda.newslisten.architecture
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.designsystem.FeedbackHaptic
 import com.rioikeda.newslisten.designsystem.FeedbackPlayer
@@ -37,7 +38,6 @@ import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.PodcastApi
-import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.network.FileSystem
 import com.rioikeda.newslisten.network.NetworkMonitoring
 import com.rioikeda.newslisten.network.SessionStore

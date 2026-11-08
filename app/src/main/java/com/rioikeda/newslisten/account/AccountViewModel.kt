@@ -2,8 +2,8 @@ package com.rioikeda.newslisten.account
 
 import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -118,12 +118,11 @@ class AccountViewModel(
             _newPassword.value = ""
             _passwordMessage.value = "パスワードを変更しました"
             _passwordMessageIsError.value = false
-        } catch (e: ApiException.HttpError) {
-            _passwordMessage.value = when (e.code) {
-                400 -> "現在のパスワードが正しくありません"
-                422 -> PASSWORD_STRENGTH_ERROR_MESSAGE
-                else -> GENERIC_PASSWORD_ERROR_MESSAGE
-            }
+        } catch (e: ApiException.InvalidInput) {
+            _passwordMessage.value = "現在のパスワードが正しくありません"
+            _passwordMessageIsError.value = true
+        } catch (e: ApiException.UnprocessableInput) {
+            _passwordMessage.value = PASSWORD_STRENGTH_ERROR_MESSAGE
             _passwordMessageIsError.value = true
         } catch (e: ApiException) {
             _passwordMessage.value = GENERIC_PASSWORD_ERROR_MESSAGE

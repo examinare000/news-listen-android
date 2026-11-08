@@ -1,11 +1,11 @@
 package com.rioikeda.newslisten.onboarding
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.model.FeaturedSitesResponse
 import com.rioikeda.newslisten.model.OnboardingStatusResponse
 import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -74,7 +74,7 @@ class OnboardingViewModelTest {
     @Test
     fun subscribeで409はaddedIds扱いになる() = runTest {
         val viewModel = newViewModel(
-            apiClient = FakeApiClient(onCreateSource = { _, _ -> throw ApiException.HttpError(409) }),
+            apiClient = FakeApiClient(onCreateSource = { _, _ -> throw ApiException.Conflict() }),
         )
 
         viewModel.subscribe(site)

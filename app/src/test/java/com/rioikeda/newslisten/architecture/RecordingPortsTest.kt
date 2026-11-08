@@ -2,9 +2,9 @@
 
 package com.rioikeda.newslisten.architecture
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.StarRequest
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceTimeBy

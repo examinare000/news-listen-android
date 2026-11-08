@@ -1,7 +1,7 @@
 package com.rioikeda.newslisten.notification
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext

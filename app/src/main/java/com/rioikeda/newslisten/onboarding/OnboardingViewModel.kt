@@ -1,8 +1,8 @@
 package com.rioikeda.newslisten.onboarding
 
+import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.ApiException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -82,12 +82,8 @@ class OnboardingViewModel(
         try {
             apiClient.createSource(site.name, site.url)
             _addedIds.value = _addedIds.value + site.id
-        } catch (e: ApiException.HttpError) {
-            if (e.code == 409) {
-                _addedIds.value = _addedIds.value + site.id
-            } else {
-                _subscribeError.value = SUBSCRIBE_ERROR_MESSAGE
-            }
+        } catch (_: ApiException.Conflict) {
+            _addedIds.value = _addedIds.value + site.id
         } catch (e: ApiException) {
             _subscribeError.value = SUBSCRIBE_ERROR_MESSAGE
         }
