@@ -19,11 +19,11 @@ class EffectTypeCatalogTest {
     // ---- 本番 ----
 
     @Test
-    fun 本番の分類表は11のportと21のhookを持つ() {
+    fun 本番の分類表は12のportと21のhookを持つ() {
         assertEquals(
             setOf(
                 "ApiClient", "PodcastApi", "PreferencesStore", "SessionStore", "PlayerController",
-                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi",
+                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi", "AuthApi",
             ),
             production.ports.map { it.port }.toSet(),
         )
@@ -103,12 +103,12 @@ class EffectTypeCatalogTest {
 
     @Test
     fun hook表から行を抜くと未登録のhookとして名指しされる() {
-        assertTrue("前提: hook 表に行がある", production.hooks.any { it.ownerField == "AuthViewModel#onSubjectLeave" })
+        assertTrue("前提: hook 表に行がある", production.hooks.any { it.ownerField == "AuthSession#onSubjectLeave" })
 
-        val trimmed = production.copy(hooks = production.hooks.filterNot { it.ownerField == "AuthViewModel#onSubjectLeave" })
+        val trimmed = production.copy(hooks = production.hooks.filterNot { it.ownerField == "AuthSession#onSubjectLeave" })
         val findings = CatalogVerifier.verify(ProductionWorld.population, trimmed)
 
-        findings.requireFinding(Headings.UNREGISTERED_HOOK, "AuthViewModel#onSubjectLeave")
+        findings.requireFinding(Headings.UNREGISTERED_HOOK, "AuthSession#onSubjectLeave")
     }
 
     @Test

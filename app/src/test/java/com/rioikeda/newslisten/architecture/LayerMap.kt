@@ -45,6 +45,8 @@ object LayerMap {
         "podcast/PlaybackState.kt",
         "podcast/PlaybackConstants.kt",
         "auth/AuthState.kt",
+        "auth/domain/AccountUser.kt",
+        "auth/domain/LoginOutcome.kt",
         "preferences/ArticleOpenMode.kt",
         "preferences/TimeFormat.kt",
         "feed/ArticleUrlValidator.kt",
@@ -66,6 +68,7 @@ object LayerMap {
         "podcast/app/EpisodeLookup.kt",
         "catalog/app/EpisodeCatalog.kt",
         "preferences/app/PreferencesSync.kt",
+        "auth/app/AuthSession.kt",
     )
 
     private val port = listOf(
@@ -74,6 +77,7 @@ object LayerMap {
         "passkey/PasskeyProvider.kt",
         "preferences/PreferencesStore.kt",
         "preferences/app/PreferencesApi.kt",
+        "auth/app/AuthApi.kt",
         "network/PodcastApi.kt",
         "network/LearningApi.kt",
         "network/VocabularyTestApi.kt",
@@ -106,6 +110,7 @@ object LayerMap {
         "network/EpisodeDecoder.kt",
         "network/PodcastApiAdapter.kt",
         "network/PreferencesApiAdapter.kt",
+        "network/AuthApiAdapter.kt",
         "observability/CrashReporter.kt",
         "observability/CrashReportFormatter.kt",
         "model/ActionResponse.kt",

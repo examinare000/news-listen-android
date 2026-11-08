@@ -36,6 +36,10 @@ import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.model.VocabularyTestResultItemRequest
 import com.rioikeda.newslisten.model.VocabularyTestResultResponse
 import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
+import com.rioikeda.newslisten.auth.app.AuthApi
+import com.rioikeda.newslisten.auth.domain.AccountUser
+import com.rioikeda.newslisten.auth.domain.IssuedSession
+import com.rioikeda.newslisten.auth.domain.Role
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.PodcastApi
@@ -277,6 +281,10 @@ internal abstract class RecordingFake(
 object RecordingDefaults {
     val userResponse: UserResponse = UserResponse(username = "default-user", role = "user", displayName = "Default User")
     val loginResponse: LoginResponse = LoginResponse(token = "default-token", user = userResponse)
+    val issuedSession: IssuedSession = IssuedSession(
+        token = "default-token",
+        user = AccountUser(username = "default-user", displayName = "Default User", role = Role.User, subjectId = null),
+    )
     val podcastResponse: PodcastResponse = PodcastResponse(
         id = "default-podcast",
         type = "daily",
@@ -334,6 +342,23 @@ internal class ApiFake(recorder: EffectRecorder, scenario: ProbeScenario, port: 
     }
 
     fun write(op: String) = written(op)
+}
+
+/** 認証のサーバー往復 port [AuthApi] の記録 fake。`me` は列の読み、`login`・`logout` は書込（どの scenario でも失敗しない）。 */
+class RecordingAuthApi(
+    val recorder: EffectRecorder,
+    val scenario: ProbeScenario,
+) : AuthApi {
+    private val core = ApiFake(recorder, scenario, port = "AuthApi")
+
+    override suspend fun me(): AccountUser = core.read("me")
+
+    override suspend fun login(username: String, password: String): IssuedSession {
+        core.write("login")
+        return RecordingDefaults.issuedSession
+    }
+
+    override suspend fun logout(token: String) = core.write("logout")
 }
 
 /** 設定のサーバー往復 port [PreferencesApi] の記録 fake。列の読みは [ApiFake.read] と同じく先頭で注入された失敗を投げる。 */
@@ -769,6 +794,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
 
     val apiClient: RecordingApiClient = RecordingApiClient(recorder, scenario)
     val podcastApi: RecordingPodcastApi = RecordingPodcastApi(recorder, scenario)
+    val authApi: RecordingAuthApi = RecordingAuthApi(recorder, scenario)
     val preferencesApi: RecordingPreferencesApi = RecordingPreferencesApi(recorder, scenario)
     val preferencesStore: RecordingPreferencesStore = RecordingPreferencesStore(recorder, scenario)
     val sessionStore: RecordingSessionStore = RecordingSessionStore(recorder, scenario)
@@ -781,7 +807,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
 
     /** この実行単位の記録 fake の全部。配線の検査が「記録 fake であること」を照合する。 */
     val fakes: List<Any> = listOf(
-        apiClient, podcastApi, preferencesApi, preferencesStore, sessionStore, playerController,
+        apiClient, podcastApi, authApi, preferencesApi, preferencesStore, sessionStore, playerController,
         fileSystem, audioStore, networkMonitor, passkeyProvider, feedbackPlayer,
     )
 

@@ -84,13 +84,13 @@ class AccountViewModel(
     /**
      * 表示名をサーバへ保存する（iOS の「更新」ボタン = AccountSettingsView.swift:57 相当。
      * 即時 PATCH ではなく明示的な submit 操作）。
-     * 成功時は [AuthViewModel.applyProfileUpdate] を呼び AuthState へ反映する。
+     * 成功時は [AuthViewModel.applyProfileUpdate] へ更新後の表示名を渡し AuthState へ反映する。
      */
     suspend fun saveProfile(): Unit = withContext(dispatcher) {
         _isLoading.value = true
         try {
             val updated = apiClient.updateProfile(_displayName.value)
-            authViewModel.applyProfileUpdate(updated)
+            authViewModel.applyProfileUpdate(updated.displayName)
             _profileMessage.value = "表示名を更新しました"
             _profileMessageIsError.value = false
         } catch (e: ApiException) {

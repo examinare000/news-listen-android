@@ -1,13 +1,14 @@
 package com.rioikeda.newslisten.auth
 
 import com.rioikeda.newslisten.model.UserResponse
+import com.rioikeda.newslisten.network.toAccountUser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SubjectTest {
     private fun user(userId: String?, username: String = "alice") =
-        UserResponse(username = username, role = "user", displayName = "Alice", userId = userId)
+        UserResponse(username = username, role = "user", displayName = "Alice", userId = userId).toAccountUser()
 
     @Test
     fun `android-rule-account-03 Subjectのuser_idは英数字とハイフンとアンダースコアだけが通り空と記号と欠落はnullになる`() {
