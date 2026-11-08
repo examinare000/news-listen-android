@@ -1319,7 +1319,7 @@ class PlaybackCoordinatorTest {
     // 完聴後の自動前進の開始前の失敗（shared-session-01・02・03・12）
 
     @Test
-    fun `android-test-06 shared-session-01 shared-session-02 shared-session-04 shared-session-12 android-contract-07 android-dec-08 advance後のNETWORK取得失敗はIdOnlyのErroredで進まずretryが取得からやり直す`() = runTest {
+    fun `android-test-06 shared-session-01 shared-session-02 shared-session-04 shared-session-12 android-contract-07 android-dec-08 advance後のNETWORK失敗はErroredでretryが取得からやり直す`() = runTest {
         val (pA, pB, pC, pD) = listOf("pA", "pB", "pC", "pD").map { podcast(id = it) }
         val exception = ApiException.NetworkError(RuntimeException("offline"))
         var bFails = true
