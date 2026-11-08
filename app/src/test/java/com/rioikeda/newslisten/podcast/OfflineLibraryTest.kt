@@ -7,6 +7,7 @@ import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.podcast.app.AudioStore
+import com.rioikeda.newslisten.podcast.app.PlaybackNotice
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -74,7 +75,7 @@ class OfflineLibraryTest {
         OfflineLibrary(cacheManager, apiClient, lookup, currentSubject, StandardTestDispatcher(testScheduler))
 
     @Test
-    fun `android-dec-64 未知のidのdownloadは保存庫もダウンロード状態も通信も変えずlastErrorはnull`() = runTest {
+    fun `android-dec-64 未知のidのdownloadは保存庫もダウンロード状態も通信も変えずnoticeはnull`() = runTest {
         val apiClient = FakePodcastApiClient(onFetchPodcast = { error("呼ばれてはならない") })
         val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
         val library = newLibrary(apiClient, cacheManager)
@@ -86,7 +87,7 @@ class OfflineLibraryTest {
         assertFalse(cacheManager.isCached("u1", "unknown"))
         assertTrue(apiClient.fetchPodcastCalls.isEmpty())
         assertTrue(apiClient.downloadAudioCalls.isEmpty())
-        assertNull(library.lastError.value)
+        assertNull(library.notice.value)
     }
 
     @Test
@@ -99,11 +100,11 @@ class OfflineLibraryTest {
         )
         val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
         val library = newLibrary(apiClient, cacheManager)
-        library.download(p1) // 取り直した値が生成中なので、失敗の文言が lastError に残る
-        assertNotNull(library.lastError.value)
+        library.download(p1) // 取り直した値が生成中なので、失敗の知らせが notice に残る
+        assertNotNull(library.notice.value)
 
-        library.download("unknown") // 冒頭で lastError を初期化した後に何もしない
-        assertNull(library.lastError.value)
+        library.download("unknown") // 冒頭で notice を初期化した後に何もしない
+        assertNull(library.notice.value)
         assertTrue(library.downloadedIds.value.isEmpty())
 
         fetched = p1 // 正方向の対照
@@ -175,11 +176,11 @@ class OfflineLibraryTest {
         assertTrue(cacheManager.isCached("u1", "p1"))
         assertEquals(setOf("p1"), library.downloadedIds.value)
         assertEquals(emptySet<String>(), library.downloadingIds.value)
-        assertNull(library.lastError.value)
+        assertNull(library.notice.value)
     }
 
     @Test
-    fun download失敗でlastErrorに反映されキャッシュされずdownloadingIdsから除去される() = runTest {
+    fun `android-dec-08 download失敗でnoticeに反映されキャッシュされずdownloadingIdsから除去される`() = runTest {
         val exception = ApiException.NetworkError(RuntimeException("offline"))
         val apiClient = FakePodcastApiClient(onFetchPodcast = { throw exception })
         val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
@@ -187,7 +188,9 @@ class OfflineLibraryTest {
 
         library.download(podcast(id = "p1"))
 
-        assertEquals(exception.message, library.lastError.value)
+        assertEquals("オフラインです。接続を確認してから、もう一度お試しください", library.notice.value?.message)
+        assertEquals(PlaybackNotice.FetchOffline, library.notice.value)
+        assertFalse("例外の message が画面に出る", library.notice.value?.message.orEmpty().contains(exception.message.orEmpty()))
         assertFalse(cacheManager.isCached("u1", "p1"))
         assertEquals(emptySet<String>(), library.downloadingIds.value)
         assertEquals(emptySet<String>(), library.downloadedIds.value)
@@ -229,12 +232,12 @@ class OfflineLibraryTest {
     }
 
     @Test
-    fun removeDownloadは不正なidの場合lastErrorに反映する() = runTest {
+    fun removeDownloadは不正なidの場合noticeに反映する() = runTest {
         val library = newLibrary(FakePodcastApiClient())
 
         library.removeDownload("../evil")
 
-        assertNotNull(library.lastError.value)
+        assertNotNull(library.notice.value)
     }
 
     @Test
@@ -255,11 +258,11 @@ class OfflineLibraryTest {
         assertFalse(cacheManager.isCached("u1", "p1"))
         assertEquals(emptySet<String>(), library.downloadingIds.value)
         assertEquals(emptySet<String>(), library.downloadedIds.value)
-        assertNotNull(library.lastError.value)
+        assertNotNull(library.notice.value)
     }
 
     @Test
-    fun `android-dec-58 保存の失敗はlastErrorに固定の文言を出しdownloadedIdsへ入れない`() = runTest {
+    fun `android-dec-58 保存の失敗はnoticeに固定の文言を出しdownloadedIdsへ入れない`() = runTest {
         val p1 = podcast(id = "p1")
         val apiClient = FakePodcastApiClient(
             onFetchPodcast = { p1 },
@@ -272,14 +275,14 @@ class OfflineLibraryTest {
         library.download(p1)
 
         // 旧は保存庫の英語の技術文言（"Failed to write cache for id=…"）がそのまま出ていた。
-        assertEquals("音声を保存できませんでした", library.lastError.value)
+        assertEquals("音声を保存できませんでした", library.notice.value?.message)
         assertEquals(emptySet<String>(), library.downloadedIds.value)
         assertEquals(emptySet<String>(), library.downloadingIds.value)
         assertFalse(cacheManager.isCached("u1", "p1"))
     }
 
     @Test
-    fun `android-dec-58 保存の成功はlastErrorをnullのままdownloadedIdsへ入れる`() = runTest {
+    fun `android-dec-58 保存の成功はnoticeをnullのままdownloadedIdsへ入れる`() = runTest {
         val p1 = podcast(id = "p1")
         val apiClient = FakePodcastApiClient(
             onFetchPodcast = { p1 },
@@ -289,12 +292,12 @@ class OfflineLibraryTest {
 
         library.download(p1)
 
-        assertNull(library.lastError.value)
+        assertNull(library.notice.value)
         assertEquals(setOf("p1"), library.downloadedIds.value)
     }
 
     @Test
-    fun `android-dec-58 不正なidの削除はlastErrorに固定の文言を出しdownloadedIdsと保存済みの音声を変えない`() = runTest {
+    fun `android-dec-58 不正なidの削除はnoticeに固定の文言を出しdownloadedIdsと保存済みの音声を変えない`() = runTest {
         val p1 = podcast(id = "p1")
         val apiClient = FakePodcastApiClient(
             onFetchPodcast = { p1 },
@@ -306,22 +309,22 @@ class OfflineLibraryTest {
 
         library.removeDownload("../evil")
 
-        assertEquals("音声を削除できませんでした", library.lastError.value)
+        assertEquals("音声を削除できませんでした", library.notice.value?.message)
         assertEquals(setOf("p1"), library.downloadedIds.value)
         assertTrue(cacheManager.isCached("u1", "p1"))
     }
 
     @Test
-    fun `android-dec-58 不正な主体の削除もlastErrorに固定の文言を出す`() = runTest {
+    fun `android-dec-58 不正な主体の削除もnoticeに固定の文言を出す`() = runTest {
         val library = newLibrary(FakePodcastApiClient()) { "bad subject" }
 
         library.removeDownload("p1")
 
-        assertEquals("音声を削除できませんでした", library.lastError.value)
+        assertEquals("音声を削除できませんでした", library.notice.value?.message)
     }
 
     @Test
-    fun `android-deriv-17 downloadで取り直した値がFailedならcacheせずlastErrorを出す`() = runTest {
+    fun `android-deriv-17 android-dec-06 downloadで取り直した値がFailedならcacheせず生成の失敗の知らせを出す`() = runTest {
         val p1 = podcast(id = "p1")
         val apiClient = FakePodcastApiClient(
             onFetchPodcast = { podcast(id = "p1", status = "failed", errorMessage = "E") },
@@ -336,7 +339,39 @@ class OfflineLibraryTest {
         assertFalse(cacheManager.isCached("u1", "p1"))
         assertEquals(emptySet<String>(), library.downloadedIds.value)
         assertEquals(emptySet<String>(), library.downloadingIds.value)
-        assertEquals("E", library.lastError.value)
+        assertEquals("生成に失敗しました", library.notice.value?.message)
+    }
+
+    @Test
+    fun `android-dec-06 NetworkError以外のApiExceptionのdownload失敗はFetchFailedになり例外のmessageを出さない`() = runTest {
+        val apiClient = FakePodcastApiClient(onFetchPodcast = { throw ApiException.HttpError(500) })
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val library = newLibrary(apiClient, cacheManager)
+
+        library.download(podcast(id = "p1"))
+
+        assertEquals(PlaybackNotice.FetchFailed, library.notice.value)
+        assertEquals("エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください", library.notice.value?.message)
+        assertFalse("HTTP Error 500 が画面に出る", library.notice.value?.message.orEmpty().contains("HTTP Error 500"))
+        assertFalse(cacheManager.isCached("u1", "p1"))
+        assertEquals(emptySet<String>(), library.downloadingIds.value)
+    }
+
+    @Test
+    fun `android-dec-06 android-dec-69 downloadで取り直した値がquota_exhaustedならcacheせず上限に達した旨の知らせを出す`() = runTest {
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { podcast(id = "p1", status = "failed", errorMessage = "quota_exhausted") },
+            onDownloadAudio = { byteArrayOf(1) },
+        )
+        val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
+        val library = newLibrary(apiClient, cacheManager)
+
+        library.download(podcast(id = "p1"))
+
+        assertTrue(apiClient.downloadAudioCalls.isEmpty())
+        assertFalse(cacheManager.isCached("u1", "p1"))
+        assertEquals("生成の上限に達したため、生成できませんでした", library.notice.value?.message)
+        assertFalse("識別子の生の値が画面に出る", library.notice.value?.message.orEmpty().contains("quota_exhausted"))
     }
 
     @Test
@@ -598,14 +633,14 @@ class OfflineLibraryTest {
     }
 
     @Test
-    fun `shared-leave-06 cancelDownloadsはlastErrorをnullに戻す`() = runTest {
+    fun `shared-leave-06 cancelDownloadsはnoticeをnullに戻す`() = runTest {
         val library = newLibrary(FakePodcastApiClient())
         library.removeDownload("../evil")
-        assertNotNull(library.lastError.value)
+        assertNotNull(library.notice.value)
 
         library.cancelDownloads("u1")
 
-        assertNull(library.lastError.value)
+        assertNull(library.notice.value)
     }
 
     // --- 主体 null（user_id の欠落・形式不正。決定 16） ---
@@ -703,23 +738,23 @@ class OfflineLibraryTest {
     }
 
     @Test
-    fun downloadとremoveDownloadは冒頭でlastErrorをnullに戻す() = runTest {
+    fun downloadとremoveDownloadは冒頭でnoticeをnullに戻す() = runTest {
         var subject: String? = "u1"
         val library = newLibrary(FakePodcastApiClient()) { subject }
         library.removeDownload("../evil")
-        assertNotNull(library.lastError.value)
+        assertNotNull(library.notice.value)
         subject = null
 
         library.download(podcast(id = "p1"))
-        assertNull(library.lastError.value)
+        assertNull(library.notice.value)
 
         subject = "u1"
         library.removeDownload("../evil")
-        assertNotNull(library.lastError.value)
+        assertNotNull(library.notice.value)
         subject = null
 
         library.removeDownload("p1")
-        assertNull(library.lastError.value)
+        assertNull(library.notice.value)
     }
 
     // --- 主体の置き場・同期・公開面 ---

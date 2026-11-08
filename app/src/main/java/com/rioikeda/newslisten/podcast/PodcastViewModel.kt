@@ -8,6 +8,7 @@ import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.ApiException
 import com.rioikeda.newslisten.podcast.app.NowPlaying
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
+import com.rioikeda.newslisten.podcast.app.PlaybackNotice
 import com.rioikeda.newslisten.podcast.app.QueueView
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -74,10 +75,10 @@ class PodcastViewModel(
     val isLoading: StateFlow<Boolean> = catalog.isLoading
 
     // 自前の失敗（語彙の登録・ダウンロードの中継）。取得の失敗は catalog、再生に由来する失敗は coordinator が持つ（android-dec-59・android-dec-63）。
-    private val _errorMessage = MutableStateFlow<String?>(null)
+    private val _notice = MutableStateFlow<PlaybackNotice?>(null)
 
     /** 優先は自前 > 取得 > 再生。3 つの持ち主の値を保存せず、読むたびに合成する。 */
-    val errorMessage: StateFlow<String?> = coordinator.errorMessageOver(_errorMessage.asStateFlow(), catalog.errorMessage)
+    val notice: StateFlow<PlaybackNotice?> = coordinator.noticeOver(_notice.asStateFlow(), catalog.notice)
 
     /** [PlaybackCoordinator.queueView] の中継。 */
     val queueView: StateFlow<QueueView> = coordinator.queueView
@@ -111,7 +112,7 @@ class PodcastViewModel(
     private fun withNowPlaying(rows: List<EpisodeRow>, nowPlaying: NowPlaying?): List<EpisodeListItem> =
         rows.map { EpisodeListItem(it, it.episodeId == nowPlaying?.episodeId) }
 
-    /** Podcast 一覧の取得を [EpisodeCatalog] へ中継する。失敗は [errorMessage] に出る。 */
+    /** Podcast 一覧の取得を [EpisodeCatalog] へ中継する。失敗は [notice] に出る。 */
     suspend fun fetchPodcasts(): Unit = catalog.refresh()
 
     /** 語彙グロッサリの習得済み表示用。失敗してもPodcast本体の利用を妨げない。 */
@@ -134,7 +135,7 @@ class PodcastViewModel(
             val saved = apiClient.saveVocabulary(podcastId, term)
             _registeredVocabularyKeys.value += vocabularyKey(saved.podcastId, saved.term)
         } catch (_: ApiException) {
-            _errorMessage.value = VOCABULARY_SAVE_ERROR_MESSAGE
+            _notice.value = PlaybackNotice.VocabularyFailed
         } finally {
             _savingVocabularyKeys.value -= key
         }
@@ -149,13 +150,13 @@ class PodcastViewModel(
     /**
      * 指定 Podcast の音声をダウンロードする。実体は [OfflineLibrary.download] で、完了まで suspend する。
      *
-     * 中継と失敗の文言の写しは [scope] の上で行う。呼び手（画面の scope）はタブ移動で cancel されるが、
-     * cancel は [join] を止めるだけで、中継の戻りの後に [errorMessage] へ写す処理は完走する。
+     * 中継と失敗の知らせの写しは [scope] の上で行う。呼び手（画面の scope）はタブ移動で cancel されるが、
+     * cancel は [join] を止めるだけで、中継の戻りの後に [notice] へ写す処理は完走する。
      */
     suspend fun download(episodeId: String) {
         scope.launch {
             offlineLibrary.download(episodeId)
-            relayDownloadError()
+            relayDownloadNotice()
         }.join()
     }
 
@@ -163,13 +164,13 @@ class PodcastViewModel(
     suspend fun removeDownload(id: String) {
         scope.launch {
             offlineLibrary.removeDownload(id)
-            relayDownloadError()
+            relayDownloadNotice()
         }.join()
     }
 
     /** 中継の戻りの後に読む（常駐の collect は作らない）。成功では `null` を写さず、既存の通知を消さない。 */
-    private fun relayDownloadError() {
-        offlineLibrary.lastError.value?.let { _errorMessage.value = it }
+    private fun relayDownloadNotice() {
+        offlineLibrary.notice.value?.let { _notice.value = it }
     }
 
     /** 失敗した再生を、取得からやり直す。 */
@@ -211,12 +212,12 @@ class PodcastViewModel(
     /** 主体の離脱での停止（shared-leave-01）。 */
     suspend fun stopForSubjectLeave(): Unit = coordinator.stopForSubjectLeave()
 
-    /** エラーメッセージをクリアする（UI の AlertDialog 閉じ時に呼ばれる）。3 つの持ち主の失敗をすべて消す。 */
-    fun clearError() {
+    /** 知らせをクリアする（UI の AlertDialog 閉じ時に呼ばれる）。3 つの持ち主の失敗をすべて消す。 */
+    fun dismissNotice() {
         // 優先の低い順に消す: 優先の高い自前を先に消すと、隠れていた失敗が一瞬だけ見える。
-        coordinator.clearError()
-        catalog.clearError()
-        _errorMessage.value = null
+        coordinator.dismissNotice()
+        catalog.dismissNotice()
+        _notice.value = null
     }
 
     /**
@@ -228,9 +229,5 @@ class PodcastViewModel(
      */
     suspend fun submitQuizAnswers(podcastId: String, answers: List<Int>): QuizAnswerResponse = withContext(dispatcher) {
         apiClient.submitQuizAnswers(podcastId, QuizAnswerRequest(answers))
-    }
-
-    private companion object {
-        const val VOCABULARY_SAVE_ERROR_MESSAGE = "語彙の登録に失敗しました"
     }
 }

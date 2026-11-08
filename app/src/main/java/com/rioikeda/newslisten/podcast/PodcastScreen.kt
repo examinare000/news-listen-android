@@ -56,7 +56,7 @@ import com.rioikeda.newslisten.designsystem.DSFeedback
 fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
     val episodes by viewModel.episodes.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
+    val notice by viewModel.notice.collectAsState()
     val nowPlaying by viewModel.nowPlaying.collectAsState()
     val queueView by viewModel.queueView.collectAsState()
     val downloadingIds by viewModel.downloadingIds.collectAsState()
@@ -207,13 +207,13 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
     }
 
     // エラーダイアログ
-    if (errorMessage != null) {
+    if (notice != null) {
         AlertDialog(
-            onDismissRequest = { viewModel.clearError() },
+            onDismissRequest = { viewModel.dismissNotice() },
             title = { Text(stringResource(R.string.error_dialog_title)) },
-            text = { Text(errorMessage ?: "") },
+            text = { Text(notice?.message ?: "") },
             confirmButton = {
-                Button(onClick = { viewModel.clearError() }) {
+                Button(onClick = { viewModel.dismissNotice() }) {
                     Text("OK")
                 }
             }

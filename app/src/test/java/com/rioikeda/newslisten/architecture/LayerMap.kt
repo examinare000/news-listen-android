@@ -78,6 +78,7 @@ object LayerMap {
     private val readModel = listOf(
         "podcast/PlaybackMetadata.kt",
         "podcast/app/PlaybackReadModels.kt",
+        "podcast/app/PlaybackNotice.kt",
         "catalog/app/EpisodeRow.kt",
     )
 

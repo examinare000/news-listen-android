@@ -73,7 +73,7 @@ interface PlaybackCommands {
 
     suspend fun stopForSubjectLeave()
 
-    fun clearError()
+    fun dismissNotice()
 }
 
 /** 再生の query の入口。読むだけで、書かない。 */
@@ -93,7 +93,7 @@ interface PlaybackQueries {
     val playbackSpeed: StateFlow<Float>
 
     /** 再生に由来する失敗だけ（android-dec-59）。 */
-    val errorMessage: StateFlow<String?>
+    val notice: StateFlow<PlaybackNotice?>
 
     val downloadingIds: StateFlow<Set<String>>
 
@@ -174,9 +174,9 @@ class PlaybackCoordinator(
 
     override val playbackSpeed: StateFlow<Float> = playerController.playbackSpeed
 
-    private val _errorMessage = MutableStateFlow<String?>(null)
+    private val _notice = MutableStateFlow<PlaybackNotice?>(null)
 
-    override val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    override val notice: StateFlow<PlaybackNotice?> = _notice.asStateFlow()
 
     override val downloadingIds: StateFlow<Set<String>> = offlineLibrary.downloadingIds
 
@@ -239,9 +239,9 @@ class PlaybackCoordinator(
      * 画面側の自前の失敗 [own]・取得の失敗 [catalog]・再生の失敗を合成する（優先は own > catalog > 再生）。
      * `.value` は読んだ時点で計算し、`collect` は合成の値の変化を出す。最上位の関数にすると台帳の列挙に出るため、メンバーに置く。
      */
-    internal fun errorMessageOver(own: StateFlow<String?>, catalog: StateFlow<String?>): StateFlow<String?> =
-        derived(combine(own, catalog, errorMessage) { ownMessage, catalogMessage, playbackMessage -> ownMessage ?: catalogMessage ?: playbackMessage }) {
-            own.value ?: catalog.value ?: errorMessage.value
+    internal fun noticeOver(own: StateFlow<PlaybackNotice?>, catalog: StateFlow<PlaybackNotice?>): StateFlow<PlaybackNotice?> =
+        derived(combine(own, catalog, notice) { ownNotice, catalogNotice, playbackNotice -> ownNotice ?: catalogNotice ?: playbackNotice }) {
+            own.value ?: catalog.value ?: notice.value
         }
 
     /** 開始の要求の出どころ。出どころで、開始前の失敗の扱いと確定時に使う辺が変わる。 */
@@ -251,7 +251,7 @@ class PlaybackCoordinator(
      * 指定 Podcast の再生を手動で開始する。
      *
      * 判定 → 再生元の決定 → （NETWORK なら）取得 → 取り直した値の判定を先に行い、通ったときだけキューと [session] を変える。
-     * 再生できないと分かったときは、再生中のものを止めずキューも [session] も変えず、[errorMessage] だけを出す。
+     * 再生できないと分かったときは、再生中のものを止めずキューも [session] も変えず、[notice] だけを出す。
      * 再生元の決定は [resolvePlaybackSource]（正本: docs/design/shared-playback-spec.md §6.1）:
      * CACHED は一覧の値で始め（オフラインでも可）、NETWORK は署名付き URL を再取得してから始める（ADR-009）。
      * キュー内に既にあればそこへジャンプ、無ければ現在の次に挿入してジャンプする（利用者が組んだ待機列を保つ）。
@@ -278,7 +278,7 @@ class PlaybackCoordinator(
      *
      * [userGeneration] は呼出側が同じ位置で読んだ [userStartGeneration]。自動の前進だけが、[playMutex] を取った直後・
      * 取得の後（取り直した値の判定の前）・取得の失敗の後（失敗を出す前）で比べ、待つ間に利用者の開始が来ていたら、
-     * キュー・session・player・[errorMessage] のどれも書かずに捨てる。[settlePlayback] の後には置かない:
+     * キュー・session・player・[notice] のどれも書かずに捨てる。[settlePlayback] の後には置かない:
      * 自動の前進のキューの書込と player の停止はそれより前に済み、中断するのは Active のときだけで、
      * 自動の前進の時点の session は Completed か離脱後の NothingPlaying だから。
      */
@@ -291,7 +291,7 @@ class PlaybackCoordinator(
             // 並んで待っていた 2 回目の retry は、1 回目の確定後の session では対象外。
             if (trigger == StartTrigger.RETRY && _session.value !is PlaybackSession.Errored) return@withLock
             if (episode !is Episode.Playable) {
-                rejectStart(episode, trigger, SessionErrorReason.NotPlayable, playabilityError(episode))
+                rejectStart(episode, trigger, SessionErrorReason.NotPlayable, PlaybackNotice.unplayable(episode))
                 return@withLock
             }
             val source = resolvePlaybackSource(hasCached = offlineLibrary.isCached(subject, episode.id), isOnline = networkMonitor.isOnline.value)
@@ -304,7 +304,7 @@ class PlaybackCoordinator(
                     // 例外にせず、開始の失敗として表に出す。
                     val cachedUri = offlineLibrary.cachedFileUri(subject, episode.id)
                     if (cachedUri == null) {
-                        rejectStart(episode, trigger, SessionErrorReason.SourceUnavailable, "ダウンロード済みの音声が削除されたため再生できません")
+                        rejectStart(episode, trigger, SessionErrorReason.SourceUnavailable, PlaybackNotice.CacheRemoved)
                         return@withLock
                     }
                     playable = episode
@@ -316,20 +316,25 @@ class PlaybackCoordinator(
                     } catch (e: ApiException) {
                         if (generation != leaveGeneration) return@withLock
                         if (supersededByUser()) return@withLock
-                        rejectStart(episode, trigger, SessionErrorReason.FetchFailed, e.message)
+                        val fetchNotice = if (e is ApiException.NetworkError) {
+                            PlaybackNotice.FetchOffline
+                        } else {
+                            PlaybackNotice.FetchFailed
+                        }
+                        rejectStart(episode, trigger, SessionErrorReason.FetchFailed, fetchNotice)
                         return@withLock
                     }
                     if (generation != leaveGeneration) return@withLock
                     if (supersededByUser()) return@withLock
                     if (fresh !is Episode.Playable) {
-                        rejectStart(episode, trigger, SessionErrorReason.NotPlayable, playabilityError(fresh))
+                        rejectStart(episode, trigger, SessionErrorReason.NotPlayable, PlaybackNotice.unplayable(fresh))
                         return@withLock
                     }
                     playable = fresh
                     url = fresh.audioUrl
                 }
                 PlaybackSource.UNAVAILABLE -> {
-                    rejectStart(episode, trigger, SessionErrorReason.SourceUnavailable, "オフラインのため再生できません")
+                    rejectStart(episode, trigger, SessionErrorReason.SourceUnavailable, PlaybackNotice.Offline)
                     return@withLock
                 }
             }
@@ -352,7 +357,7 @@ class PlaybackCoordinator(
             startSerial++
             sessionSource = source
             sessionSubject = subject
-            _errorMessage.value = null
+            _notice.value = null
             playerController.prepare(url, playable.toPlaybackMetadata())
             playerController.setSpeed(speed.toFloat())
             if (resume > 0) playerController.seekTo(resume)
@@ -361,11 +366,11 @@ class PlaybackCoordinator(
     }
 
     /**
-     * 開始前の失敗。手動の開始は何も変えず [errorMessage] だけを出す（前の再生は続く）。
+     * 開始前の失敗。手動の開始は何も変えず [notice] だけを出す（前の再生は続く）。
      * 自動前進・retry は、domain の辺 failBeforeStart の戻り値を置く。前進はキューを書く前に失敗するので、ここで
      * Errored(IdOnly) と食い違わないよう現在を合わせる（retry は既に合っている）。
      */
-    private suspend fun rejectStart(episode: Episode, trigger: StartTrigger, reason: SessionErrorReason, message: String?) {
+    private suspend fun rejectStart(episode: Episode, trigger: StartTrigger, reason: SessionErrorReason, notice: PlaybackNotice?) {
         if (trigger != StartTrigger.MANUAL) {
             settlePlayback()
             // 防御: 利用者の開始は要求の時点で自動の前進を捨てるので、確定済みの手動の開始と競合する状況は通常は起きない。
@@ -376,7 +381,7 @@ class PlaybackCoordinator(
             if (trigger == StartTrigger.ADVANCE) _queue.value = _queue.value.playNext(episode).jump(episode.id).first
             applySession(_session.value.failBeforeStart(SessionEpisodeRef.IdOnly(episode.id), reason))
         }
-        _errorMessage.value = message
+        _notice.value = notice
     }
 
     /** 開始を確定するときの辺の選び方。呼ぶ前に [settlePlayback] 済みで、確定時点の [session] で選ぶ。 */
@@ -459,6 +464,7 @@ class PlaybackCoordinator(
             offlineLibrary.invalidate(sessionSubject, episode.id)
         }
         applySession(_session.value.fail(SessionEpisodeRef.Loaded(episode), SessionErrorReason.Player(reason)))
+        _notice.value = PlaybackNotice.PlayerFailed
     }
 
     /**
@@ -637,8 +643,8 @@ class PlaybackCoordinator(
     }
 
     /** 再生に由来する失敗の通知だけを消す。画面側の自前の失敗には触れない。 */
-    override fun clearError() {
-        _errorMessage.value = null
+    override fun dismissNotice() {
+        _notice.value = null
     }
 
     /**
@@ -686,17 +692,6 @@ class PlaybackCoordinator(
             // ネットワーク一時的な失敗等をログしない（iOS 同様のベストエフォート）。
         }
     }
-
-    /**
-     * 再生可否のゲート判定。再生可能なら null、不可なら理由メッセージを返す。
-     * 判定は [Episode] の種類で決まる（[Episode.Playable] だけが再生できる）。
-     */
-    private fun playabilityError(podcast: Episode): String? =
-        when (podcast) {
-            is Episode.Playable -> null
-            is Episode.Generating -> "生成中のため再生できません"
-            is Episode.Failed -> podcast.errorMessage?.takeIf { it.isNotEmpty() } ?: "生成に失敗しました"
-        }
 
     private companion object {
         const val POSITION_SYNC_INTERVAL_MS = 15_000L
