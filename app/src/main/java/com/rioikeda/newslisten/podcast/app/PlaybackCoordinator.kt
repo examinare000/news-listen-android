@@ -352,7 +352,7 @@ class PlaybackCoordinator(
             settlePlayback()
             if (generation != leaveGeneration) return@withLock
             val resume = resolveResumePosition(playable.resumeHintSeconds, playable.durationSeconds)
-            val speed = preferencesStore.defaultPlaybackSpeed.value
+            val speed = preferencesStore.defaultPlaybackSpeed.value.multiplier
             applySession(beginSession(playable, resume, speed, trigger))
             startSerial++
             sessionSource = source

@@ -2,6 +2,7 @@ package com.rioikeda.newslisten.podcast.app
 
 import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.core.ApiException
+import com.rioikeda.newslisten.core.PlaybackSpeed
 import com.rioikeda.newslisten.engagement.ListeningStreakStore
 import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.PodcastResponse
@@ -1277,7 +1278,7 @@ class PlaybackCoordinatorTest {
 
     @Test
     fun `android-test-05 shared-session-10 android-contract-06 既定速度で開始しセッション中の速度変更は既定速度を書き換えず次のepisodeも既定速度で始まる`() = runTest {
-        val preferences = InMemoryPreferencesStore(initialDefaultPlaybackSpeed = 1.5)
+        val preferences = InMemoryPreferencesStore(initialDefaultPlaybackSpeed = PlaybackSpeed.of(1.5)!!)
         val listedA = podcast(id = "pA")
         val freshA = podcast(id = "pA", audioUrl = "https://example.com/pA-fresh.mp3", playbackPositionSeconds = 120.0)
         val listedB = podcast(id = "pB", playbackPositionSeconds = 40.0)
@@ -1296,7 +1297,7 @@ class PlaybackCoordinatorTest {
 
         assertEquals(listOf(1.5f, 2.0f, 1.5f), player.speedCalls)
         assertEquals(listOf(120.0, 40.0), player.seekCalls)
-        assertEquals(1.5, preferences.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(1.5, preferences.defaultPlaybackSpeed.value.multiplier, 0.0)
         coordinator.stopForSubjectLeave()
     }
 

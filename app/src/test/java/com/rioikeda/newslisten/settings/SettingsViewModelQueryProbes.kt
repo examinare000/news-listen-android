@@ -5,8 +5,11 @@ import com.rioikeda.newslisten.architecture.ProbeData
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.engagement.probeListeningStreakStore
+import com.rioikeda.newslisten.preferences.probePreferencesSync
 
-/** `SettingsViewModel` の query。`loadListeningStreak` は、自分のグラフの store の `refresh` を呼ぶ（callback の発火を観測する）。 */
+/**
+ * `SettingsViewModel` の query。`SettingsViewModel#getPreferencesSyncFailed` は、自分のグラフの `PreferencesSync` の状態を読むだけで書かない。
+ * `loadListeningStreak` は、自分のグラフの store の `refresh` を呼ぶ（callback の発火を観測する）。 */
 internal val settingsViewModelQueryProbes: QueryProbeSet = run {
     val canned = mapOf(
         "ApiClient#fetchSources" to ProbeData.repeated(ProbeData.sources),
@@ -34,7 +37,7 @@ internal val settingsViewModelQueryProbes: QueryProbeSet = run {
     ) { env ->
         SettingsViewModel(
             apiClient = env.apiClient,
-            preferencesStore = env.preferencesStore,
+            preferencesSync = probePreferencesSync(env),
             dispatcher = env.newDispatcher(),
             isAdminProvider = env.hooks.read("SettingsViewModel#isAdminProvider") { false },
             listeningStreakStore = probeListeningStreakStore(env),

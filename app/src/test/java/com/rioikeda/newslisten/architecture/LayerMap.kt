@@ -50,6 +50,9 @@ object LayerMap {
         "feed/ArticleUrlValidator.kt",
         "catalog/domain/Episode.kt",
         "preferences/domain/PreferenceItem.kt",
+        "core/PlaybackSpeed.kt",
+        "preferences/domain/WeeklyGoal.kt",
+        "preferences/domain/PreferenceSyncResult.kt",
     )
 
     private val application = listOf(
@@ -62,6 +65,7 @@ object LayerMap {
         "podcast/app/PlaybackCoordinator.kt",
         "podcast/app/EpisodeLookup.kt",
         "catalog/app/EpisodeCatalog.kt",
+        "preferences/app/PreferencesSync.kt",
     )
 
     private val port = listOf(
@@ -69,6 +73,7 @@ object LayerMap {
         "podcast/app/AudioStore.kt",
         "passkey/PasskeyProvider.kt",
         "preferences/PreferencesStore.kt",
+        "preferences/app/PreferencesApi.kt",
         "network/PodcastApi.kt",
         "network/LearningApi.kt",
         "network/VocabularyTestApi.kt",
@@ -81,6 +86,7 @@ object LayerMap {
         "podcast/app/PlaybackReadModels.kt",
         "podcast/app/PlaybackNotice.kt",
         "catalog/app/EpisodeRow.kt",
+        "preferences/app/PreferencesView.kt",
     )
 
     private val adapter = listOf(
@@ -99,6 +105,7 @@ object LayerMap {
         "network/OkHttpApiClient.kt",
         "network/EpisodeDecoder.kt",
         "network/PodcastApiAdapter.kt",
+        "network/PreferencesApiAdapter.kt",
         "observability/CrashReporter.kt",
         "observability/CrashReportFormatter.kt",
         "model/ActionResponse.kt",

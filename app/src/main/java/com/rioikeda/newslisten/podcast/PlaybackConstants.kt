@@ -1,5 +1,7 @@
 package com.rioikeda.newslisten.podcast
 
+import com.rioikeda.newslisten.core.PlaybackSpeed
+
 /**
  * 再生操作の共有定数。
  *
@@ -8,14 +10,8 @@ package com.rioikeda.newslisten.podcast
  * 同じ値を使い、片方だけ変更して食い違う回帰を防ぐ狙いを踏襲する。
  */
 object PlaybackConstants {
-    /** 速度選択肢（倍率）。8段階。 */
-    val speeds: List<Double> = listOf(0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5)
-
-    /**
-     * [speeds] に含まれる値だけを選択可能とする。許容誤差は持たず、NaN は常に false。
-     * 値域の判定はここに集約し、呼び出し側で [speeds] を直接検索しない。
-     */
-    fun isSelectableSpeed(value: Double): Boolean = value in speeds
+    /** 速度選択肢（倍率）。値域の正本は [PlaybackSpeed] で、ここはそこから導く。 */
+    val speeds: List<Double> = PlaybackSpeed.all.map { it.multiplier }
 
     /** 戻るスキップ秒。 */
     const val SKIP_BACKWARD_SECONDS: Double = 15.0

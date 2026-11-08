@@ -8,12 +8,16 @@ import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.RssSource
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.preferences.app.PreferencesSync
+import com.rioikeda.newslisten.preferences.domain.PreferenceSyncResult
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+
+/** 保存後の画面の選択。`Keep` は選んだ値を保ち、`Revert` は元の値へ戻す。 */
+enum class SelectionAfterSave { Keep, Revert }
 
 /**
  * Settings タブの状態とロジックを担う ViewModel（フェーズ10 P10 Task2）。
@@ -26,11 +30,10 @@ import kotlinx.coroutines.withContext
 class SettingsViewModel(
     private val apiClient: ApiClient,
     /**
-     * 難易度・再生速度の値の正本（AuthViewModel と同じ設計。詳細は [PreferencesStore] のコメント
-     * 参照）。SettingsViewModel は同期の成否のみを扱い、値そのものはここへ書き戻すのみで
-     * 独自コピーを持たない。
+     * 設定の同期の入口。値域の検査・サーバー往復・保存・競合の解決は [PreferencesSync] が持ち、
+     * SettingsViewModel は結果を画面の文言と選択の扱いへ写す中継だけを行う。
      */
-    private val preferencesStore: PreferencesStore,
+    private val preferencesSync: PreferencesSync,
     private val dispatcher: CoroutineDispatcher,
     /**
      * 現在ログイン中ユーザーが admin かどうかを都度問い合わせる関数（issue #66 / ADR-047）。
@@ -170,70 +173,41 @@ class SettingsViewModel(
      */
     suspend fun loadListeningStreak() = listeningStreakStore.refresh()
 
-    /**
-     * デフォルト難易度をサーバーへ同期する。
-     * @return 成功したら `true`、失敗したら `false`（[errorMessage] にも反映する）。
-     */
-    suspend fun syncDefaultDifficulty(value: String): Boolean =
-        syncPreference(
-            operation = { apiClient.updatePreferences(defaultDifficulty = value, defaultPlaybackSpeed = null) },
-            onSuccess = { preferencesStore.setDefaultDifficulty(value) },
-        )
+    /** 直近の取り込みが失敗したか。画面が読む。 */
+    val preferencesSyncFailed: StateFlow<Boolean> = preferencesSync.preferencesSyncFailed
 
-    /**
-     * デフォルト再生速度をサーバーへ同期する。
-     * @return 成功したら `true`、失敗したら `false`（[errorMessage] にも反映する）。
-     */
-    suspend fun syncDefaultPlaybackSpeed(value: Double): Boolean =
-        syncPreference(
-            operation = { apiClient.updatePreferences(defaultDifficulty = null, defaultPlaybackSpeed = value) },
-            onSuccess = { preferencesStore.setDefaultPlaybackSpeed(value) },
-        )
+    /** デフォルト難易度を同期する。結果は [errorMessage] と戻りの [SelectionAfterSave] に反映する。 */
+    suspend fun syncDefaultDifficulty(value: String): SelectionAfterSave =
+        relay { preferencesSync.setDefaultDifficulty(value) }
 
-    suspend fun syncWeeklyGoalEpisodes(value: Int): Boolean {
-        if (value !in WEEKLY_GOAL_OPTIONS) {
-            _errorMessage.value = PREFERENCES_SYNC_ERROR_MESSAGE
-            return false
+    /** デフォルト再生速度を同期する。 */
+    suspend fun syncDefaultPlaybackSpeed(value: Double): SelectionAfterSave =
+        relay { preferencesSync.setDefaultPlaybackSpeed(value) }
+
+    /** 週あたりの目標を同期する。 */
+    suspend fun syncWeeklyGoalEpisodes(value: Int): SelectionAfterSave =
+        relay { preferencesSync.setWeeklyGoal(value) }
+
+    private suspend fun relay(command: suspend () -> PreferenceSyncResult): SelectionAfterSave =
+        when (withContext(dispatcher) { command() }) {
+            PreferenceSyncResult.Applied -> {
+                _errorMessage.value = null
+                SelectionAfterSave.Keep
+            }
+            // 古い応答は画面の状態を変えない。
+            PreferenceSyncResult.Superseded -> SelectionAfterSave.Keep
+            is PreferenceSyncResult.Rejected,
+            is PreferenceSyncResult.Failed,
+            PreferenceSyncResult.SaveFailed,
+            -> {
+                _errorMessage.value = PREFERENCES_SYNC_ERROR_MESSAGE
+                SelectionAfterSave.Revert
+            }
         }
-        return syncPreference(
-            operation = { apiClient.updateWeeklyGoalEpisodes(value) },
-            onSuccess = { preferencesStore.setWeeklyGoalEpisodes(value) },
-        )
-    }
-
-    /**
-     * 設定同期の成否を共通化する内部ヘルパー（iOS SettingsViewModel.swift:215-227 の
-     * `syncPreference` 相当）。成功時のみ [onSuccess] を呼び、値を [preferencesStore] に
-     * 書き戻す（値の所有はストアに一本化し、ここでは二重保持しない）。
-     */
-    private suspend fun syncPreference(
-        operation: suspend () -> Unit,
-        onSuccess: suspend () -> Unit,
-    ): Boolean = withContext(dispatcher) {
-        // WHY: 連打などで複数リクエストが競合したとき、古い応答（成功/失敗とも）が
-        // 最新の状態を上書きしないよう、呼び出し連番で最新以外の応答を無視する
-        // （iOS SettingsViewModel の stale ガードと同型）。stale は true を返して
-        // 呼び出し元のロールバックも抑止する。
-        val ticket = syncSequence.incrementAndGet()
-        try {
-            operation()
-            if (ticket != syncSequence.get()) return@withContext true
-            onSuccess()
-            _errorMessage.value = null
-            true
-        } catch (e: ApiException) {
-            if (ticket != syncSequence.get()) return@withContext true
-            _errorMessage.value = PREFERENCES_SYNC_ERROR_MESSAGE
-            false
-        }
-    }
-
-    private val syncSequence = java.util.concurrent.atomic.AtomicLong(0)
 
     private companion object {
         const val SOURCES_ERROR_MESSAGE = "RSSソースの操作に失敗しました"
         const val ADMIN_ONLY_ERROR_MESSAGE = "この操作には管理者権限が必要です"
         const val PREFERENCES_SYNC_ERROR_MESSAGE = "設定の保存に失敗しました"
-        val WEEKLY_GOAL_OPTIONS = setOf(3, 5, 7, 10)
     }
 }

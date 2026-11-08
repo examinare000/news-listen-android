@@ -1,28 +1,10 @@
 package com.rioikeda.newslisten.podcast
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 再生速度の値域（正本は `PlaybackConstants.speeds` の 1 本）を固定する。 */
+/** 再生速度の選択肢（`PlaybackConstants.speeds`）が値域の正本と同じ並びであることを固定する。 */
 class PlaybackConstantsTest {
-
-    @Test
-    fun `android-rule-prefs-03 isSelectableSpeed は 8 段の値だけ true`() {
-        // verifies: android-contract-17 / android-rule-prefs-03
-        listOf(0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5).forEach { speed ->
-            assertTrue("$speed は選べる速度", PlaybackConstants.isSelectableSpeed(speed))
-        }
-    }
-
-    @Test
-    fun `android-rule-prefs-03 isSelectableSpeed は値域外と NaN を false にする`() {
-        // verifies: android-contract-17 / android-rule-prefs-03
-        listOf(0.0, 3.0, 1.0001, -1.0, Double.NaN).forEach { speed ->
-            assertFalse("$speed は選べない速度", PlaybackConstants.isSelectableSpeed(speed))
-        }
-    }
 
     @Test
     fun `android-rule-prefs-03 speeds は 8 段の Double`() {

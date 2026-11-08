@@ -26,6 +26,8 @@ class FakeApiClient(
         { error("deleteSource is not stubbed") },
     private val onFetchFeaturedSites: suspend () -> FeaturedSitesResponse =
         { error("fetchFeaturedSites is not stubbed") },
+    private val onFetchPreferences: suspend () -> PreferencesResponse =
+        { error("fetchPreferences is not stubbed") },
     private val onUpdatePreferences: suspend (defaultDifficulty: String?, defaultPlaybackSpeed: Double?) -> PreferencesResponse =
         { _, _ -> error("updatePreferences is not stubbed") },
     private val onUpdateWeeklyGoalEpisodes: suspend (weeklyGoalEpisodes: Int) -> PreferencesResponse =
@@ -53,6 +55,8 @@ class FakeApiClient(
     override suspend fun deleteSource(url: String): RssSourcesResponse = onDeleteSource(url)
 
     override suspend fun fetchFeaturedSites(): FeaturedSitesResponse = onFetchFeaturedSites()
+
+    override suspend fun fetchPreferences(): PreferencesResponse = onFetchPreferences()
 
     override suspend fun updatePreferences(defaultDifficulty: String?, defaultPlaybackSpeed: Double?): PreferencesResponse =
         onUpdatePreferences(defaultDifficulty, defaultPlaybackSpeed)

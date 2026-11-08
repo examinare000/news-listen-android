@@ -1,8 +1,9 @@
 package com.rioikeda.newslisten.preferences
 
 import com.rioikeda.newslisten.core.Difficulty
-import com.rioikeda.newslisten.podcast.PlaybackConstants
+import com.rioikeda.newslisten.core.PlaybackSpeed
 import com.rioikeda.newslisten.preferences.domain.PreferenceItem
+import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,20 +15,20 @@ import kotlinx.coroutines.flow.asStateFlow
  * （本番実装と対になる Fake を main ソースセットに置く）。
  */
 class InMemoryPreferencesStore(
-    initialDefaultDifficulty: String = Difficulty.DEFAULT.code,
-    initialDefaultPlaybackSpeed: Double = DEFAULT_PLAYBACK_SPEED,
+    initialDefaultDifficulty: Difficulty = Difficulty.DEFAULT,
+    initialDefaultPlaybackSpeed: PlaybackSpeed = PlaybackSpeed.DEFAULT,
     initialArticleOpenMode: ArticleOpenMode = ArticleOpenMode.DEFAULT,
     initialTimeFormat: TimeFormat = TimeFormat.DEFAULT,
     initialSfxEnabled: Boolean = true,
     initialHapticsEnabled: Boolean = true,
-    initialWeeklyGoalEpisodes: Int = DEFAULT_WEEKLY_GOAL_EPISODES,
+    initialWeeklyGoalEpisodes: WeeklyGoal = WeeklyGoal.DEFAULT,
     initialSeenAchievementIds: Set<String> = emptySet(),
 ) : PreferencesStore {
     private val _defaultDifficulty = MutableStateFlow(initialDefaultDifficulty)
-    override val defaultDifficulty: StateFlow<String> = _defaultDifficulty.asStateFlow()
+    override val defaultDifficulty: StateFlow<Difficulty> = _defaultDifficulty.asStateFlow()
 
     private val _defaultPlaybackSpeed = MutableStateFlow(initialDefaultPlaybackSpeed)
-    override val defaultPlaybackSpeed: StateFlow<Double> = _defaultPlaybackSpeed.asStateFlow()
+    override val defaultPlaybackSpeed: StateFlow<PlaybackSpeed> = _defaultPlaybackSpeed.asStateFlow()
 
     private val _articleOpenMode = MutableStateFlow(initialArticleOpenMode)
     override val articleOpenMode: StateFlow<ArticleOpenMode> = _articleOpenMode.asStateFlow()
@@ -42,18 +43,17 @@ class InMemoryPreferencesStore(
     override val hapticsEnabled: StateFlow<Boolean> = _hapticsEnabled.asStateFlow()
 
     private val _weeklyGoalEpisodes = MutableStateFlow(initialWeeklyGoalEpisodes)
-    override val weeklyGoalEpisodes: StateFlow<Int> = _weeklyGoalEpisodes.asStateFlow()
+    override val weeklyGoalEpisodes: StateFlow<WeeklyGoal> = _weeklyGoalEpisodes.asStateFlow()
 
     private val _seenAchievementIds = MutableStateFlow(initialSeenAchievementIds)
     override val seenAchievementIds: StateFlow<Set<String>> = _seenAchievementIds.asStateFlow()
 
-    override suspend fun setDefaultDifficulty(code: String) {
-        _defaultDifficulty.value = code
+    override suspend fun setDefaultDifficulty(difficulty: Difficulty) {
+        _defaultDifficulty.value = difficulty
     }
 
     override suspend fun setDefaultPlaybackSpeed(speed: Double) {
-        if (!PlaybackConstants.isSelectableSpeed(speed)) return
-        _defaultPlaybackSpeed.value = speed
+        _defaultPlaybackSpeed.value = PlaybackSpeed.of(speed) ?: return
     }
 
     override suspend fun setArticleOpenMode(mode: ArticleOpenMode) {
@@ -73,7 +73,7 @@ class InMemoryPreferencesStore(
     }
 
     override suspend fun setWeeklyGoalEpisodes(episodes: Int) {
-        _weeklyGoalEpisodes.value = episodes
+        _weeklyGoalEpisodes.value = WeeklyGoal.of(episodes) ?: return
     }
 
     override suspend fun markAchievementsSeen(ids: Set<String>) {
@@ -83,9 +83,9 @@ class InMemoryPreferencesStore(
     override suspend fun clearSubjectScoped() {
         PreferenceItem.entries.filter { it.subjectScoped }.forEach { item ->
             when (item) {
-                PreferenceItem.DEFAULT_DIFFICULTY -> _defaultDifficulty.value = Difficulty.DEFAULT.code
-                PreferenceItem.DEFAULT_PLAYBACK_SPEED -> _defaultPlaybackSpeed.value = DEFAULT_PLAYBACK_SPEED
-                PreferenceItem.WEEKLY_GOAL_EPISODES -> _weeklyGoalEpisodes.value = DEFAULT_WEEKLY_GOAL_EPISODES
+                PreferenceItem.DEFAULT_DIFFICULTY -> _defaultDifficulty.value = Difficulty.DEFAULT
+                PreferenceItem.DEFAULT_PLAYBACK_SPEED -> _defaultPlaybackSpeed.value = PlaybackSpeed.DEFAULT
+                PreferenceItem.WEEKLY_GOAL_EPISODES -> _weeklyGoalEpisodes.value = WeeklyGoal.DEFAULT
                 PreferenceItem.SEEN_ACHIEVEMENT_IDS -> _seenAchievementIds.value = emptySet()
                 PreferenceItem.ARTICLE_OPEN_MODE,
                 PreferenceItem.TIME_FORMAT,
@@ -94,10 +94,5 @@ class InMemoryPreferencesStore(
                 -> Unit
             }
         }
-    }
-
-    private companion object {
-        const val DEFAULT_PLAYBACK_SPEED = 1.0
-        const val DEFAULT_WEEKLY_GOAL_EPISODES = 3
     }
 }

@@ -1,5 +1,8 @@
 package com.rioikeda.newslisten.preferences
 
+import com.rioikeda.newslisten.core.Difficulty
+import com.rioikeda.newslisten.core.PlaybackSpeed
+import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -29,8 +32,8 @@ class InMemoryPreferencesStoreTest {
     fun 既定値はDifficultyのDEFAULT_速度1_0_ArticleOpenModeのIN_APP_TimeFormatのABSOLUTEである() = runTest {
         val store = InMemoryPreferencesStore()
 
-        assertEquals("toeic_600", store.defaultDifficulty.value)
-        assertEquals(1.0, store.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(Difficulty.TOEIC_600, store.defaultDifficulty.value)
+        assertEquals(1.0, store.defaultPlaybackSpeed.value.multiplier, 0.0)
         assertEquals(ArticleOpenMode.IN_APP, store.articleOpenMode.value)
         assertEquals(TimeFormat.ABSOLUTE, store.timeFormat.value)
     }
@@ -39,9 +42,9 @@ class InMemoryPreferencesStoreTest {
     fun setDefaultDifficultyで値を更新するとStateFlowに反映される() = runTest {
         val store = InMemoryPreferencesStore()
 
-        store.setDefaultDifficulty("toeic_900")
+        store.setDefaultDifficulty(Difficulty.TOEIC_900)
 
-        assertEquals("toeic_900", store.defaultDifficulty.value)
+        assertEquals(Difficulty.TOEIC_900, store.defaultDifficulty.value)
     }
 
     @Test
@@ -50,7 +53,7 @@ class InMemoryPreferencesStoreTest {
 
         store.setDefaultPlaybackSpeed(1.5)
 
-        assertEquals(1.5, store.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(1.5, store.defaultPlaybackSpeed.value.multiplier, 0.0)
     }
 
     @Test
@@ -58,12 +61,12 @@ class InMemoryPreferencesStoreTest {
         // verifies: android-contract-17
         val store = InMemoryPreferencesStore()
         store.setDefaultPlaybackSpeed(1.5)
-        assertEquals(1.5, store.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(1.5, store.defaultPlaybackSpeed.value.multiplier, 0.0)
 
         listOf(0.0, 3.0, 1.0001, -1.0, Double.NaN).forEach { rejected ->
             store.setDefaultPlaybackSpeed(rejected)
 
-            assertEquals(1.5, store.defaultPlaybackSpeed.value, 0.0)
+            assertEquals(1.5, store.defaultPlaybackSpeed.value.multiplier, 0.0)
         }
     }
 
@@ -89,26 +92,39 @@ class InMemoryPreferencesStoreTest {
     fun `shared-dec-02 clearSubjectScopedは主体依存の4項目を既定値へ戻し端末設定の4項目を残す`() = runTest {
         // verifies: shared-dec-02
         val store = InMemoryPreferencesStore(
-            initialDefaultDifficulty = "toeic_900",
-            initialDefaultPlaybackSpeed = 2.0,
+            initialDefaultDifficulty = Difficulty.TOEIC_900,
+            initialDefaultPlaybackSpeed = PlaybackSpeed.of(2.0)!!,
             initialArticleOpenMode = ArticleOpenMode.EXTERNAL,
             initialTimeFormat = TimeFormat.RELATIVE,
             initialSfxEnabled = false,
             initialHapticsEnabled = false,
-            initialWeeklyGoalEpisodes = 9,
+            initialWeeklyGoalEpisodes = WeeklyGoal.of(10)!!,
             initialSeenAchievementIds = setOf("streak_7"),
         )
 
         store.clearSubjectScoped()
         store.clearSubjectScoped()
 
-        assertEquals("toeic_600", store.defaultDifficulty.value)
-        assertEquals(1.0, store.defaultPlaybackSpeed.value, 0.0)
-        assertEquals(3, store.weeklyGoalEpisodes.value)
+        assertEquals(Difficulty.TOEIC_600, store.defaultDifficulty.value)
+        assertEquals(1.0, store.defaultPlaybackSpeed.value.multiplier, 0.0)
+        assertEquals(WeeklyGoal.DEFAULT, store.weeklyGoalEpisodes.value)
         assertEquals(emptySet<String>(), store.seenAchievementIds.value)
         assertEquals(ArticleOpenMode.EXTERNAL, store.articleOpenMode.value)
         assertEquals(TimeFormat.RELATIVE, store.timeFormat.value)
         assertFalse(store.sfxEnabled.value)
         assertFalse(store.hapticsEnabled.value)
+    }
+
+    @Test
+    fun `android-dec-79 setWeeklyGoalEpisodesは値域外の週の目標を拒否し直前の値を維持する`() = runTest {
+        // verifies: android-dec-79
+        val store = InMemoryPreferencesStore()
+        store.setWeeklyGoalEpisodes(7)
+
+        listOf(0, 4, 9, 11, -1).forEach { rejected ->
+            store.setWeeklyGoalEpisodes(rejected)
+
+            assertEquals(7, store.weeklyGoalEpisodes.value.episodes)
+        }
     }
 }

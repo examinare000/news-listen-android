@@ -1,6 +1,8 @@
 package com.rioikeda.newslisten.settings
 
 import com.rioikeda.newslisten.core.ApiException
+import com.rioikeda.newslisten.core.Difficulty
+import com.rioikeda.newslisten.core.PlaybackSpeed
 import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
@@ -10,7 +12,10 @@ import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.podcast.PlaybackConstants
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
+import com.rioikeda.newslisten.network.PreferencesApiAdapter
 import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.preferences.app.PreferencesSync
+import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -22,6 +27,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 
 /**
  * [SettingsViewModel] の挙動検証。
@@ -31,17 +37,32 @@ import org.junit.Test
  */
 class SettingsViewModelTest {
 
+    /** 実物の [PreferencesSync]。サーバー往復は [PreferencesApiAdapter] 越しに [ApiClient] の fake へ届く。 */
+    private fun TestScope.newPreferencesSync(
+        apiClient: ApiClient,
+        preferencesStore: PreferencesStore,
+    ): PreferencesSync =
+        PreferencesSync(PreferencesApiAdapter(apiClient), preferencesStore, { "u-1" }, backgroundScope)
+
     private fun TestScope.newViewModel(
         apiClient: ApiClient = FakeApiClient(),
         preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
+        preferencesSync: PreferencesSync = newPreferencesSync(apiClient, preferencesStore),
         isAdminProvider: () -> Boolean = { false },
     ): SettingsViewModel =
         SettingsViewModel(
             apiClient = apiClient,
-            preferencesStore = preferencesStore,
+            preferencesSync = preferencesSync,
             dispatcher = StandardTestDispatcher(testScheduler),
             isAdminProvider = isAdminProvider,
         )
+
+    /** 書込だけが `IOException` で失敗する store（DataStore の書込失敗の模擬）。 */
+    private class FailingWriteStore(delegate: InMemoryPreferencesStore) : PreferencesStore by delegate {
+        override suspend fun setDefaultPlaybackSpeed(speed: Double) {
+            throw IOException("disk full")
+        }
+    }
 
     // --- RSS ソース ---
 
@@ -300,16 +321,16 @@ class SettingsViewModelTest {
 
         val result = viewModel.syncDefaultDifficulty("toeic_900")
 
-        assertTrue(result)
+        assertEquals(SelectionAfterSave.Keep, result)
         assertEquals("toeic_900", receivedDifficulty)
         assertNull(receivedSpeed)
-        assertEquals("toeic_900", preferencesStore.defaultDifficulty.value)
+        assertEquals(Difficulty.TOEIC_900, preferencesStore.defaultDifficulty.value)
         assertNull(viewModel.errorMessage.value)
     }
 
     @Test
     fun syncDefaultDifficulty失敗でfalseを返しPreferencesStoreは変わらない() = runTest {
-        val preferencesStore = InMemoryPreferencesStore(initialDefaultDifficulty = "toeic_600")
+        val preferencesStore = InMemoryPreferencesStore(initialDefaultDifficulty = Difficulty.TOEIC_600)
         val viewModel = newViewModel(
             apiClient = FakeApiClient(onUpdatePreferences = { _, _ -> throw ApiException.HttpError(500) }),
             preferencesStore = preferencesStore,
@@ -317,8 +338,8 @@ class SettingsViewModelTest {
 
         val result = viewModel.syncDefaultDifficulty("toeic_900")
 
-        assertFalse(result)
-        assertEquals("toeic_600", preferencesStore.defaultDifficulty.value)
+        assertEquals(SelectionAfterSave.Revert, result)
+        assertEquals(Difficulty.TOEIC_600, preferencesStore.defaultDifficulty.value)
         assertTrue(viewModel.errorMessage.value != null)
     }
 
@@ -345,16 +366,16 @@ class SettingsViewModelTest {
 
         val result = viewModel.syncDefaultPlaybackSpeed(1.5)
 
-        assertTrue(result)
+        assertEquals(SelectionAfterSave.Keep, result)
         assertNull(receivedDifficulty)
         assertEquals(1.5, receivedSpeed)
-        assertEquals(1.5, preferencesStore.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(1.5, preferencesStore.defaultPlaybackSpeed.value.multiplier, 0.0)
         assertNull(viewModel.errorMessage.value)
     }
 
     @Test
     fun syncDefaultPlaybackSpeed失敗でfalseを返しPreferencesStoreは変わらない() = runTest {
-        val preferencesStore = InMemoryPreferencesStore(initialDefaultPlaybackSpeed = 1.0)
+        val preferencesStore = InMemoryPreferencesStore(initialDefaultPlaybackSpeed = PlaybackSpeed.DEFAULT)
         val viewModel = newViewModel(
             apiClient = FakeApiClient(onUpdatePreferences = { _, _ -> throw ApiException.HttpError(500) }),
             preferencesStore = preferencesStore,
@@ -362,8 +383,8 @@ class SettingsViewModelTest {
 
         val result = viewModel.syncDefaultPlaybackSpeed(2.0)
 
-        assertFalse(result)
-        assertEquals(1.0, preferencesStore.defaultPlaybackSpeed.value, 0.0)
+        assertEquals(SelectionAfterSave.Revert, result)
+        assertEquals(1.0, preferencesStore.defaultPlaybackSpeed.value.multiplier, 0.0)
         assertTrue(viewModel.errorMessage.value != null)
     }
 
@@ -388,15 +409,15 @@ class SettingsViewModelTest {
 
             val result = viewModel.syncDefaultPlaybackSpeed(speed)
 
-            assertTrue("speed=$speed", result)
-            assertEquals("speed=$speed", speed, preferencesStore.defaultPlaybackSpeed.value, 0.0)
+            assertEquals("speed=$speed", SelectionAfterSave.Keep, result)
+            assertEquals("speed=$speed", speed, preferencesStore.defaultPlaybackSpeed.value.multiplier, 0.0)
         }
         assertEquals(8, PlaybackConstants.speeds.size)
     }
 
     @Test
     fun `週次目標の更新成功時だけPreferencesStoreへ書き戻す`() = runTest {
-        val preferencesStore = InMemoryPreferencesStore(initialWeeklyGoalEpisodes = 3)
+        val preferencesStore = InMemoryPreferencesStore(initialWeeklyGoalEpisodes = WeeklyGoal.DEFAULT)
         var receivedGoal = 0
         val viewModel = newViewModel(
             apiClient = FakeApiClient(
@@ -416,14 +437,14 @@ class SettingsViewModelTest {
 
         val result = viewModel.syncWeeklyGoalEpisodes(7)
 
-        assertTrue(result)
+        assertEquals(SelectionAfterSave.Keep, result)
         assertEquals(7, receivedGoal)
-        assertEquals(7, preferencesStore.weeklyGoalEpisodes.value)
+        assertEquals(7, preferencesStore.weeklyGoalEpisodes.value.episodes)
     }
 
     @Test
     fun `許容外の週次目標はAPIへ送らず保持する`() = runTest {
-        val preferencesStore = InMemoryPreferencesStore(initialWeeklyGoalEpisodes = 3)
+        val preferencesStore = InMemoryPreferencesStore(initialWeeklyGoalEpisodes = WeeklyGoal.DEFAULT)
         val viewModel = newViewModel(
             apiClient = FakeApiClient(
                 onUpdateWeeklyGoalEpisodes = {
@@ -435,13 +456,13 @@ class SettingsViewModelTest {
 
         val result = viewModel.syncWeeklyGoalEpisodes(4)
 
-        assertFalse(result)
-        assertEquals(3, preferencesStore.weeklyGoalEpisodes.value)
+        assertEquals(SelectionAfterSave.Revert, result)
+        assertEquals(3, preferencesStore.weeklyGoalEpisodes.value.episodes)
     }
 
     @Test
     fun `古いリクエストの失敗応答は最新の成功を上書きしない`() = runTest {
-        val preferencesStore = InMemoryPreferencesStore(initialWeeklyGoalEpisodes = 3)
+        val preferencesStore = InMemoryPreferencesStore(initialWeeklyGoalEpisodes = WeeklyGoal.DEFAULT)
         val firstGate = CompletableDeferred<Unit>()
         var callCount = 0
         val viewModel = newViewModel(
@@ -469,13 +490,50 @@ class SettingsViewModelTest {
         runCurrent()
         val second = async { viewModel.syncWeeklyGoalEpisodes(7) }
         runCurrent()
-        assertTrue(second.await())
-        assertEquals(7, preferencesStore.weeklyGoalEpisodes.value)
+        assertEquals(SelectionAfterSave.Keep, second.await())
+        assertEquals(7, preferencesStore.weeklyGoalEpisodes.value.episodes)
 
         firstGate.complete(Unit)
-        // stale な失敗はロールバック不要の true・エラー表示なし・最新値を保持
-        assertTrue(first.await())
-        assertEquals(7, preferencesStore.weeklyGoalEpisodes.value)
+        // stale な失敗は Keep（ロールバックしない）・エラー表示なし・最新値を保持
+        assertEquals(SelectionAfterSave.Keep, first.await())
+        assertEquals(7, preferencesStore.weeklyGoalEpisodes.value.episodes)
         assertNull(viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `android-dec-80 端末への保存失敗はRevertを返し保存失敗の文言を出す`() = runTest {
+        // verifies: android-dec-80
+        val apiClient = FakeApiClient(
+            onUpdatePreferences = { _, speed ->
+                PreferencesResponse(
+                    defaultDifficulty = "toeic_600",
+                    defaultPlaybackSpeed = speed ?: 1.0,
+                    digestEnabled = false,
+                    digestArticleCount = 0,
+                )
+            },
+        )
+        val viewModel = newViewModel(
+            apiClient = apiClient,
+            preferencesStore = FailingWriteStore(InMemoryPreferencesStore()),
+        )
+
+        val result = viewModel.syncDefaultPlaybackSpeed(1.5)
+
+        assertEquals(SelectionAfterSave.Revert, result)
+        assertEquals("設定の保存に失敗しました", viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun preferencesSyncFailedはPreferencesSyncの取り込み失敗を公開する() = runTest {
+        // verifies: android-cmd-prefs-03
+        val apiClient = FakeApiClient(onFetchPreferences = { throw ApiException.HttpError(500) })
+        val preferencesSync = newPreferencesSync(apiClient, InMemoryPreferencesStore())
+        val viewModel = newViewModel(apiClient = apiClient, preferencesSync = preferencesSync)
+        assertFalse(viewModel.preferencesSyncFailed.value)
+
+        preferencesSync.syncFromServer()
+
+        assertTrue(viewModel.preferencesSyncFailed.value)
     }
 }

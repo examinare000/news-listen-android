@@ -19,11 +19,11 @@ class EffectTypeCatalogTest {
     // ---- 本番 ----
 
     @Test
-    fun 本番の分類表は10のportと19のhookを持つ() {
+    fun 本番の分類表は11のportと21のhookを持つ() {
         assertEquals(
             setOf(
                 "ApiClient", "PodcastApi", "PreferencesStore", "SessionStore", "PlayerController",
-                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore",
+                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi",
             ),
             production.ports.map { it.port }.toSet(),
         )
@@ -68,7 +68,7 @@ class EffectTypeCatalogTest {
         assertEquals(setOf("createCredential", "getCredential"), portRow(production, "PasskeyProvider").writes)
         assertEquals(setOf("playSound", "performHaptic"), portRow(production, "FeedbackPlayer").writes)
 
-        assertEquals("hook は 19 個", 19, production.hooks.size)
+        assertEquals("hook は 21 個", 21, production.hooks.size)
         assertEquals("公開 callback（SETTER）は 2 つ", 2, production.hooks.count { it.wiring == HookWiring.SETTER })
         assertTrue(production.hooks.filter { it.wiring == HookWiring.SETTER }.all { it.kind == HookKind.WRITE })
     }

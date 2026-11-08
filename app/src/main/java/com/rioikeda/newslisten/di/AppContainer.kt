@@ -28,6 +28,7 @@ import com.rioikeda.newslisten.network.JavaFileSystem
 import com.rioikeda.newslisten.network.KeystoreSessionStore
 import com.rioikeda.newslisten.network.OkHttpApiClient
 import com.rioikeda.newslisten.network.PodcastApiAdapter
+import com.rioikeda.newslisten.network.PreferencesApiAdapter
 import com.rioikeda.newslisten.network.SessionStore
 import com.rioikeda.newslisten.notification.FcmTokenRegistrar
 import com.rioikeda.newslisten.observability.CrashReporter
@@ -43,6 +44,7 @@ import com.rioikeda.newslisten.podcast.PodcastViewModel
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
 import com.rioikeda.newslisten.preferences.DataStorePreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.preferences.app.PreferencesSync
 import com.rioikeda.newslisten.settings.SettingsViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -243,6 +245,19 @@ class AppContainer(context: Context) {
 
     fun getPreferencesStore(): PreferencesStore = preferencesStore
 
+    /**
+     * 設定の同期の入口。`_authViewModel` のラムダと後始末の手順がこの値を読むので `by lazy` にする。
+     * `_authViewModel` は構築時にこの値を評価しないため、初期化は `preferencesSync` → `_authViewModel` の一方向で、循環しない。
+     */
+    private val preferencesSync: PreferencesSync by lazy {
+        PreferencesSync(
+            PreferencesApiAdapter(apiClient),
+            preferencesStore,
+            _authViewModel::currentSubjectId,
+            preferencesScope,
+        )
+    }
+
     private val _listeningStreakStore: ApiListeningStreakStore = ApiListeningStreakStore(
         apiClient = apiClient,
         dispatcher = Dispatchers.Default.limitedParallelism(1),
@@ -266,7 +281,7 @@ class AppContainer(context: Context) {
                 CleanupStep("playback_stop") { _podcastViewModel.stopForSubjectLeave() },
                 CleanupStep("download_cancel") { s -> s.userId?.let { offlineLibrary.cancelDownloads(it) } },
                 CleanupStep("audio_cache") { s -> s.userId?.let { offlineLibrary.removeSubject(it) } },
-                CleanupStep("preferences") { preferencesStore.clearSubjectScoped() },
+                CleanupStep("preferences") { preferencesSync.clearSubjectScoped() },
                 CleanupStep("fcm_local_reset") { fcmTokenRegistrar.onLogout() },
             ),
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
@@ -293,8 +308,8 @@ class AppContainer(context: Context) {
             apiClient = apiClient,
             sessionStore = sessionStore,
             dispatcher = Dispatchers.Default,
-            preferencesStore = preferencesStore,
             onSubjectLeave = subjectCleanup::start,
+            onSessionRestored = { preferencesSync.syncFromServer() },
             onAuthenticated = { fcmTokenRegistrar.onAuthenticated() },
             // Unknown からの確定（shared-dec-05）と遷移 ④ の B の確立（android-dec-48）の直後に回収する。形式の判断は Subject の生成に任せる。
             onSubjectResolved = { s -> offlineLibrary.reclaim(s?.userId) },
@@ -456,7 +471,7 @@ class AppContainer(context: Context) {
     private val _settingsViewModel: SettingsViewModel by lazy {
         SettingsViewModel(
             apiClient = apiClient,
-            preferencesStore = preferencesStore,
+            preferencesSync = preferencesSync,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
             isAdminProvider = {
                 (_authViewModel.authState.value as? AuthState.Authenticated)?.user?.role == "admin"

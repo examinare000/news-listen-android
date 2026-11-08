@@ -3,20 +3,19 @@ package com.rioikeda.newslisten.auth
 import com.rioikeda.newslisten.architecture.ProbeData
 import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
-import com.rioikeda.newslisten.architecture.RecordingDefaults
 import com.rioikeda.newslisten.architecture.CallSpec
 import com.rioikeda.newslisten.architecture.queryProbeSet
 
 /**
- * AppContainer と同じ形で `AuthViewModel` を組む。後始末（`onSubjectLeave`）と認証確立（`onAuthenticated`）の hook は、
+ * AppContainer と同じ形で `AuthViewModel` を組む。後始末（`onSubjectLeave`）・保存済みトークンでの確立（`onSessionRestored`）・認証確立（`onAuthenticated`）の hook は、
  * 実行単位の工場の WRITE の関数に置き換える。`AccountViewModel` の probe も、自分のグラフの中にこれを組む。
  */
 internal fun probeAuthViewModel(env: ProbeEnvironment): AuthViewModel = AuthViewModel(
     apiClient = env.apiClient,
     sessionStore = env.sessionStore,
     dispatcher = env.newDispatcher(),
-    preferencesStore = env.preferencesStore,
     onSubjectLeave = env.hooks.write1<Subject>("AuthViewModel#onSubjectLeave"),
+    onSessionRestored = env.hooks.suspendWrite("AuthViewModel#onSessionRestored"),
     onAuthenticated = env.hooks.suspendWrite("AuthViewModel#onAuthenticated"),
     onSubjectResolved = env.hooks.write1<Subject?>("AuthViewModel#onSubjectResolved"),
 )
@@ -26,7 +25,6 @@ internal val authViewModelQueryProbes: QueryProbeSet = run {
     val tokenCanned = mapOf("SessionStore#load" to ProbeData.repeated<String?>("probe-token"))
     val canned = tokenCanned + mapOf(
         "ApiClient#me" to ProbeData.repeated(ProbeData.user),
-        "ApiClient#fetchPreferences" to ProbeData.repeated(RecordingDefaults.preferencesResponse),
     )
     val warmUp: suspend (Any, ProbeEnvironment) -> Unit = { owner, _ ->
         val viewModel = owner as AuthViewModel

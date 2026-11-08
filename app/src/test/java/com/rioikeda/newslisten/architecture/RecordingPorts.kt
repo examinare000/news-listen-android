@@ -22,6 +22,7 @@ import com.rioikeda.newslisten.model.PasskeyOptionsResponse
 import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.core.PlaybackSpeed
 import com.rioikeda.newslisten.model.PreferencesResponse
 import com.rioikeda.newslisten.model.QuizAnswerRequest
 import com.rioikeda.newslisten.model.QuizAnswerResponse
@@ -48,6 +49,9 @@ import com.rioikeda.newslisten.podcast.PlayerController
 import com.rioikeda.newslisten.podcast.app.AudioStore
 import com.rioikeda.newslisten.preferences.ArticleOpenMode
 import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.preferences.app.PreferencesApi
+import com.rioikeda.newslisten.preferences.app.ServerPreferences
+import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import com.rioikeda.newslisten.preferences.TimeFormat
 import java.util.IdentityHashMap
 import kotlin.coroutines.CoroutineContext
@@ -296,6 +300,8 @@ object RecordingDefaults {
         digestArticleCount = 0,
         weeklyGoalEpisodes = 3,
     )
+    val serverPreferences: ServerPreferences =
+        ServerPreferences(defaultDifficulty = Difficulty.DEFAULT.code, defaultPlaybackSpeed = 1.0, weeklyGoalEpisodes = 3)
     val vocabularyItemResponse: VocabularyItemResponse = VocabularyItemResponse(
         vocabularyId = "default-vocabulary",
         podcastId = "default-podcast",
@@ -328,6 +334,22 @@ internal class ApiFake(recorder: EffectRecorder, scenario: ProbeScenario, port: 
     }
 
     fun write(op: String) = written(op)
+}
+
+/** 設定のサーバー往復 port [PreferencesApi] の記録 fake。列の読みは [ApiFake.read] と同じく先頭で注入された失敗を投げる。 */
+class RecordingPreferencesApi(
+    val recorder: EffectRecorder,
+    val scenario: ProbeScenario,
+) : PreferencesApi {
+    private val core = ApiFake(recorder, scenario, port = "PreferencesApi")
+
+    override suspend fun fetchPreferences(): ServerPreferences = core.read("fetchPreferences")
+
+    override suspend fun updateDefaultDifficulty(code: String) = core.write("updateDefaultDifficulty")
+
+    override suspend fun updateDefaultPlaybackSpeed(speed: Double) = core.write("updateDefaultPlaybackSpeed")
+
+    override suspend fun updateWeeklyGoalEpisodes(episodes: Int) = core.write("updateWeeklyGoalEpisodes")
 }
 
 /** 再生 port [PodcastApi] の記録 fake。列の読みは [ApiFake.read] と同じく先頭で注入された失敗を投げる。 */
@@ -519,9 +541,10 @@ class RecordingPreferencesStore(
 ) : PreferencesStore {
     private val core = PreferencesFake(recorder, scenario)
 
-    override val defaultDifficulty: StateFlow<String> =
-        MutableStateFlow(core.property("getDefaultDifficulty", Difficulty.DEFAULT.code))
-    override val defaultPlaybackSpeed: StateFlow<Double> = MutableStateFlow(core.property("getDefaultPlaybackSpeed", 1.0))
+    override val defaultDifficulty: StateFlow<Difficulty> =
+        MutableStateFlow(core.property("getDefaultDifficulty", Difficulty.DEFAULT))
+    override val defaultPlaybackSpeed: StateFlow<PlaybackSpeed> =
+        MutableStateFlow(core.property("getDefaultPlaybackSpeed", PlaybackSpeed.DEFAULT))
     override val articleOpenMode: StateFlow<ArticleOpenMode> =
         MutableStateFlow(core.property("getArticleOpenMode", ArticleOpenMode.DEFAULT))
     override val timeFormat: StateFlow<TimeFormat> = MutableStateFlow(core.property("getTimeFormat", TimeFormat.DEFAULT))
@@ -529,11 +552,12 @@ class RecordingPreferencesStore(
         MutableStateFlow(core.property("getSfxEnabled", RecordingDefaults.INITIAL_SFX_ENABLED))
     override val hapticsEnabled: StateFlow<Boolean> =
         MutableStateFlow(core.property("getHapticsEnabled", RecordingDefaults.INITIAL_HAPTICS_ENABLED))
-    override val weeklyGoalEpisodes: StateFlow<Int> = MutableStateFlow(core.property("getWeeklyGoalEpisodes", 3))
+    override val weeklyGoalEpisodes: StateFlow<WeeklyGoal> =
+        MutableStateFlow(core.property("getWeeklyGoalEpisodes", WeeklyGoal.DEFAULT))
     override val seenAchievementIds: StateFlow<Set<String>> =
         MutableStateFlow(core.property("getSeenAchievementIds", emptySet()))
 
-    override suspend fun setDefaultDifficulty(code: String) = core.write("setDefaultDifficulty")
+    override suspend fun setDefaultDifficulty(difficulty: Difficulty) = core.write("setDefaultDifficulty")
 
     override suspend fun setDefaultPlaybackSpeed(speed: Double) = core.write("setDefaultPlaybackSpeed")
 
@@ -745,6 +769,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
 
     val apiClient: RecordingApiClient = RecordingApiClient(recorder, scenario)
     val podcastApi: RecordingPodcastApi = RecordingPodcastApi(recorder, scenario)
+    val preferencesApi: RecordingPreferencesApi = RecordingPreferencesApi(recorder, scenario)
     val preferencesStore: RecordingPreferencesStore = RecordingPreferencesStore(recorder, scenario)
     val sessionStore: RecordingSessionStore = RecordingSessionStore(recorder, scenario)
     val playerController: RecordingPlayerController = RecordingPlayerController(recorder, scenario)
@@ -756,7 +781,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
 
     /** この実行単位の記録 fake の全部。配線の検査が「記録 fake であること」を照合する。 */
     val fakes: List<Any> = listOf(
-        apiClient, podcastApi, preferencesStore, sessionStore, playerController,
+        apiClient, podcastApi, preferencesApi, preferencesStore, sessionStore, playerController,
         fileSystem, audioStore, networkMonitor, passkeyProvider, feedbackPlayer,
     )
 

@@ -123,8 +123,8 @@ fun SettingsScreen(
     val listeningStreakLoadFailed by viewModel.listeningStreakLoadFailed.collectAsStateWithLifecycle()
     val featuredSitesLoadFailed by viewModel.featuredSitesLoadFailed.collectAsStateWithLifecycle()
 
-    // AuthViewModel state
-    val preferencesSyncFailed by authViewModel.preferencesSyncFailed.collectAsStateWithLifecycle()
+    // SettingsViewModel state（取り込みの失敗）
+    val preferencesSyncFailed by viewModel.preferencesSyncFailed.collectAsStateWithLifecycle()
 
     // PreferencesStore state
     val defaultDifficulty by preferencesStore.defaultDifficulty.collectAsStateWithLifecycle()
@@ -178,13 +178,13 @@ fun SettingsScreen(
 
     // Initialize selected indices
     LaunchedEffect(defaultDifficulty, defaultPlaybackSpeed, articleOpenMode, timeFormat, weeklyGoalEpisodes) {
-        selectedDifficultyIndex = Difficulty.entries.indexOfFirst { it.code == defaultDifficulty }
+        selectedDifficultyIndex = Difficulty.entries.indexOfFirst { it == defaultDifficulty }
             .takeIf { it >= 0 } ?: 0
-        selectedSpeedIndex = PlaybackConstants.speeds.indexOfFirst { it == defaultPlaybackSpeed }
+        selectedSpeedIndex = PlaybackConstants.speeds.indexOfFirst { it == defaultPlaybackSpeed.multiplier }
             .takeIf { it >= 0 } ?: PlaybackConstants.speeds.indexOfFirst { it == 1.0 }
         selectedArticleOpenModeIndex = ArticleOpenMode.entries.indexOf(articleOpenMode)
         selectedTimeFormatIndex = TimeFormat.entries.indexOf(timeFormat)
-        selectedWeeklyGoalIndex = WEEKLY_GOAL_OPTIONS.indexOf(weeklyGoalEpisodes).coerceAtLeast(0)
+        selectedWeeklyGoalIndex = WEEKLY_GOAL_OPTIONS.indexOf(weeklyGoalEpisodes.episodes).coerceAtLeast(0)
     }
 
     LazyColumn(
@@ -294,7 +294,7 @@ fun SettingsScreen(
                     val previous = selectedWeeklyGoalIndex
                     selectedWeeklyGoalIndex = index
                     coroutineScope.launch {
-                        if (!viewModel.syncWeeklyGoalEpisodes(WEEKLY_GOAL_OPTIONS[index])) {
+                        if (viewModel.syncWeeklyGoalEpisodes(WEEKLY_GOAL_OPTIONS[index]) == SelectionAfterSave.Revert) {
                             selectedWeeklyGoalIndex = previous
                         }
                     }
@@ -303,7 +303,7 @@ fun SettingsScreen(
             Text(
                 text = stringResource(
                     R.string.settings_weekly_goal_daily_average,
-                    weeklyGoalEpisodes / 7.0,
+                    weeklyGoalEpisodes.episodes / 7.0,
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -633,10 +633,9 @@ fun SettingsScreen(
                     selectedDifficultyIndex = index
                     coroutineScope.launch {
                         val newValue = Difficulty.entries[index].code
-                        val ok = viewModel.syncDefaultDifficulty(newValue)
-                        if (!ok) {
+                        if (viewModel.syncDefaultDifficulty(newValue) == SelectionAfterSave.Revert) {
                             // Revert on failure
-                            selectedDifficultyIndex = Difficulty.entries.indexOfFirst { it.code == defaultDifficulty }
+                            selectedDifficultyIndex = Difficulty.entries.indexOfFirst { it == defaultDifficulty }
                                 .takeIf { it >= 0 } ?: 0
                         }
                     }
@@ -653,10 +652,9 @@ fun SettingsScreen(
                     selectedSpeedIndex = index
                     coroutineScope.launch {
                         val newValue = PlaybackConstants.speeds[index]
-                        val ok = viewModel.syncDefaultPlaybackSpeed(newValue)
-                        if (!ok) {
+                        if (viewModel.syncDefaultPlaybackSpeed(newValue) == SelectionAfterSave.Revert) {
                             // Revert on failure
-                            selectedSpeedIndex = PlaybackConstants.speeds.indexOfFirst { it == defaultPlaybackSpeed }
+                            selectedSpeedIndex = PlaybackConstants.speeds.indexOfFirst { it == defaultPlaybackSpeed.multiplier }
                                 .takeIf { it >= 0 } ?: PlaybackConstants.speeds.indexOfFirst { it == 1.0 }
                         }
                     }
