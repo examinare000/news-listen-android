@@ -11,6 +11,8 @@ import com.rioikeda.newslisten.learning.app.DashboardRecord
 import com.rioikeda.newslisten.learning.app.StreakRecord
 import com.rioikeda.newslisten.learning.app.VocabularyRecord
 import com.rioikeda.newslisten.learning.app.VocabularySummary
+import com.rioikeda.newslisten.learning.app.VocabularyTestItemRecord
+import com.rioikeda.newslisten.learning.app.VocabularyTestSessionRecord
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.ArticleResponse
 import com.rioikeda.newslisten.model.FeaturedSite
@@ -23,8 +25,6 @@ import com.rioikeda.newslisten.model.RssSource
 import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.model.VocabularyItemResponse
 import com.rioikeda.newslisten.model.VocabularyListResponse
-import com.rioikeda.newslisten.model.VocabularyTestItemResponse
-import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
 import com.rioikeda.newslisten.network.EpisodeDecoder
 
 /**
@@ -79,9 +79,9 @@ internal object ProbeData {
 
     val vocabularyList: VocabularyListResponse = VocabularyListResponse(vocabulary = listOf(vocabularyItem), count = 1)
 
-    val vocabularyTestSession: VocabularyTestSessionResponse = VocabularyTestSessionResponse(
+    val vocabularyTestSessionRecord: VocabularyTestSessionRecord = VocabularyTestSessionRecord(
         items = listOf(
-            VocabularyTestItemResponse(
+            VocabularyTestItemRecord(
                 vocabularyId = "vocabulary-1",
                 term = "term",
                 meaning = "meaning",

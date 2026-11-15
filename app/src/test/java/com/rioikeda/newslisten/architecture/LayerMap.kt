@@ -61,6 +61,7 @@ object LayerMap {
         "learning/domain/MonthlyActivity.kt",
         "learning/domain/VocabularyKey.kt",
         "learning/domain/QuizGrade.kt",
+        "learning/domain/VocabularyTestSession.kt",
     )
 
     private val application = listOf(
@@ -81,6 +82,7 @@ object LayerMap {
         "learning/app/StreakQuery.kt",
         "learning/app/LearningCommands.kt",
         "learning/app/LearningNotice.kt",
+        "learning/app/VocabularyTestCommands.kt",
     )
 
     private val port = listOf(
@@ -92,9 +94,8 @@ object LayerMap {
         "auth/app/AuthApi.kt",
         "account/app/AccountApi.kt",
         "learning/app/LearningApi.kt",
+        "learning/app/VocabularyTestApi.kt",
         "network/PodcastApi.kt",
-        "network/LearningApi.kt",
-        "network/VocabularyTestApi.kt",
         "network/SessionStore.kt",
         "network/NetworkMonitoring.kt",
     )
@@ -131,6 +132,7 @@ object LayerMap {
         "network/PreferencesApiAdapter.kt",
         "network/AccountApiAdapter.kt",
         "network/LearningApiAdapter.kt",
+        "network/VocabularyTestApiAdapter.kt",
         "network/AuthApiAdapter.kt",
         "observability/CrashReporter.kt",
         "observability/CrashReportFormatter.kt",

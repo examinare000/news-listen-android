@@ -149,4 +149,48 @@ class NoThrowingDefaultStructureTest {
             Regex("""\bPodcastApi\b""").containsMatchIn(supertypes),
         )
     }
+
+    @Test
+    fun ApiClientは単語テストのportを継承しない() {
+        // verifies: android-slice-learning-03 旧い port の撤去。LearningApi・VocabularyTestApi は learning/app の port に移った
+        val root = resolveMainSourceRoot()
+        val file = root.walkTopDown().firstOrNull { it.name == "ApiClient.kt" }
+            ?: error("走査ルート $root に ApiClient.kt が見つからない")
+        val text = file.readText()
+
+        val declStart = text.indexOf("interface ApiClient")
+        check(declStart >= 0) { "${file.path} に interface ApiClient の宣言が見つからない（vacuous pass ガード）" }
+        val bodyStart = text.indexOf('{', declStart)
+        check(bodyStart > declStart) { "${file.path} の interface ApiClient に本体の { が見つからない" }
+        val supertypes = text.substring(declStart, bodyStart)
+
+        assertFalse(
+            "interface ApiClient の上位型に LearningApi / VocabularyTestApi が残っている: $supertypes",
+            Regex("""\b(LearningApi|VocabularyTestApi)\b""").containsMatchIn(supertypes),
+        )
+    }
+
+    @Test
+    fun AppContainerは単語テストの入口を呼ぶたびに新しく作りbylazyで持たない() {
+        // verifies: android-dec-106。単語テストは開くたびに新しい VocabularyTestCommands を持つ
+        val root = resolveMainSourceRoot()
+        val file = root.walkTopDown().firstOrNull { it.name == "AppContainer.kt" }
+            ?: error("走査ルート $root に AppContainer.kt が見つからない")
+        val text = file.readText()
+
+        val funStart = text.indexOf("fun createVocabularyTestViewModel")
+        check(funStart >= 0) { "${file.path} に fun createVocabularyTestViewModel が見つからない（vacuous pass ガード）" }
+        val nextFun = text.indexOf("fun ", funStart + 1)
+        val body = if (nextFun > funStart) text.substring(funStart, nextFun) else text.substring(funStart)
+
+        assertTrue(
+            "createVocabularyTestViewModel の本体が VocabularyTestCommands( を構築していない",
+            body.contains("VocabularyTestCommands("),
+        )
+        assertFalse(
+            "VocabularyTestCommands を by lazy の 1 instance で持っている",
+            Regex("""\bVocabularyTestCommands\b[^\n]*by\s+lazy|by\s+lazy[^\n]*\bVocabularyTestCommands\b""")
+                .containsMatchIn(text),
+        )
+    }
 }

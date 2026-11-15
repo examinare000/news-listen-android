@@ -24,6 +24,7 @@ import com.rioikeda.newslisten.learning.LearningViewModel
 import com.rioikeda.newslisten.learning.app.LearningCommands
 import com.rioikeda.newslisten.learning.app.LearningDashboardQuery
 import com.rioikeda.newslisten.learning.app.StreakQuery
+import com.rioikeda.newslisten.learning.app.VocabularyTestCommands
 import com.rioikeda.newslisten.network.AccountApiAdapter
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.vocabulary.VocabularyTestViewModel
@@ -33,6 +34,7 @@ import com.rioikeda.newslisten.network.AuthInterceptor
 import com.rioikeda.newslisten.network.ConnectivityNetworkMonitor
 import com.rioikeda.newslisten.network.JavaFileSystem
 import com.rioikeda.newslisten.network.LearningApiAdapter
+import com.rioikeda.newslisten.network.VocabularyTestApiAdapter
 import com.rioikeda.newslisten.network.KeystoreSessionStore
 import com.rioikeda.newslisten.network.OkHttpApiClient
 import com.rioikeda.newslisten.network.PodcastApiAdapter
@@ -266,6 +268,7 @@ class AppContainer(context: Context) {
     }
 
     private val learningApi = LearningApiAdapter(apiClient)
+    private val vocabularyTestApi = VocabularyTestApiAdapter(apiClient)
 
     /** 聴取ストリークの読み。AppScaffold・設定画面・再生が同じものを共有する。 */
     private val _streakQuery: StreakQuery = StreakQuery(
@@ -484,8 +487,10 @@ class AppContainer(context: Context) {
      */
     fun createVocabularyTestViewModel(): VocabularyTestViewModel {
         return VocabularyTestViewModel(
-            api = apiClient,
-            dispatcher = Dispatchers.Default.limitedParallelism(1),
+            VocabularyTestCommands(
+                api = vocabularyTestApi,
+                dispatcher = Dispatchers.Default.limitedParallelism(1),
+            ),
         )
     }
 

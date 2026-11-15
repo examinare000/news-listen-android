@@ -1,5 +1,9 @@
 package com.rioikeda.newslisten.learning.app
 
+import com.rioikeda.newslisten.learning.domain.RetestFeedback
+import com.rioikeda.newslisten.learning.domain.VocabularyTestPhase
+import com.rioikeda.newslisten.learning.domain.VocabularyTestProgress
+import com.rioikeda.newslisten.learning.domain.VocabularyTestSummary
 import java.util.ArrayList
 import java.util.Collections
 
@@ -65,4 +69,45 @@ class LearningDashboardView(
     val newlyUnlockedAchievements: List<UnlockedAchievement> =
         Collections.unmodifiableList(ArrayList(newlyUnlockedAchievements))
     val recentVocabulary: List<VocabularyRow> = Collections.unmodifiableList(ArrayList(recentVocabulary))
+}
+
+/** 単語テストの画面が読む項目だけを持つ view。集合は渡された list と共有しない読み取り専用の写し。 */
+class VocabularyTestView(
+    val phase: VocabularyTestPhase,
+    val progress: VocabularyTestProgress?,
+    val currentTerm: String?,
+    val currentExample: String?,
+    val correctMeaning: String?,
+    choices: List<String>,
+    val retestFeedback: RetestFeedback?,
+    val isAnswerLocked: Boolean,
+    val summary: VocabularyTestSummary?,
+) {
+    val choices: List<String> = Collections.unmodifiableList(ArrayList(choices))
+
+    // 等しい状態を StateFlow が再発行しないために、9 項目すべてで決める。
+    override fun equals(other: Any?): Boolean =
+        other is VocabularyTestView &&
+            phase == other.phase &&
+            progress == other.progress &&
+            currentTerm == other.currentTerm &&
+            currentExample == other.currentExample &&
+            correctMeaning == other.correctMeaning &&
+            choices == other.choices &&
+            retestFeedback == other.retestFeedback &&
+            isAnswerLocked == other.isAnswerLocked &&
+            summary == other.summary
+
+    override fun hashCode(): Int {
+        var result = phase.hashCode()
+        result = 31 * result + (progress?.hashCode() ?: 0)
+        result = 31 * result + (currentTerm?.hashCode() ?: 0)
+        result = 31 * result + (currentExample?.hashCode() ?: 0)
+        result = 31 * result + (correctMeaning?.hashCode() ?: 0)
+        result = 31 * result + choices.hashCode()
+        result = 31 * result + (retestFeedback?.hashCode() ?: 0)
+        result = 31 * result + isAnswerLocked.hashCode()
+        result = 31 * result + (summary?.hashCode() ?: 0)
+        return result
+    }
 }

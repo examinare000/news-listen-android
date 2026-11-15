@@ -19,11 +19,11 @@ class EffectTypeCatalogTest {
     // ---- 本番 ----
 
     @Test
-    fun 本番の分類表は14のportと20のhookを持つ() {
+    fun 本番の分類表は15のportと20のhookを持つ() {
         assertEquals(
             setOf(
                 "ApiClient", "PodcastApi", "PreferencesStore", "SessionStore", "PlayerController",
-                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi", "AuthApi", "AccountApi", "LearningApi",
+                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi", "AuthApi", "AccountApi", "LearningApi", "VocabularyTestApi",
             ),
             production.ports.map { it.port }.toSet(),
         )
@@ -53,6 +53,17 @@ class EffectTypeCatalogTest {
             api.interfaces.none { it.endsWith(".network.LearningApi") },
         )
         assertTrue(api.sequenceReads.containsAll(listOf("fetchLearningDashboard", "fetchVocabulary")))
+
+        // 単語テストの port も独立した行で、ApiClient 行は継承元に持たない（android-slice-learning-03）。
+        val vocabularyTest = portRow(production, "VocabularyTestApi")
+        assertEquals(setOf("com.rioikeda.newslisten.learning.app.VocabularyTestApi"), vocabularyTest.interfaces)
+        assertEquals(setOf("submitVocabularyTestResults"), vocabularyTest.writes)
+        assertEquals(setOf("fetchVocabularyTestSession"), vocabularyTest.sequenceReads)
+        assertTrue(vocabularyTest.propertyReads.isEmpty())
+        assertTrue(
+            "ApiClient 行の interfaces に VocabularyTestApi が残っている",
+            api.interfaces.none { it.endsWith(".VocabularyTestApi") },
+        )
 
         val preferences = portRow(production, "PreferencesStore")
         assertEquals(9, preferences.writes.size)
