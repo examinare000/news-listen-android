@@ -1,12 +1,8 @@
 package com.rioikeda.newslisten.di
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
-import androidx.core.content.ContextCompat
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import com.google.firebase.messaging.FirebaseMessaging
 import com.rioikeda.newslisten.BuildConfig
 import com.rioikeda.newslisten.account.AccountViewModel
 import com.rioikeda.newslisten.account.SessionsViewModel
@@ -35,6 +31,7 @@ import com.rioikeda.newslisten.vocabulary.VocabularyTestViewModel
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.AuthApiAdapter
 import com.rioikeda.newslisten.network.AuthInterceptor
+import com.rioikeda.newslisten.network.DeviceTokenApiAdapter
 import com.rioikeda.newslisten.network.ConnectivityNetworkMonitor
 import com.rioikeda.newslisten.network.JavaFileSystem
 import com.rioikeda.newslisten.network.FeedApiAdapter
@@ -45,6 +42,7 @@ import com.rioikeda.newslisten.network.OkHttpApiClient
 import com.rioikeda.newslisten.network.PodcastApiAdapter
 import com.rioikeda.newslisten.network.PreferencesApiAdapter
 import com.rioikeda.newslisten.network.SessionStore
+import com.rioikeda.newslisten.network.SourcesApiAdapter
 import com.rioikeda.newslisten.notification.FcmTokenRegistrar
 import com.rioikeda.newslisten.observability.CrashReporter
 import com.rioikeda.newslisten.observability.DeviceInfo
@@ -61,18 +59,22 @@ import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
 import com.rioikeda.newslisten.preferences.DataStorePreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import com.rioikeda.newslisten.preferences.app.PreferencesSync
+import com.rioikeda.newslisten.notification.infra.AndroidNotificationPermission
+import com.rioikeda.newslisten.notification.infra.FirebasePushTokenSource
+import com.rioikeda.newslisten.onboarding.app.OnboardingCommands
 import com.rioikeda.newslisten.settings.SettingsViewModel
+import com.rioikeda.newslisten.settings.app.SourcesCommands
+import com.rioikeda.newslisten.settings.app.SourcesQueries
+import com.rioikeda.newslisten.settings.app.SourcesState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.io.File
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
 
 /**
  * アプリケーション スコープ依存グラフの管理。
@@ -159,44 +161,13 @@ class AppContainer(context: Context) {
     }
 
     /**
-     * FCM トークン取得の suspend ラッパ（フェーズ9・プッシュ通知）。
-     *
-     * WHY suspendCancellableCoroutine: kotlinx-coroutines-play-services への追加依存
-     * (Task.await()) を避け、OkHttpApiClient.executeCall と同型のパターンで既存の
-     * Task API(addOnCompleteListener) をラップする。取得失敗時は例外を投げず null を返し、
-     * 「トークン取得できない」として FcmTokenRegistrar 側に判断を委ねる。
-     *
-     * WHY @Suppress("DEPRECATION"): firebase-bom 34.15.0 (firebase-messaging 25.1.0) では
-     * `FirebaseMessaging.getToken()` が非推奨化されている（コンパイル時に確認済み。register() は
-     * Task<Void> しか返さずトークン文字列を取得できないため代替にならない）。ログイン時に
-     * その場でトークンを pull 取得する用途では、現時点で Google 公式ドキュメントもこの API を
-     * 案内しており、機能上は問題ない。SDK の将来のメジャー更新で本当に削除される場合は
-     * FcmTokenRegistrar のインターフェース（tokenProvider: suspend () -> String?）は変えずに
-     * ここだけ差し替えればよい設計にしてある。
-     */
-    @Suppress("DEPRECATION")
-    private val fcmTokenProvider: suspend () -> String? = {
-        suspendCancellableCoroutine { continuation ->
-            FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-                continuation.resume(if (task.isSuccessful) task.result else null)
-            }
-        }
-    }
-
-    /**
-     * FCM デバイストークンの登録ロジック（フェーズ9）。
-     *
-     * permissionChecker: API 33 未満は POST_NOTIFICATIONS 権限自体が存在しないため常に許可扱い
-     * （MainActivity のランタイム要求ガードと同じ判定基準）。
+     * FCM デバイストークンの登録ロジック（フェーズ9）。port の実体（Firebase・通知権限・登録 API）は
+     * adapter が持ち、ここは組み立てるだけ。adapter は式の中で作る（by lazy でない val は宣言順に評価される）。
      */
     private val fcmTokenRegistrar: FcmTokenRegistrar = FcmTokenRegistrar(
-        apiClient = apiClient,
-        tokenProvider = fcmTokenProvider,
-        permissionChecker = {
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                ContextCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) ==
-                PackageManager.PERMISSION_GRANTED
-        },
+        deviceTokenApi = DeviceTokenApiAdapter(apiClient),
+        pushTokenSource = FirebasePushTokenSource(),
+        notificationPermission = AndroidNotificationPermission(appContext),
         dispatcher = Dispatchers.Default,
     )
 
@@ -275,6 +246,7 @@ class AppContainer(context: Context) {
     private val learningApi = LearningApiAdapter(apiClient)
     private val vocabularyTestApi = VocabularyTestApiAdapter(apiClient)
     private val feedApi: FeedApi = FeedApiAdapter(apiClient)
+    private val sourcesApi = SourcesApiAdapter(apiClient)
 
     /** 聴取ストリークの読み。AppScaffold・設定画面・再生が同じものを共有する。 */
     private val _streakQuery: StreakQuery = StreakQuery(
@@ -506,30 +478,54 @@ class AppContainer(context: Context) {
     }
 
     /**
+     * Sources の共有の状態。[sourcesCommands] と [sourcesQueries] が同じ 1 つを受ける（別々だと、`addSource` が
+     * 書く一覧と画面が読む一覧が別になり、画面に何も起きない）。
+     *
+     * Dispatcher: Dispatchers.Default.limitedParallelism(1) で一覧の読み取り→書き込みを直列化する。
+     */
+    private val sourcesState: SourcesState by lazy { SourcesState(Dispatchers.Default.limitedParallelism(1)) }
+
+    /**
+     * isAdminProvider: RSS ソース編集（updateSource）は admin 限定（issue #66・ADR-047）。
+     * role は認証確立後に非同期で確定するため、構築時の固定値ではなく呼出の時点で
+     * authSession.authState.value を評価する。authSession は呼ばれた時点で解決するので循環しない。
+     */
+    private val sourcesCommands: SourcesCommands by lazy {
+        SourcesCommands(
+            sourcesApi,
+            sourcesState,
+            isAdminProvider = {
+                (authSession.authState.value as? AuthState.Authenticated)?.user?.role?.isAdmin == true
+            },
+        )
+    }
+
+    private val sourcesQueries: SourcesQueries by lazy { SourcesQueries(sourcesApi, sourcesState) }
+
+    private val onboardingCommands: OnboardingCommands by lazy {
+        OnboardingCommands(sourcesApi, Dispatchers.Default.limitedParallelism(1))
+    }
+
+    /**
      * SettingsViewModel（設定タブ: RSS ソース管理・おすすめサイト・生成クォータ・聴取ストリーク・
      * 難易度/再生速度のサーバー同期）を生成して返す（フェーズ10 P10 Task2）。
      *
      * Dispatcher: feedState・PodcastViewModel と同じ理由で
-     * Dispatchers.Default.limitedParallelism(1) を使う。sources リストの読み取り→書き込みが
-     * 複数スレッドで競合すると更新の取りこぼしが起こり得るため、単一スレッドで直列化する。
+     * Dispatchers.Default.limitedParallelism(1) を使う。画面の状態（isLoading・errorMessage・
+     * featuredSites・generationQuota とそのフラグ）の書込みが競合しないよう直列化する
+     * （sources 一覧の直列化は [sourcesState] の dispatcher が持つ）。
      *
-     * isAdminProvider: RSS ソース編集（updateSource）は admin 限定（issue #66・ADR-047）。
-     * settings 層が auth 層の型（AuthState）に直接依存しないよう、AuthSession の
-     * onSubjectLeave/onAuthenticated と同じ「呼び出し元が判定関数を注入する」パターンを踏襲する。
-     * role は認証確立後に非同期で確定するため、コンストラクタ時点の固定値ではなく
-     * 呼び出し時点で都度 authSession.authState.value を評価する。
+     * Sources の入口（[sourcesCommands]・[sourcesQueries]）は ViewModel の外で作り、ここへ渡す。
      *
      * by lazy でシングルトンキャッシュ化：画面回転時に SettingsViewModel インスタンスが
-     * 同じままであることを保証し、sources/generationQuota 等の読み込み済み状態を保持する。
+     * 同じままであることを保証し、generationQuota 等の読み込み済み状態を保持する。
      */
     private val _settingsViewModel: SettingsViewModel by lazy {
         SettingsViewModel(
-            apiClient = apiClient,
+            sourcesCommands = sourcesCommands,
+            sourcesQueries = sourcesQueries,
             preferencesSync = preferencesSync,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
-            isAdminProvider = {
-                (authSession.authState.value as? AuthState.Authenticated)?.user?.role?.isAdmin == true
-            },
             streakQuery = _streakQuery,
         )
     }
@@ -594,7 +590,9 @@ class AppContainer(context: Context) {
      */
     private val _onboardingViewModel: OnboardingViewModel by lazy {
         OnboardingViewModel(
-            apiClient = apiClient,
+            sourcesCommands = sourcesCommands,
+            sourcesQueries = sourcesQueries,
+            onboardingCommands = onboardingCommands,
             dispatcher = Dispatchers.Default.limitedParallelism(1),
         )
     }

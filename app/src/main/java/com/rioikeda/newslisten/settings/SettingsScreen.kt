@@ -57,13 +57,12 @@ import com.rioikeda.newslisten.auth.domain.PasswordRule
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.core.PlaybackSpeed
 import com.rioikeda.newslisten.designsystem.DSSpacing
-import com.rioikeda.newslisten.model.FeaturedCategory
-import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.passkey.PasskeyCredentialsViewModel
 import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
 import com.rioikeda.newslisten.preferences.ArticleOpenMode
 import com.rioikeda.newslisten.preferences.TimeFormat
 import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
+import com.rioikeda.newslisten.settings.domain.GenerationQuota
 import kotlinx.coroutines.launch
 
 /**
@@ -419,20 +418,16 @@ fun SettingsScreen(
                 SettingsSectionHeader(stringResource(R.string.settings_section_featured_sites))
             }
 
-            val grouped = FeaturedCategory.groupByCategoryInOrder(featuredSites)
-            val categories = FeaturedCategory.getDisplayOrderCategories(grouped)
-
-            categories.forEach { category ->
-                val sitesInCategory = grouped[category] ?: emptyList()
+            featuredSites.forEach { group ->
                 item {
                     Text(
-                        text = stringResource(FeaturedCategory.getCategoryLabel(category)),
+                        text = stringResource(featuredCategoryLabel(group.category)),
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(top = DSSpacing.m, bottom = DSSpacing.s),
                     )
                 }
-                items(sitesInCategory) { site ->
+                items(group.sites) { site ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -501,15 +496,14 @@ fun SettingsScreen(
         // Generation Quota セクション
         item {
             SettingsSectionHeader(stringResource(R.string.settings_section_generation_quota))
-            if (generationQuota != null) {
+            generationQuota?.let { quota ->
                 Text(
-                    text = if (generationQuota!!.limit == 0) {
-                        stringResource(R.string.settings_generation_quota_unlimited)
-                    } else {
-                        stringResource(
+                    text = when (quota) {
+                        is GenerationQuota.Unlimited -> stringResource(R.string.settings_generation_quota_unlimited)
+                        is GenerationQuota.Limited -> stringResource(
                             R.string.settings_generation_quota_limited,
-                            generationQuota!!.remaining ?: 0,
-                            generationQuota!!.limit
+                            quota.remaining,
+                            quota.limit
                         )
                     },
                     style = MaterialTheme.typography.bodyMedium,

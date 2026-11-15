@@ -225,4 +225,61 @@ class NoThrowingDefaultStructureTest {
             queriesState == stateVal,
         )
     }
+
+    /**
+     * `SourcesState(` の構築が 1 回で、`SourcesCommands(x, state, …)` と `SourcesQueries(x, state)` が
+     * その同じ val を受けているかを調べ、違反の説明を返す。0 件なら構造が一致している。
+     */
+    private fun sourcesStateWiringViolations(code: String): List<String> {
+        val violations = mutableListOf<String>()
+        val stateConstructions = Regex("""\bSourcesState\(""").findAll(code).count()
+        if (stateConstructions != 1) violations += "SourcesState( の構築が 1 回でない（実際: $stateConstructions 回）"
+
+        val stateVal = Regex("""\bval\s+(\w+)\s*(?::\s*SourcesState)?\s*(?:=|by\s+lazy\s*\{)\s*SourcesState\(""")
+            .find(code)?.groupValues?.get(1)
+        val commandsState = Regex("""\bSourcesCommands\(\s*\w+\s*,\s*(\w+)\s*,""").find(code)?.groupValues?.get(1)
+        val queriesState = Regex("""\bSourcesQueries\(\s*\w+\s*,\s*(\w+)\s*\)""").find(code)?.groupValues?.get(1)
+        if (stateVal == null) violations += "SourcesState( を初期化子に持つ val が無い"
+        if (commandsState == null) violations += "SourcesCommands(x, y, …) の構築が無い"
+        if (queriesState == null) violations += "SourcesQueries(x, y) の構築が無い"
+        if (stateVal != null && commandsState != null && commandsState != stateVal) {
+            violations += "SourcesCommands の状態（$commandsState）が SourcesState を作る val（$stateVal）でない"
+        }
+        if (stateVal != null && queriesState != null && queriesState != stateVal) {
+            violations += "SourcesQueries の状態（$queriesState）が SourcesState を作る val（$stateVal）でない"
+        }
+        return violations
+    }
+
+    @Test
+    fun AppContainerはSourcesStateを1つだけ作りSourcesCommandsとSourcesQueriesへ同じ値を渡す() {
+        // verifies: android-dec-114。状態を 2 つ作ると、addSource が書く一覧と画面が読む一覧が別になり画面に何も起きない
+        val root = resolveMainSourceRoot()
+        val file = root.walkTopDown().firstOrNull { it.name == "AppContainer.kt" }
+            ?: error("走査ルート $root に AppContainer.kt が見つからない")
+        val code = file.readLines()
+            .filterNot { it.trimStart().let { line -> line.startsWith("//") || line.startsWith("*") || line.startsWith("/*") } }
+            .joinToString("\n")
+
+        assertTrue("AppContainer の Sources の結線が android-dec-114 と違う: ${sourcesStateWiringViolations(code)}", sourcesStateWiringViolations(code).isEmpty())
+    }
+
+    @Test
+    fun SourcesStateの結線の検査は正しい形を通し0回と2回と別の値を落とす_vacuous_passガード() {
+        val correct = """
+            private val sourcesState by lazy { SourcesState(Dispatchers.Default.limitedParallelism(1)) }
+            private val sourcesCommands by lazy { SourcesCommands(sourcesApi, sourcesState, isAdminProvider = { false }) }
+            private val sourcesQueries by lazy { SourcesQueries(sourcesApi, sourcesState) }
+        """.trimIndent()
+        assertTrue(sourcesStateWiringViolations(correct).isEmpty())
+
+        assertFalse(sourcesStateWiringViolations(correct.replace("SourcesState(Dispatchers", "Other(Dispatchers")).isEmpty())
+        assertFalse(
+            sourcesStateWiringViolations(
+                correct + "\nprivate val second by lazy { SourcesState(Dispatchers.Default.limitedParallelism(1)) }",
+            ).isEmpty(),
+        )
+        assertFalse(sourcesStateWiringViolations(correct.replace("SourcesQueries(sourcesApi, sourcesState)", "SourcesQueries(sourcesApi, other)")).isEmpty())
+        assertFalse(sourcesStateWiringViolations(correct.replace("SourcesCommands(sourcesApi, sourcesState,", "SourcesCommands(sourcesApi, other,")).isEmpty())
+    }
 }

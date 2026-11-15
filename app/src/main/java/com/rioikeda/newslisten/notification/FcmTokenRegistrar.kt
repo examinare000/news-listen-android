@@ -1,7 +1,9 @@
 package com.rioikeda.newslisten.notification
 
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.network.ApiClient
+import com.rioikeda.newslisten.notification.app.DeviceTokenApi
+import com.rioikeda.newslisten.notification.app.NotificationPermission
+import com.rioikeda.newslisten.notification.app.PushTokenSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -21,12 +23,12 @@ import kotlinx.coroutines.withContext
  * たびに非同期で呼ばれ、呼び出し元は「現在ログイン中か」を都度渡す手段を持たない
  * （FirebaseMessagingService は認証状態を知らない）。そのため onAuthenticated/onLogout の
  * 呼び出しをそのまま「ログイン状態の事実」として記憶し、onNewToken はその内部状態と
- * 都度評価する permissionChecker() の両方で判定する（権限は実行時に変わり得るため毎回再評価）。
+ * 都度評価する notificationPermission.isGranted の両方で判定する（権限は実行時に変わり得るため毎回再評価）。
  */
 class FcmTokenRegistrar(
-    private val apiClient: ApiClient,
-    private val tokenProvider: suspend () -> String?,
-    private val permissionChecker: () -> Boolean,
+    private val deviceTokenApi: DeviceTokenApi,
+    private val pushTokenSource: PushTokenSource,
+    private val notificationPermission: NotificationPermission,
     private val dispatcher: CoroutineDispatcher,
 ) {
     private var isAuthenticated = false
@@ -34,7 +36,7 @@ class FcmTokenRegistrar(
     /** 認証確立時に呼ぶ。通知権限が許可済みのときのみ FCM トークンを取得し登録する。 */
     suspend fun onAuthenticated(): Unit = withContext(dispatcher) {
         isAuthenticated = true
-        if (!permissionChecker()) return@withContext
+        if (!notificationPermission.isGranted) return@withContext
         val token = fetchTokenOrNull() ?: return@withContext
         registerToken(token)
     }
@@ -49,14 +51,14 @@ class FcmTokenRegistrar(
 
     /** FCM トークン更新時に呼ぶ。認証済みかつ通知権限が許可済みのときのみ再登録する。 */
     suspend fun onNewToken(token: String): Unit = withContext(dispatcher) {
-        if (!isAuthenticated || !permissionChecker()) return@withContext
+        if (!isAuthenticated || !notificationPermission.isGranted) return@withContext
         registerToken(token)
     }
 
-    /** [tokenProvider] を安全に呼び出す。取得失敗（Firebase 側の例外含む）は null 扱いで握る。 */
+    /** [pushTokenSource] を安全に呼び出す。取得失敗（Firebase 側の例外含む）は null 扱いで握る。 */
     private suspend fun fetchTokenOrNull(): String? =
         try {
-            tokenProvider()
+            pushTokenSource.token()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -65,7 +67,7 @@ class FcmTokenRegistrar(
 
     private suspend fun registerToken(token: String) {
         try {
-            apiClient.registerDeviceToken(token, PLATFORM_ANDROID)
+            deviceTokenApi.register(token, PLATFORM_ANDROID)
         } catch (e: CancellationException) {
             throw e
         } catch (e: ApiException) {

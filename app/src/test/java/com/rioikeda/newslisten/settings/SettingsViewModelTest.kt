@@ -3,14 +3,10 @@ package com.rioikeda.newslisten.settings
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.core.PlaybackSpeed
-import com.rioikeda.newslisten.model.FeaturedSite
-import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.learning.app.FakeLearningApi
 import com.rioikeda.newslisten.learning.app.StreakQuery
 import com.rioikeda.newslisten.learning.app.StreakRecord
 import com.rioikeda.newslisten.model.PreferencesResponse
-import com.rioikeda.newslisten.model.RssSource
-import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.podcast.PlaybackConstants
 import com.rioikeda.newslisten.preferences.ArticleOpenMode
@@ -21,14 +17,26 @@ import com.rioikeda.newslisten.preferences.TimeFormat
 import com.rioikeda.newslisten.preferences.app.PreferencesSync
 import com.rioikeda.newslisten.preferences.app.PreferencesView
 import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
+import com.rioikeda.newslisten.settings.app.FakeSourcesApi
+import com.rioikeda.newslisten.settings.app.SourcesCommands
+import com.rioikeda.newslisten.settings.app.SourcesQueries
+import com.rioikeda.newslisten.settings.app.SourcesState
+import com.rioikeda.newslisten.settings.app.FeaturedSiteGroup
+import com.rioikeda.newslisten.settings.app.featuredSite
+import com.rioikeda.newslisten.settings.app.techCrunch
+import com.rioikeda.newslisten.settings.domain.FeaturedSiteEntry
+import com.rioikeda.newslisten.settings.domain.GenerationQuota
+import com.rioikeda.newslisten.settings.domain.RssSourceEntry
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -49,18 +57,26 @@ class SettingsViewModelTest {
     ): PreferencesSync =
         PreferencesSync(PreferencesApiAdapter(apiClient), preferencesStore, { "u-1" }, backgroundScope)
 
+    /** Sources の入口の組。同じ [SourcesState] を [SourcesCommands] と [SourcesQueries] が共有する（android-dec-114）。 */
+    private class SourcesHarness(scheduler: TestCoroutineScheduler, isAdminProvider: () -> Boolean) {
+        val api = FakeSourcesApi()
+        val state = SourcesState(StandardTestDispatcher(scheduler))
+        val commands = SourcesCommands(api, state, isAdminProvider)
+        val queries = SourcesQueries(api, state)
+    }
+
     private fun TestScope.newViewModel(
         apiClient: ApiClient = FakeApiClient(),
         preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
         preferencesSync: PreferencesSync = newPreferencesSync(apiClient, preferencesStore),
-        isAdminProvider: () -> Boolean = { false },
+        sources: SourcesHarness = SourcesHarness(testScheduler) { false },
         learningApi: FakeLearningApi = FakeLearningApi(),
     ): SettingsViewModel =
         SettingsViewModel(
-            apiClient = apiClient,
+            sourcesCommands = sources.commands,
+            sourcesQueries = sources.queries,
             preferencesSync = preferencesSync,
             dispatcher = StandardTestDispatcher(testScheduler),
-            isAdminProvider = isAdminProvider,
             streakQuery = StreakQuery(learningApi, StandardTestDispatcher(testScheduler)),
         )
 
@@ -202,24 +218,15 @@ class SettingsViewModelTest {
 
     // --- RSS ソース ---
 
-    @Test
-    fun loadSources成功でsourcesが更新される() = runTest {
-        val sources = listOf(RssSource(name = "TechCrunch", url = "https://tc.example.com/rss"))
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchSources = { RssSourcesResponse(sources) }),
-        )
-
-        viewModel.loadSources()
-
-        assertEquals(sources, viewModel.sources.value)
-        assertNull(viewModel.errorMessage.value)
-    }
+    private val tcUrl = "https://tc.example.com/rss"
+    private val failureMessage = "RSSソースの操作に失敗しました"
+    private val adminOnlyMessage = "この操作には管理者権限が必要です"
 
     @Test
     fun loadSources失敗でerrorMessageが設定される() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchSources = { throw ApiException.HttpError(500) }),
-        )
+        val sources = SourcesHarness(testScheduler) { false }
+        sources.api.onFetchSources = { throw ApiException.HttpError(500) }
+        val viewModel = newViewModel(sources = sources)
 
         viewModel.loadSources()
 
@@ -228,22 +235,10 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun addSource成功でサーバ最新一覧がsourcesに反映される() = runTest {
-        val updated = listOf(RssSource(name = "New", url = "https://new.example.com/rss"))
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onCreateSource = { _, _ -> RssSourcesResponse(updated) }),
-        )
-
-        viewModel.addSource(name = "New", url = "https://new.example.com/rss")
-
-        assertEquals(updated, viewModel.sources.value)
-    }
-
-    @Test
     fun addSource失敗でerrorMessageが設定されsourcesは変わらない() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onCreateSource = { _, _ -> throw ApiException.HttpError(400) }),
-        )
+        val sources = SourcesHarness(testScheduler) { false }
+        sources.api.onAddSource = { _, _ -> throw ApiException.HttpError(400) }
+        val viewModel = newViewModel(sources = sources)
 
         viewModel.addSource(name = "New", url = "https://new.example.com/rss")
 
@@ -252,59 +247,23 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun updateSourceはadminなら成功しsourcesが更新される() = runTest {
-        val updated = listOf(RssSource(name = "Renamed", url = "https://tc.example.com/rss"))
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onUpdateSource = { _, _, _ -> RssSourcesResponse(updated) }),
-            isAdminProvider = { true },
-        )
-
-        viewModel.updateSource(oldUrl = "https://tc.example.com/rss", name = "Renamed", url = "https://tc.example.com/rss")
-
-        assertEquals(updated, viewModel.sources.value)
-        assertNull(viewModel.errorMessage.value)
-    }
-
-    @Test
     fun updateSourceは非adminならAPIを呼ばずerrorMessageを設定する() = runTest {
-        val apiClient = FakeApiClient(onUpdateSource = { _, _, _ -> error("must not be called") })
-        val viewModel = newViewModel(apiClient = apiClient, isAdminProvider = { false })
+        val sources = SourcesHarness(testScheduler) { false }
+        val viewModel = newViewModel(sources = sources)
 
-        viewModel.updateSource(oldUrl = "https://tc.example.com/rss", name = "Renamed", url = "https://tc.example.com/rss")
+        viewModel.updateSource(oldUrl = tcUrl, name = "Renamed", url = tcUrl)
 
-        assertEquals(0, apiClient.updateSourceCallCount)
+        assertEquals(0, sources.api.updateSourceCallCount)
         assertTrue(viewModel.errorMessage.value != null)
     }
 
     @Test
-    fun removeSource成功でsourcesから取り除かれる() = runTest {
-        val remaining = RssSource(name = "Keep", url = "https://keep.example.com/rss")
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(
-                onFetchSources = {
-                    RssSourcesResponse(
-                        listOf(remaining, RssSource(name = "Remove", url = "https://remove.example.com/rss")),
-                    )
-                },
-                onDeleteSource = { RssSourcesResponse(listOf(remaining)) },
-            ),
-        )
-        viewModel.loadSources()
-
-        viewModel.removeSource(url = "https://remove.example.com/rss")
-
-        assertEquals(listOf(remaining), viewModel.sources.value)
-    }
-
-    @Test
     fun removeSource失敗でerrorMessageが設定されsourcesは変わらない() = runTest {
-        val existing = listOf(RssSource(name = "Keep", url = "https://keep.example.com/rss"))
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(
-                onFetchSources = { RssSourcesResponse(existing) },
-                onDeleteSource = { throw ApiException.HttpError(500) },
-            ),
-        )
+        val existing = listOf(RssSourceEntry("Keep", "https://keep.example.com/rss"))
+        val sources = SourcesHarness(testScheduler) { false }
+        sources.api.onFetchSources = { existing }
+        sources.api.onRemoveSource = { throw ApiException.HttpError(500) }
+        val viewModel = newViewModel(sources = sources)
         viewModel.loadSources()
 
         viewModel.removeSource(url = "https://keep.example.com/rss")
@@ -313,26 +272,115 @@ class SettingsViewModelTest {
         assertTrue(viewModel.errorMessage.value != null)
     }
 
+    @Test
+    fun `android-dec-115 sourcesはSourcesQueriesをそのまま渡す`() = runTest {
+        val sources = SourcesHarness(testScheduler) { false }
+        val viewModel = newViewModel(sources = sources)
+
+        assertSame(sources.queries.sources, viewModel.sources)
+    }
+
+    @Test
+    fun `android-dec-115 loadSourcesは取得の間だけisLoadingを立て開始時にerrorMessageを消す`() = runTest {
+        val sources = SourcesHarness(testScheduler) { false }
+        sources.api.onAddSource = { _, _ -> throw ApiException.HttpError(400) }
+        val viewModel = newViewModel(sources = sources)
+        viewModel.addSource(name = "New", url = "https://new.example.com/rss")
+        assertTrue(viewModel.errorMessage.value != null)
+        var loadingDuringFetch: Boolean? = null
+        var messageDuringFetch: String? = "unset"
+        sources.api.onFetchSources = {
+            loadingDuringFetch = viewModel.isLoading.value
+            messageDuringFetch = viewModel.errorMessage.value
+            listOf(techCrunch)
+        }
+
+        viewModel.loadSources()
+
+        assertEquals(true, loadingDuringFetch)
+        assertNull(messageDuringFetch)
+        assertFalse(viewModel.isLoading.value)
+    }
+
+    @Test
+    fun `android-dec-115 addSourceとupdateSourceの成功はerrorMessageを消しremoveSourceの成功は消さない`() = runTest {
+        val sources = SourcesHarness(testScheduler) { true }
+        sources.api.onFetchSources = { listOf(techCrunch) }
+        sources.api.onAddSource = { _, _ -> listOf(techCrunch) }
+        sources.api.onUpdateSource = { _, _, _ -> listOf(techCrunch) }
+        val viewModel = newViewModel(sources = sources)
+        viewModel.loadSources()
+
+        // addSource の成功は失敗の文言を消す
+        sources.api.onRemoveSource = { throw ApiException.HttpError(500) }
+        viewModel.removeSource(tcUrl)
+        assertEquals(failureMessage, viewModel.errorMessage.value)
+        viewModel.addSource("TechCrunch", tcUrl)
+        assertNull(viewModel.errorMessage.value)
+
+        // updateSource の成功は失敗の文言を消す
+        viewModel.removeSource(tcUrl)
+        assertEquals(failureMessage, viewModel.errorMessage.value)
+        viewModel.updateSource(tcUrl, "TechCrunch", tcUrl)
+        assertNull(viewModel.errorMessage.value)
+
+        // removeSource の成功は失敗の文言を消さない（正方向の対照: 失敗は設定する）
+        viewModel.removeSource(tcUrl)
+        assertEquals(failureMessage, viewModel.errorMessage.value)
+        sources.api.onRemoveSource = {}
+        viewModel.removeSource(tcUrl)
+        assertEquals(failureMessage, viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `android-dec-115 updateSourceが管理者のみのときerrorMessageは管理者権限の文面になる`() = runTest {
+        var admin = false
+        val sources = SourcesHarness(testScheduler) { admin }
+        val viewModel = newViewModel(sources = sources)
+
+        viewModel.updateSource(tcUrl, "Renamed", tcUrl)
+        assertEquals(adminOnlyMessage, viewModel.errorMessage.value)
+
+        admin = true
+        sources.api.onUpdateSource = { _, _, _ -> throw ApiException.HttpError(500) }
+        viewModel.updateSource(tcUrl, "Renamed", tcUrl)
+        assertEquals(failureMessage, viewModel.errorMessage.value)
+
+        admin = false
+        viewModel.updateSource(tcUrl, "Renamed", tcUrl)
+        assertEquals(adminOnlyMessage, viewModel.errorMessage.value)
+
+        sources.api.onAddSource = { _, _ -> throw ApiException.HttpError(500) }
+        viewModel.addSource("New", "https://new.example.com/rss")
+        assertEquals(failureMessage, viewModel.errorMessage.value)
+
+        viewModel.updateSource(tcUrl, "Renamed", tcUrl)
+        assertEquals(adminOnlyMessage, viewModel.errorMessage.value)
+
+        sources.api.onRemoveSource = { throw ApiException.HttpError(500) }
+        viewModel.removeSource(tcUrl)
+        assertEquals(failureMessage, viewModel.errorMessage.value)
+    }
+
     // --- おすすめサイト ---
 
     @Test
     fun loadFeaturedSites成功でfeaturedSitesが更新される() = runTest {
-        val sites = listOf(FeaturedSite(id = "1", name = "Site", url = "https://site.example.com/rss"))
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchFeaturedSites = { com.rioikeda.newslisten.model.FeaturedSitesResponse(sites) }),
-        )
+        val sources = SourcesHarness(testScheduler) { false }
+        sources.api.onFetchFeaturedSites = { listOf(featuredSite) }
+        val viewModel = newViewModel(sources = sources)
 
         viewModel.loadFeaturedSites()
 
-        assertEquals(sites, viewModel.featuredSites.value)
+        assertEquals(listOf(FeaturedSiteGroup("tech", listOf(featuredSite))), viewModel.featuredSites.value)
         assertFalse(viewModel.featuredSitesLoadFailed.value)
     }
 
     @Test
     fun loadFeaturedSites失敗でfeaturedSitesLoadFailedが立つ() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchFeaturedSites = { throw ApiException.HttpError(500) }),
-        )
+        val sources = SourcesHarness(testScheduler) { false }
+        sources.api.onFetchFeaturedSites = { throw ApiException.HttpError(500) }
+        val viewModel = newViewModel(sources = sources)
 
         viewModel.loadFeaturedSites()
 
@@ -342,38 +390,95 @@ class SettingsViewModelTest {
         assertNull(viewModel.errorMessage.value)
     }
 
+    @Test
+    fun `android-dec-115 loadFeaturedSitesはerrorMessageを変えない`() = runTest {
+        val sources = SourcesHarness(testScheduler) { false }
+        sources.api.onFetchSources = { throw ApiException.HttpError(500) }
+        val viewModel = newViewModel(sources = sources)
+        viewModel.loadSources()
+        assertEquals(failureMessage, viewModel.errorMessage.value)
+
+        sources.api.onFetchFeaturedSites = { listOf(featuredSite) }
+        viewModel.loadFeaturedSites()
+        assertEquals(failureMessage, viewModel.errorMessage.value)
+
+        sources.api.onFetchFeaturedSites = { throw ApiException.HttpError(500) }
+        viewModel.loadFeaturedSites()
+        assertEquals(failureMessage, viewModel.errorMessage.value)
+    }
+
+    @Test
+    fun `android-dec-115 loadFeaturedSites失敗は前の一覧を空にして失敗のフラグを立てる`() = runTest {
+        val siteA = featuredSite
+        val siteB = FeaturedSiteEntry("2", "SiteB", "https://b.example.com/rss", null, "business")
+        val sources = SourcesHarness(testScheduler) { false }
+        val viewModel = newViewModel(sources = sources)
+
+        sources.api.onFetchFeaturedSites = { listOf(siteA) }
+        viewModel.loadFeaturedSites()
+        assertEquals(listOf(FeaturedSiteGroup("tech", listOf(siteA))), viewModel.featuredSites.value)
+
+        sources.api.onFetchFeaturedSites = { listOf(siteB) }
+        viewModel.loadFeaturedSites()
+        assertEquals(listOf(FeaturedSiteGroup("business", listOf(siteB))), viewModel.featuredSites.value)
+
+        sources.api.onFetchFeaturedSites = { throw ApiException.HttpError(500) }
+        viewModel.loadFeaturedSites()
+        assertTrue(viewModel.featuredSites.value.isEmpty())
+        assertTrue(viewModel.featuredSitesLoadFailed.value)
+
+        sources.api.onFetchFeaturedSites = { listOf(siteA) }
+        viewModel.loadFeaturedSites()
+        assertEquals(listOf(FeaturedSiteGroup("tech", listOf(siteA))), viewModel.featuredSites.value)
+        assertFalse(viewModel.featuredSitesLoadFailed.value)
+    }
+
+    @Test
+    fun `android-dec-115 loadFeaturedSitesはカテゴリの順の束を公開する`() = runTest {
+        val business = FeaturedSiteEntry("b", "B", "https://b.example.com/rss", null, "business")
+        val tech = FeaturedSiteEntry("t", "T", "https://t.example.com/rss", null, "tech")
+        val sources = SourcesHarness(testScheduler) { false }
+        sources.api.onFetchFeaturedSites = { listOf(business, tech) }
+        val viewModel = newViewModel(sources = sources)
+
+        viewModel.loadFeaturedSites()
+
+        assertEquals(
+            listOf(FeaturedSiteGroup("tech", listOf(tech)), FeaturedSiteGroup("business", listOf(business))),
+            viewModel.featuredSites.value,
+        )
+    }
+
     // --- 生成クォータ ---
 
     @Test
     fun loadGenerationQuota成功でgenerationQuotaが更新される() = runTest {
-        val quota = GenerationQuotaResponse(limit = 5, used = 2, remaining = 3, resetAt = "2026-07-09T00:00:00Z")
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchGenerationQuota = { quota }),
-        )
+        val sources = SourcesHarness(testScheduler) { false }
+        sources.api.onFetchGenerationQuota = { GenerationQuota.Limited(5, 2, 3) }
+        val viewModel = newViewModel(sources = sources)
 
         viewModel.loadGenerationQuota()
 
-        assertEquals(quota, viewModel.generationQuota.value)
+        assertEquals(GenerationQuota.Limited(5, 2, 3), viewModel.generationQuota.value)
         assertFalse(viewModel.generationQuotaLoadFailed.value)
     }
 
     @Test
     fun loadGenerationQuota無制限はlimitゼロremainingNullのまま反映される() = runTest {
-        val unlimited = GenerationQuotaResponse(limit = 0, used = 10, remaining = null, resetAt = "2026-07-09T00:00:00Z")
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchGenerationQuota = { unlimited }),
-        )
+        val sources = SourcesHarness(testScheduler) { false }
+        sources.api.onFetchGenerationQuota = { GenerationQuota.Unlimited(10) }
+        val viewModel = newViewModel(sources = sources)
 
         viewModel.loadGenerationQuota()
 
-        assertEquals(unlimited, viewModel.generationQuota.value)
+        assertEquals(GenerationQuota.Unlimited(10), viewModel.generationQuota.value)
     }
 
     @Test
     fun loadGenerationQuotaは404でgracefulにnullとなりLoadFailedは立たない() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchGenerationQuota = { throw ApiException.NotFound() }),
-        )
+        val sources = SourcesHarness(testScheduler) { false }
+        sources.api.onFetchGenerationQuota = { throw ApiException.NotFound() }
+        val viewModel = newViewModel(sources = sources)
 
         viewModel.loadGenerationQuota()
 
@@ -383,14 +488,55 @@ class SettingsViewModelTest {
 
     @Test
     fun loadGenerationQuotaは404以外の失敗でLoadFailedが立つ() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchGenerationQuota = { throw ApiException.HttpError(500) }),
-        )
+        val sources = SourcesHarness(testScheduler) { false }
+        sources.api.onFetchGenerationQuota = { throw ApiException.HttpError(500) }
+        val viewModel = newViewModel(sources = sources)
 
         viewModel.loadGenerationQuota()
 
         assertNull(viewModel.generationQuota.value)
         assertTrue(viewModel.generationQuotaLoadFailed.value)
+    }
+
+    @Test
+    fun `android-dec-115 loadGenerationQuotaは結果ごとに上限とフラグを書き直す`() = runTest {
+        val sources = SourcesHarness(testScheduler) { false }
+        val viewModel = newViewModel(sources = sources)
+
+        sources.api.onFetchGenerationQuota = { GenerationQuota.Limited(5, 2, 3) }
+        viewModel.loadGenerationQuota()
+        assertEquals(GenerationQuota.Limited(5, 2, 3), viewModel.generationQuota.value)
+        assertFalse(viewModel.generationQuotaLoadFailed.value)
+
+        sources.api.onFetchGenerationQuota = { GenerationQuota.Limited(5, 4, 1) }
+        viewModel.loadGenerationQuota()
+        assertEquals(GenerationQuota.Limited(5, 4, 1), viewModel.generationQuota.value)
+        assertFalse(viewModel.generationQuotaLoadFailed.value)
+
+        sources.api.onFetchGenerationQuota = { throw ApiException.HttpError(500) }
+        viewModel.loadGenerationQuota()
+        assertNull(viewModel.generationQuota.value)
+        assertTrue(viewModel.generationQuotaLoadFailed.value)
+
+        sources.api.onFetchGenerationQuota = { GenerationQuota.Limited(5, 2, 3) }
+        viewModel.loadGenerationQuota()
+        assertEquals(GenerationQuota.Limited(5, 2, 3), viewModel.generationQuota.value)
+        assertFalse(viewModel.generationQuotaLoadFailed.value)
+
+        sources.api.onFetchGenerationQuota = { throw ApiException.NotFound() }
+        viewModel.loadGenerationQuota()
+        assertNull(viewModel.generationQuota.value)
+        assertFalse(viewModel.generationQuotaLoadFailed.value)
+
+        sources.api.onFetchGenerationQuota = { throw ApiException.HttpError(500) }
+        viewModel.loadGenerationQuota()
+        assertNull(viewModel.generationQuota.value)
+        assertTrue(viewModel.generationQuotaLoadFailed.value)
+
+        sources.api.onFetchGenerationQuota = { throw ApiException.NotFound() }
+        viewModel.loadGenerationQuota()
+        assertNull(viewModel.generationQuota.value)
+        assertFalse(viewModel.generationQuotaLoadFailed.value)
     }
 
     // --- 聴取ストリーク ---

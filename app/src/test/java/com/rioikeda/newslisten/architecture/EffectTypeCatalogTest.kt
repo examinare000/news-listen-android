@@ -19,11 +19,12 @@ class EffectTypeCatalogTest {
     // ---- 本番 ----
 
     @Test
-    fun 本番の分類表は16のportと19のhookを持つ() {
+    fun 本番の分類表は20のportと17のhookを持つ() {
         assertEquals(
             setOf(
                 "ApiClient", "PodcastApi", "PreferencesStore", "SessionStore", "PlayerController",
                 "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi", "AuthApi", "AccountApi", "LearningApi", "VocabularyTestApi", "FeedApi",
+                "SourcesApi", "DeviceTokenApi", "PushTokenSource", "NotificationPermission",
             ),
             production.ports.map { it.port }.toSet(),
         )
@@ -72,6 +73,16 @@ class EffectTypeCatalogTest {
         assertEquals(setOf("fetchFeed"), feed.sequenceReads)
         assertTrue(feed.propertyReads.isEmpty())
 
+        // Sources・通知の port も独立した行で、ApiClient 行は操作を宣言し続ける（adapter が包む。android-dec-116・android-dec-117）。
+        val sources = portRow(production, "SourcesApi")
+        assertEquals(setOf("com.rioikeda.newslisten.settings.app.SourcesApi"), sources.interfaces)
+        assertEquals(setOf("addSource", "updateSource", "removeSource", "completeOnboarding"), sources.writes)
+        assertEquals(setOf("fetchSources", "fetchFeaturedSites", "fetchGenerationQuota", "fetchOnboardingStatus"), sources.sequenceReads)
+        assertTrue(sources.propertyReads.isEmpty())
+        assertEquals(setOf("register"), portRow(production, "DeviceTokenApi").writes)
+        assertEquals(setOf("token"), portRow(production, "PushTokenSource").sequenceReads)
+        assertEquals(setOf("isGranted"), portRow(production, "NotificationPermission").propertyReads)
+
         val preferences = portRow(production, "PreferencesStore")
         assertEquals(9, preferences.writes.size)
         assertEquals(8, preferences.propertyReads.size)
@@ -98,7 +109,7 @@ class EffectTypeCatalogTest {
         assertEquals(setOf("createCredential", "getCredential"), portRow(production, "PasskeyProvider").writes)
         assertEquals(setOf("playSound", "performHaptic"), portRow(production, "FeedbackPlayer").writes)
 
-        assertEquals("hook は 19 個", 19, production.hooks.size)
+        assertEquals("hook は 17 個", 17, production.hooks.size)
         assertEquals("公開 callback（SETTER）は 0 個", 0, production.hooks.count { it.wiring == HookWiring.SETTER })
         assertTrue(production.hooks.filter { it.wiring == HookWiring.SETTER }.all { it.kind == HookKind.WRITE })
     }

@@ -25,8 +25,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSSpacing
-import com.rioikeda.newslisten.model.FeaturedCategory
-import com.rioikeda.newslisten.model.FeaturedSite
+import com.rioikeda.newslisten.settings.domain.FeaturedSiteEntry
+import com.rioikeda.newslisten.settings.featuredCategoryLabel
 import kotlinx.coroutines.launch
 
 /**
@@ -78,20 +78,16 @@ fun OnboardingScreen(
         }
 
         LazyColumn(modifier = Modifier.weight(1f)) {
-            val grouped = FeaturedCategory.groupByCategoryInOrder(featuredSites)
-            val categories = FeaturedCategory.getDisplayOrderCategories(grouped)
-
-            categories.forEach { category ->
-                val sitesInCategory = grouped[category] ?: emptyList()
+            featuredSites.forEach { group ->
                 item {
                     Text(
-                        text = stringResource(FeaturedCategory.getCategoryLabel(category)),
+                        text = stringResource(featuredCategoryLabel(group.category)),
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(top = DSSpacing.m, bottom = DSSpacing.s),
                     )
                 }
-                items(sitesInCategory) { site ->
+                items(group.sites) { site ->
                     FeaturedSiteRow(
                         site = site,
                         subscribed = addedIds.contains(site.id),
@@ -144,7 +140,7 @@ fun OnboardingScreen(
 /** おすすめサイト1行。名前/説明 + 購読ボタン（購読済みは無効化してラベル切り替え）。 */
 @Composable
 private fun FeaturedSiteRow(
-    site: FeaturedSite,
+    site: FeaturedSiteEntry,
     subscribed: Boolean,
     onSubscribe: () -> Unit,
 ) {

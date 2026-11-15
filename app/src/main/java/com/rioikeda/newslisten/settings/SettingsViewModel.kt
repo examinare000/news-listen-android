@@ -1,17 +1,21 @@
 package com.rioikeda.newslisten.settings
 
-import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.learning.app.StreakBadge
 import com.rioikeda.newslisten.learning.app.StreakQuery
-import com.rioikeda.newslisten.model.FeaturedSite
-import com.rioikeda.newslisten.model.GenerationQuotaResponse
-import com.rioikeda.newslisten.model.RssSource
-import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.preferences.ArticleOpenMode
 import com.rioikeda.newslisten.preferences.TimeFormat
 import com.rioikeda.newslisten.preferences.app.PreferencesSync
 import com.rioikeda.newslisten.preferences.app.PreferencesView
 import com.rioikeda.newslisten.preferences.domain.PreferenceSyncResult
+import com.rioikeda.newslisten.settings.app.FeaturedSiteGroup
+import com.rioikeda.newslisten.settings.app.FeaturedSitesLoad
+import com.rioikeda.newslisten.settings.app.QuotaLoad
+import com.rioikeda.newslisten.settings.app.SourcesCommands
+import com.rioikeda.newslisten.settings.app.SourcesLoad
+import com.rioikeda.newslisten.settings.app.SourcesOutcome
+import com.rioikeda.newslisten.settings.app.SourcesQueries
+import com.rioikeda.newslisten.settings.domain.GenerationQuota
+import com.rioikeda.newslisten.settings.domain.RssSourceEntry
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,32 +34,22 @@ enum class SelectionAfterSave { Keep, Revert }
  * 各 suspend 関数を呼び出す想定。
  */
 class SettingsViewModel(
-    private val apiClient: ApiClient,
+    private val sourcesCommands: SourcesCommands,
+    private val sourcesQueries: SourcesQueries,
     /**
      * 設定の同期の入口。値域の検査・サーバー往復・保存・競合の解決は [PreferencesSync] が持ち、
      * SettingsViewModel は結果を画面の文言と選択の扱いへ写す中継だけを行う。
      */
     private val preferencesSync: PreferencesSync,
     private val dispatcher: CoroutineDispatcher,
-    /**
-     * 現在ログイン中ユーザーが admin かどうかを都度問い合わせる関数（issue #66 / ADR-047）。
-     *
-     * WHY 関数注入（AuthState を直接受け取らない）: settings 層が auth 層の型（AuthState）に
-     * 依存すると層の依存方向が増える。呼び出し元（AppContainer）が
-     * `{ authViewModel.authState.value を見て判定 }` を注入する形にし、settings 層は
-     * 「admin かどうかを問い合わせられる」という事実のみを知る設計にした
-     * （AuthViewModel の onSubjectLeave/onAuthenticated と同じパターン）。
-     * role は認証確立後に非同期で確定するため、コンストラクタ時点の固定値ではなく
-     * 呼び出し時点で都度評価する関数にしている。
-     */
-    private val isAdminProvider: () -> Boolean = { false },
     private val streakQuery: StreakQuery,
 ) {
-    private val _sources = MutableStateFlow<List<RssSource>>(emptyList())
-    val sources: StateFlow<List<RssSource>> = _sources.asStateFlow()
+    val sources: StateFlow<List<RssSourceEntry>> = sourcesQueries.sources
 
-    private val _featuredSites = MutableStateFlow<List<FeaturedSite>>(emptyList())
-    val featuredSites: StateFlow<List<FeaturedSite>> = _featuredSites.asStateFlow()
+    // WHY ViewModel が一覧を持つ: 取得に失敗したとき Settings は一覧を空にする（Onboarding は前の一覧を保つ）。
+    // 入口に持たせるとどちらかの見える挙動が変わる（android-dec-115）。
+    private val _featuredSites = MutableStateFlow<List<FeaturedSiteGroup>>(emptyList())
+    val featuredSites: StateFlow<List<FeaturedSiteGroup>> = _featuredSites.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -67,9 +61,9 @@ class SettingsViewModel(
     private val _featuredSitesLoadFailed = MutableStateFlow(false)
     val featuredSitesLoadFailed: StateFlow<Boolean> = _featuredSitesLoadFailed.asStateFlow()
 
-    /** Podcast 生成の本日残回数（issue #164 / ADR-061）。未取得・取得失敗時は `null`。 */
-    private val _generationQuota = MutableStateFlow<GenerationQuotaResponse?>(null)
-    val generationQuota: StateFlow<GenerationQuotaResponse?> = _generationQuota.asStateFlow()
+    /** Podcast 生成の本日の上限（issue #164 / ADR-061）。未取得・取得失敗時は `null`。 */
+    private val _generationQuota = MutableStateFlow<GenerationQuota?>(null)
+    val generationQuota: StateFlow<GenerationQuota?> = _generationQuota.asStateFlow()
 
     private val _generationQuotaLoadFailed = MutableStateFlow(false)
     val generationQuotaLoadFailed: StateFlow<Boolean> = _generationQuotaLoadFailed.asStateFlow()
@@ -78,15 +72,11 @@ class SettingsViewModel(
     val listeningStreak: StateFlow<StreakBadge?> = streakQuery.streak
     val listeningStreakLoadFailed: StateFlow<Boolean> = streakQuery.loadFailed
 
-    /** RSS ソース一覧を取得して [sources] を更新する。失敗時は [errorMessage] に反映する。 */
+    /** RSS ソース一覧を取得する。失敗時は [errorMessage] に反映する。 */
     suspend fun loadSources(): Unit = withContext(dispatcher) {
         _isLoading.value = true
         _errorMessage.value = null
-        try {
-            _sources.value = apiClient.fetchSources().sources
-        } catch (e: ApiException) {
-            _errorMessage.value = SOURCES_ERROR_MESSAGE
-        }
+        if (sourcesQueries.loadSources() == SourcesLoad.Failed) _errorMessage.value = SOURCES_ERROR_MESSAGE
         _isLoading.value = false
     }
 
@@ -98,73 +88,64 @@ class SettingsViewModel(
      * （issue #164・完全サイレントの解消）。
      */
     suspend fun loadFeaturedSites(): Unit = withContext(dispatcher) {
-        try {
-            _featuredSites.value = apiClient.fetchFeaturedSites().sites
-            _featuredSitesLoadFailed.value = false
-        } catch (e: ApiException) {
-            _featuredSites.value = emptyList()
-            _featuredSitesLoadFailed.value = true
+        when (val load = sourcesQueries.loadFeaturedSites()) {
+            is FeaturedSitesLoad.Loaded -> {
+                _featuredSites.value = load.groups
+                _featuredSitesLoadFailed.value = false
+            }
+            FeaturedSitesLoad.Failed -> {
+                _featuredSites.value = emptyList()
+                _featuredSitesLoadFailed.value = true
+            }
         }
     }
 
     /**
-     * RSS ソースを追加し、サーバが返す最新一覧で [sources] を更新する。
-     * おすすめサイトの「購読」もこの関数を再利用する（専用 API は無い）。
+     * RSS ソースを追加する。設定画面のおすすめサイトの「購読」もこの関数を使う（専用 API は無い）。
+     * オンボーディングの購読は [SourcesCommands.subscribeFeatured] が持つ（一覧を書かない・409 は成功）。
      */
     suspend fun addSource(name: String, url: String): Unit = withContext(dispatcher) {
-        try {
-            _sources.value = apiClient.createSource(name, url).sources
-            _errorMessage.value = null
-        } catch (e: ApiException) {
-            _errorMessage.value = SOURCES_ERROR_MESSAGE
+        when (sourcesCommands.addSource(name, url)) {
+            SourcesOutcome.Done -> _errorMessage.value = null
+            else -> _errorMessage.value = SOURCES_ERROR_MESSAGE
         }
     }
 
     /**
-     * 既存 RSS ソースの名称・URL を編集し、サーバが返す最新一覧で [sources] を更新する（issue #66）。
-     *
-     * 編集は admin 限定（ADR-047）。iOS は View 側（SettingsView.swift:155）でのみ導線を隠すが、
-     * Android はそれに加え ViewModel 側でも防御的にガードする（呼び出し元の実装漏れで
-     * 非 admin から呼ばれても API を叩かない）。ガード発火時は [errorMessage] に反映し、
-     * サーバー呼び出しは行わない。
+     * 既存 RSS ソースの名称・URL を編集する（issue #66）。編集は admin 限定（ADR-047）で、判定は入口が持つ。
+     * 管理者でないときは通信せず、[errorMessage] に権限の文言を出す。
      */
     suspend fun updateSource(oldUrl: String, name: String, url: String): Unit = withContext(dispatcher) {
-        if (!isAdminProvider()) {
-            _errorMessage.value = ADMIN_ONLY_ERROR_MESSAGE
-            return@withContext
-        }
-        try {
-            _sources.value = apiClient.updateSource(oldUrl, name, url).sources
-            _errorMessage.value = null
-        } catch (e: ApiException) {
-            _errorMessage.value = SOURCES_ERROR_MESSAGE
+        when (sourcesCommands.updateSource(oldUrl, name, url)) {
+            SourcesOutcome.Done -> _errorMessage.value = null
+            SourcesOutcome.AdminOnly -> _errorMessage.value = ADMIN_ONLY_ERROR_MESSAGE
+            SourcesOutcome.Failed -> _errorMessage.value = SOURCES_ERROR_MESSAGE
         }
     }
 
-    /** 指定 URL の RSS ソースを削除し、一覧から取り除く。失敗時は [errorMessage] に反映する。 */
+    /** 指定 URL の RSS ソースを削除する。失敗時は [errorMessage] に反映する（成功しても消さない）。 */
     suspend fun removeSource(url: String): Unit = withContext(dispatcher) {
-        try {
-            apiClient.deleteSource(url)
-            _sources.value = _sources.value.filterNot { it.url == url }
-        } catch (e: ApiException) {
-            _errorMessage.value = SOURCES_ERROR_MESSAGE
-        }
+        if (sourcesCommands.removeSource(url) != SourcesOutcome.Done) _errorMessage.value = SOURCES_ERROR_MESSAGE
     }
 
     /**
-     * Podcast 生成の本日残回数を取得する（issue #164 / ADR-061）。
+     * Podcast 生成の上限を取得する（issue #164 / ADR-061）。
      * 404 時は graceful degradation: セクション非表示（[generationQuotaLoadFailed] は立てない）。
      */
     suspend fun loadGenerationQuota(): Unit = withContext(dispatcher) {
-        try {
-            _generationQuota.value = apiClient.fetchGenerationQuota()
-            _generationQuotaLoadFailed.value = false
-        } catch (_: ApiException.NotFound) {
-            _generationQuota.value = null
-            _generationQuotaLoadFailed.value = false
-        } catch (e: ApiException) {
-            _generationQuota.value = null
-            _generationQuotaLoadFailed.value = true
+        when (val load = sourcesQueries.loadGenerationQuota()) {
+            is QuotaLoad.Loaded -> {
+                _generationQuota.value = load.quota
+                _generationQuotaLoadFailed.value = false
+            }
+            QuotaLoad.Hidden -> {
+                _generationQuota.value = null
+                _generationQuotaLoadFailed.value = false
+            }
+            QuotaLoad.Failed -> {
+                _generationQuota.value = null
+                _generationQuotaLoadFailed.value = true
+            }
         }
     }
 

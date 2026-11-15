@@ -64,6 +64,10 @@ object LayerMap {
         "learning/domain/VocabularyTestSession.kt",
         "feed/domain/Article.kt",
         "feed/domain/PendingCuration.kt",
+        "settings/domain/RssSourceEntry.kt",
+        "settings/domain/FeaturedSiteEntry.kt",
+        "settings/domain/FeaturedCategory.kt",
+        "settings/domain/GenerationQuota.kt",
     )
 
     private val application = listOf(
@@ -87,6 +91,10 @@ object LayerMap {
         "feed/app/FeedCommands.kt",
         "feed/app/FeedQueries.kt",
         "feed/app/FeedState.kt",
+        "settings/app/SourcesCommands.kt",
+        "settings/app/SourcesQueries.kt",
+        "settings/app/SourcesState.kt",
+        "onboarding/app/OnboardingCommands.kt",
     )
 
     private val port = listOf(
@@ -100,6 +108,10 @@ object LayerMap {
         "learning/app/LearningApi.kt",
         "learning/app/VocabularyTestApi.kt",
         "feed/app/FeedApi.kt",
+        "settings/app/SourcesApi.kt",
+        "notification/app/DeviceTokenApi.kt",
+        "notification/app/PushTokenSource.kt",
+        "notification/app/NotificationPermission.kt",
         "network/PodcastApi.kt",
         "network/SessionStore.kt",
         "network/NetworkMonitoring.kt",
@@ -118,6 +130,7 @@ object LayerMap {
         "learning/app/LearningReadModels.kt",
         "feed/app/ArticleRow.kt",
         "feed/app/FeedNotice.kt",
+        "settings/app/SourcesOutcomes.kt",
     )
 
     private val adapter = listOf(
@@ -141,6 +154,10 @@ object LayerMap {
         "network/LearningApiAdapter.kt",
         "network/VocabularyTestApiAdapter.kt",
         "network/FeedApiAdapter.kt",
+        "network/SourcesApiAdapter.kt",
+        "network/DeviceTokenApiAdapter.kt",
+        "notification/infra/FirebasePushTokenSource.kt",
+        "notification/infra/AndroidNotificationPermission.kt",
         "network/AuthApiAdapter.kt",
         "observability/CrashReporter.kt",
         "observability/CrashReportFormatter.kt",
@@ -148,7 +165,6 @@ object LayerMap {
         "model/ArticleResponse.kt",
         "model/ClientErrorReport.kt",
         "model/DeviceTokenRequest.kt",
-        "model/FeaturedCategory.kt",
         "model/FeaturedSite.kt",
         "model/FeedResponse.kt",
         "model/GenerationQuotaResponse.kt",
@@ -206,6 +222,7 @@ object LayerMap {
         "podcast/QueueSheet.kt",
         "podcast/QuizSheet.kt",
         "settings/SettingsScreen.kt",
+        "settings/FeaturedCategoryLabels.kt",
         "vocabulary/VocabularyTestScreen.kt",
         "podcast/PodcastViewModel.kt",
         "auth/AuthViewModel.kt",

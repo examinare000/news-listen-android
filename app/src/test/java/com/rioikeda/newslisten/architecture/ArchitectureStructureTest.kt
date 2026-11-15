@@ -535,6 +535,30 @@ class ArchitectureStructureTest {
     }
 
     @Test
+    fun 走査器_AppContainerのコードにFCMの断片があれば違反としコメントだけなら違反にしない() {
+        // verifies: android-dep-06（FirebaseMessaging・checkSelfPermission・POST_NOTIFICATIONS を composition root に置かない）
+        val violating = fixture(
+            "import com.google.firebase.messaging.FirebaseMessaging",
+            "val token = FirebaseMessaging.getInstance().token",
+            "val granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS)",
+        )
+        val commentOnly = fixture(
+            "// FirebaseMessaging は FirebasePushTokenSource へ移した",
+            "/**",
+            " * checkSelfPermission と POST_NOTIFICATIONS は AndroidNotificationPermission が持つ",
+            " */",
+            "val registrar = FcmTokenRegistrar(a, b, c, d)",
+        )
+
+        val violatingTargets = ArchitectureScanner.compositionHits(listOf(SourceFile("di/AppContainer.kt", violating)))
+            .map { it.target }.toSet()
+        val commentOnlyHits = ArchitectureScanner.compositionHits(listOf(SourceFile("di/AppContainer.kt", commentOnly)))
+
+        assertEquals(setOf("FirebaseMessaging", "checkSelfPermission", "POST_NOTIFICATIONS"), violatingTargets)
+        assertTrue("コメントだけの AppContainer は違反にならない: $commentOnlyHits", commentOnlyHits.isEmpty())
+    }
+
+    @Test
     fun 走査器_portの受け取りと遷移関数の呼出を名前の形で判定する() {
         // verifies: CI-08, CI-09 / T-16
         val text = fixture(
@@ -996,6 +1020,7 @@ object ArchitectureScanner {
     private val portNames = listOf(
         "PlayerController", "PasskeyProvider", "PreferencesStore", "PodcastApi",
         "LearningApi", "VocabularyTestApi", "FeedApi", "SessionStore", "NetworkMonitoring",
+        "SourcesApi", "DeviceTokenApi", "PushTokenSource", "NotificationPermission",
     )
     private val portRegexes = portNames.associateWith { Regex("""(?<![A-Za-z0-9_])(get)?$it\b""") }
     private const val PREFERENCES_SETTER = "preferencesStore.set"
@@ -1109,6 +1134,9 @@ object ArchitectureScanner {
     private val constructorCalls = adapterConstructors.associateWith { Regex("""\b$it\(""") }
     private const val APP_CONTAINER = "di/AppContainer.kt"
 
+    /** composition root に置かない FCM の断片（android-dep-06。許可リストに行は作らない）。 */
+    private val fcmFragments = listOf("FirebaseMessaging", "checkSelfPermission", "POST_NOTIFICATIONS")
+
     fun compositionHits(sources: List<SourceFile>): List<Hit> {
         check(sources.any { it.path == APP_CONTAINER }) { "$APP_CONTAINER が main に無い" }
         val hits = HitBuilder()
@@ -1124,6 +1152,9 @@ object ArchitectureScanner {
                     hits.add("android-dep-06", path, "getAppContainer()", line.number)
                 }
                 if (path == APP_CONTAINER && line.raw.contains("== \"")) hits.add("android-dep-06", path, "== \"", line.number)
+                if (path == APP_CONTAINER) {
+                    fcmFragments.filter { code.contains(it) }.forEach { hits.add("android-dep-06", path, it, line.number) }
+                }
             }
         }
         return hits.build()

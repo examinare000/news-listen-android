@@ -13,6 +13,9 @@ import com.rioikeda.newslisten.preferences.ArticleOpenMode
 import com.rioikeda.newslisten.preferences.TimeFormat
 import com.rioikeda.newslisten.preferences.app.PreferencesView
 import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
+import com.rioikeda.newslisten.settings.domain.FeaturedSiteEntry
+import com.rioikeda.newslisten.settings.domain.GenerationQuota
+import com.rioikeda.newslisten.settings.domain.RssSourceEntry
 import com.rioikeda.newslisten.learning.app.AchievementRecord
 import com.rioikeda.newslisten.learning.app.DashboardRecord
 import com.rioikeda.newslisten.learning.app.StreakRecord
@@ -21,13 +24,7 @@ import com.rioikeda.newslisten.learning.app.VocabularySummary
 import com.rioikeda.newslisten.learning.app.VocabularyTestItemRecord
 import com.rioikeda.newslisten.learning.app.VocabularyTestSessionRecord
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.model.FeaturedSite
-import com.rioikeda.newslisten.model.FeaturedSitesResponse
-import com.rioikeda.newslisten.model.GenerationQuotaResponse
-import com.rioikeda.newslisten.model.OnboardingStatusResponse
 import com.rioikeda.newslisten.model.PodcastResponse
-import com.rioikeda.newslisten.model.RssSource
-import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.model.VocabularyItemResponse
 import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.network.EpisodeDecoder
@@ -128,16 +125,16 @@ internal object ProbeData {
         items = listOf(VocabularyRecord(episodeId = "podcast-1", term = "term", meaning = "meaning", registeredAt = "2026-10-14T00:00:00Z")),
     )
 
-    val featuredSite: FeaturedSite = FeaturedSite(id = "site-1", name = "Example", url = "https://example.com/rss")
+    val featuredSite: FeaturedSiteEntry =
+        FeaturedSiteEntry(id = "site-1", name = "Example", url = "https://example.com/rss", description = null, category = null)
 
-    val featuredSites: FeaturedSitesResponse = FeaturedSitesResponse(sites = listOf(featuredSite))
+    val featuredSites: List<FeaturedSiteEntry> = listOf(featuredSite)
 
-    val sources: RssSourcesResponse = RssSourcesResponse(sources = listOf(RssSource(name = "Example", url = "https://example.com/rss")))
+    val sources: List<RssSourceEntry> = listOf(RssSourceEntry(name = "Example", url = "https://example.com/rss"))
 
-    val generationQuota: GenerationQuotaResponse =
-        GenerationQuotaResponse(limit = 3, used = 1, remaining = 2, resetAt = "2026-10-15T00:00:00Z")
+    val generationQuota: GenerationQuota = GenerationQuota.Limited(limit = 3, used = 1, remaining = 2)
 
-    val onboardingStatus: OnboardingStatusResponse = OnboardingStatusResponse(onboardingCompleted = false)
+    val onboardingStatus: Boolean = false
 
     val sessionRecords: List<SessionRecord> = listOf(
         SessionRecord(id = "session-current", deviceLabel = "this device", createdAt = "2026-10-14T00:00:00Z", lastUsedAt = null, current = true),
