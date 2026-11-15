@@ -37,6 +37,8 @@ import com.rioikeda.newslisten.model.VocabularyTestResultItemRequest
 import com.rioikeda.newslisten.model.VocabularyTestResultResponse
 import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
 import com.rioikeda.newslisten.account.app.AccountApi
+import com.rioikeda.newslisten.feed.app.FeedApi
+import com.rioikeda.newslisten.feed.domain.Article
 import com.rioikeda.newslisten.learning.app.DashboardRecord
 import com.rioikeda.newslisten.learning.app.LearningApi
 import com.rioikeda.newslisten.learning.app.QuizGradeRecord
@@ -468,6 +470,24 @@ class RecordingVocabularyTestApi(
 
     override suspend fun submitVocabularyTestResults(results: List<VocabularyTestAnswerRecord>) {
         core.write("submitVocabularyTestResults")
+    }
+}
+
+/** 記事の port [FeedApi] の記録 fake。取得は列の読みで、scenario B では注入した失敗を投げる。`star`・`dismiss` は書込として記録する。 */
+class RecordingFeedApi(
+    val recorder: EffectRecorder,
+    val scenario: ProbeScenario,
+) : FeedApi {
+    private val core = ApiFake(recorder, scenario, port = "FeedApi")
+
+    override suspend fun fetchFeed(): List<Article> = core.read("fetchFeed")
+
+    override suspend fun star(articleId: String, difficulty: String?) {
+        core.write("star")
+    }
+
+    override suspend fun dismiss(articleId: String) {
+        core.write("dismiss")
     }
 }
 
@@ -908,6 +928,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
     val accountApi: RecordingAccountApi = RecordingAccountApi(recorder, scenario)
     val learningApi: RecordingLearningApi = RecordingLearningApi(recorder, scenario)
     val vocabularyTestApi: RecordingVocabularyTestApi = RecordingVocabularyTestApi(recorder, scenario)
+    val feedApi: RecordingFeedApi = RecordingFeedApi(recorder, scenario)
     val preferencesApi: RecordingPreferencesApi = RecordingPreferencesApi(recorder, scenario)
     val preferencesStore: RecordingPreferencesStore = RecordingPreferencesStore(recorder, scenario)
     val sessionStore: RecordingSessionStore = RecordingSessionStore(recorder, scenario)
@@ -920,7 +941,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
 
     /** この実行単位の記録 fake の全部。配線の検査が「記録 fake であること」を照合する。 */
     val fakes: List<Any> = listOf(
-        apiClient, podcastApi, authApi, accountApi, learningApi, vocabularyTestApi, preferencesApi, preferencesStore, sessionStore, playerController,
+        apiClient, podcastApi, authApi, accountApi, learningApi, vocabularyTestApi, feedApi, preferencesApi, preferencesStore, sessionStore, playerController,
         fileSystem, audioStore, networkMonitor, passkeyProvider, feedbackPlayer,
     )
 

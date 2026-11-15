@@ -19,11 +19,11 @@ class EffectTypeCatalogTest {
     // ---- 本番 ----
 
     @Test
-    fun 本番の分類表は15のportと20のhookを持つ() {
+    fun 本番の分類表は16のportと19のhookを持つ() {
         assertEquals(
             setOf(
                 "ApiClient", "PodcastApi", "PreferencesStore", "SessionStore", "PlayerController",
-                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi", "AuthApi", "AccountApi", "LearningApi", "VocabularyTestApi",
+                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi", "AuthApi", "AccountApi", "LearningApi", "VocabularyTestApi", "FeedApi",
             ),
             production.ports.map { it.port }.toSet(),
         )
@@ -65,6 +65,13 @@ class EffectTypeCatalogTest {
             api.interfaces.none { it.endsWith(".VocabularyTestApi") },
         )
 
+        // 記事の port も独立した行で、ApiClient 行は 3 操作を宣言し続ける（adapter が包む。android-dec-112）。
+        val feed = portRow(production, "FeedApi")
+        assertEquals(setOf("com.rioikeda.newslisten.feed.app.FeedApi"), feed.interfaces)
+        assertEquals(setOf("star", "dismiss"), feed.writes)
+        assertEquals(setOf("fetchFeed"), feed.sequenceReads)
+        assertTrue(feed.propertyReads.isEmpty())
+
         val preferences = portRow(production, "PreferencesStore")
         assertEquals(9, preferences.writes.size)
         assertEquals(8, preferences.propertyReads.size)
@@ -91,8 +98,8 @@ class EffectTypeCatalogTest {
         assertEquals(setOf("createCredential", "getCredential"), portRow(production, "PasskeyProvider").writes)
         assertEquals(setOf("playSound", "performHaptic"), portRow(production, "FeedbackPlayer").writes)
 
-        assertEquals("hook は 20 個", 20, production.hooks.size)
-        assertEquals("公開 callback（SETTER）は 1 つ", 1, production.hooks.count { it.wiring == HookWiring.SETTER })
+        assertEquals("hook は 19 個", 19, production.hooks.size)
+        assertEquals("公開 callback（SETTER）は 0 個", 0, production.hooks.count { it.wiring == HookWiring.SETTER })
         assertTrue(production.hooks.filter { it.wiring == HookWiring.SETTER }.all { it.kind == HookKind.WRITE })
     }
 

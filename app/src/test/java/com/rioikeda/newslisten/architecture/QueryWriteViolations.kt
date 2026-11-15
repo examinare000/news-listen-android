@@ -26,28 +26,12 @@ data class KnownViolation(
 )
 
 object QueryWriteViolations {
-    private const val PERIPHERY = "android-slice-periphery-01"
-
-    private fun violation(operationId: String, port: String, op: String, path: String, owner: String) =
-        MigrationViolation(operationId, port, op, path, owner = owner, fixTask = owner, removeBy = owner)
-
     /**
      * 観測と一致させる表。query が書く `(操作 ID, port, op)` を、owner の slice が消すまで固定する（両方向の一致で縮め忘れも落とす）。
-     * 各 owner の slice は、直した行をこの表と [known] から消す。
+     * 現在、移行違反は無い。新しい違反を許すときは owner の slice を付けて足し、その slice が直して消す。
      */
-    val table: List<MigrationViolation> = listOf(
-        // 目標 Spec §6 #2: 読む前に、保留中の Star・Dismiss を確定送信する。
-        violation("FeedViewModel#loadFeed", "ApiClient", "starArticle", "feed/FeedViewModel.kt", PERIPHERY),
-        violation("FeedViewModel#loadFeed", "ApiClient", "dismissArticle", "feed/FeedViewModel.kt", PERIPHERY),
-        violation("FeedViewModel#refresh", "ApiClient", "starArticle", "feed/FeedViewModel.kt", PERIPHERY),
-        violation("FeedViewModel#refresh", "ApiClient", "dismissArticle", "feed/FeedViewModel.kt", PERIPHERY),
-    )
+    val table: List<MigrationViolation> = emptyList()
 
-    /** 観測より先に固定する既知の違反（目標 Spec §6 #1・#2）。消して通すことは禁止。 */
-    val known: List<KnownViolation> = listOf(
-        KnownViolation("FeedViewModel#loadFeed", "ApiClient", "starArticle", "目標 Spec §6 #2", "android-slice-periphery-01"),
-        KnownViolation("FeedViewModel#loadFeed", "ApiClient", "dismissArticle", "目標 Spec §6 #2", "android-slice-periphery-01"),
-        KnownViolation("FeedViewModel#refresh", "ApiClient", "starArticle", "目標 Spec §6 #2", "android-slice-periphery-01"),
-        KnownViolation("FeedViewModel#refresh", "ApiClient", "dismissArticle", "目標 Spec §6 #2", "android-slice-periphery-01"),
-    )
+    /** 観測より先に固定する既知の違反。現在は無い。消して通すことは禁止。 */
+    val known: List<KnownViolation> = emptyList()
 }

@@ -11,6 +11,8 @@ import com.rioikeda.newslisten.auth.authSessionQueryProbes
 import com.rioikeda.newslisten.auth.authViewModelQueryProbes
 import com.rioikeda.newslisten.auth.subjectCleanupQueryProbes
 import com.rioikeda.newslisten.catalog.episodeCatalogQueryProbes
+import com.rioikeda.newslisten.feed.app.FeedQueries
+import com.rioikeda.newslisten.feed.feedQueriesQueryProbes
 import com.rioikeda.newslisten.feed.feedViewModelQueryProbes
 import com.rioikeda.newslisten.learning.app.StreakQuery
 import com.rioikeda.newslisten.learning.learningCommandsQueryProbes
@@ -54,6 +56,7 @@ internal val registeredQueryProbeSets: List<QueryProbeSet> = listOf(
     passkeyLoginViewModelQueryProbes,
     passkeyRegistrationViewModelQueryProbes,
     feedViewModelQueryProbes,
+    feedQueriesQueryProbes,
     learningViewModelQueryProbes,
     vocabularyTestViewModelQueryProbes,
     settingsViewModelQueryProbes,
@@ -197,7 +200,7 @@ class QueryEffectCoverageTest {
             "PasskeyCredentialsViewModel", "PasskeyLoginViewModel", "PasskeyRegistrationViewModel",
             "FeedViewModel", "LearningViewModel", "VocabularyTestViewModel", "SettingsViewModel", "OnboardingViewModel",
             "LearningDashboardQuery", "StreakQuery", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator", "EpisodeCatalog",
-            "PreferencesSync", "LearningCommands", "VocabularyTestCommands",
+            "PreferencesSync", "LearningCommands", "VocabularyTestCommands", "FeedQueries",
         )
 
         /** 登録 list の各 probe set を、本番の母集団・台帳・分類表で 1 回ずつ run した結果。 */
@@ -216,7 +219,7 @@ class QueryEffectCoverageTest {
     // ---- 本番の probe の網羅と配線 ----
 
     @Test(timeout = 600_000)
-    fun 登録listは12のViewModelとLearningCommandsとVocabularyTestCommandsとLearningDashboardQueryとStreakQueryとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
+    fun 登録listは12のViewModelとFeedQueriesとLearningCommandsとVocabularyTestCommandsとLearningDashboardQueryとStreakQueryとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
         val registered = registeredQueryProbeSets.map { it.owner }
         assertEquals("登録された probe set の所有者", owners.sorted(), registered.sorted())
 
@@ -274,7 +277,6 @@ class QueryEffectCoverageTest {
         val expected = listOf(
             Expected("VocabularyTestCommands#shuffle", setOf("VocabularyTestCommands", "VocabularyTestViewModel"), HookKind.READ, HookShape.ONE_ARG),
             Expected("PasskeyCommands#onLoginSuccess", setOf("PasskeyLoginViewModel"), HookKind.WRITE, HookShape.SUSPEND_ONE_ARG),
-            Expected("FeedViewModel#onStarConfirmed", setOf("FeedViewModel"), HookKind.WRITE, HookShape.NO_ARG),
         )
         assertTrue("trace が空", allTraces.isNotEmpty())
 
@@ -346,38 +348,45 @@ class QueryEffectCoverageTest {
         }
     }
 
-    // ---- 既知の違反の観測 ----
+    // ---- 保留があっても query は書かない ----
 
     @Test(timeout = 600_000)
-    fun FeedViewModelのwarmupで保留を確定するとloadFeedとrefreshのstarArticleとdismissArticleが観測される() {
-        val feed = registeredQueryProbeSets.single { it.owner == "FeedViewModel" }
+    fun FeedQueriesのwarmupで保留を作ってもloadFeedとrefreshはstarもdismissも観測されない() {
+        val feed = registeredQueryProbeSets.single { it.owner == "FeedQueries" }
 
         val result = QueryProbeRunner.run(feed, ProductionWorld.context)
 
-        val seen = result.observed.map { Triple(it.operationId, it.port, it.op) }.toSet()
-        listOf("FeedViewModel#loadFeed", "FeedViewModel#refresh").forEach { operation ->
-            listOf("starArticle", "dismissArticle").forEach { op ->
-                assertTrue("$operation の ApiClient#$op が観測されない: $seen", Triple(operation, "ApiClient", op) in seen)
+        val treatments = result.traces.filter { it.ownerType == "FeedQueries" && it.role == UnitRole.TREATMENT }
+        assertTrue("treatment の trace が無い", treatments.isNotEmpty())
+        // 保留があること（正方向の対照）。FeedState は graph に入らないので所有者の公開面で見る。
+        treatments.forEach { trace ->
+            val pending = (trace.graph.first() as FeedQueries).pendingAction.value
+            if (trace.scenario in setOf("C1", "C2")) {
+                assertTrue("${trace.scenario}: warm-up の後に保留が無い", pending != null)
+            } else {
+                assertTrue("${trace.scenario}: 保留があってはならない", pending == null)
             }
         }
+        val seen = result.observed.map { Triple(it.operationId, it.port, it.op) }
+        assertTrue("保留があるのに FeedApi の書込が観測された: $seen", seen.none { it.first.startsWith("FeedQueries#") })
         assertTrue("探査の失敗: ${result.traces.flatMap { it.failures }}", result.traces.all { it.failures.isEmpty() })
     }
 
     @Test(timeout = 600_000)
-    fun warmupを外した写しは既知の違反が観測されずprobeの欠陥で失敗する() {
-        val feed = registeredQueryProbeSets.single { it.owner == "FeedViewModel" }
-        val withoutWarmUp = feed.mapScenarios { it.copy(warmUp = null, noWarmUpReason = "対照: warm-up を外した") }
-        val sets = registeredQueryProbeSets.map { if (it.owner == "FeedViewModel") withoutWarmUp else it }
+    fun FeedQueriesのprobeはloadFeedとrefreshを正常に完了させて空振りしない() {
+        val feed = registeredQueryProbeSets.single { it.owner == "FeedQueries" }
 
-        val outcome = QueryEffectChecks.execute(productionCheckInput(sets))
+        val result = QueryProbeRunner.run(feed, ProductionWorld.context)
 
-        assertTrue(
-            "既知の違反の list と表は変えていない",
-            QueryWriteViolations.known.isNotEmpty() && QueryWriteViolations.known.all { k ->
-                QueryWriteViolations.table.any { it.operationId == k.operationId && it.port == k.port && it.op == k.op }
-            },
-        )
-        outcome.findings.requireFinding(Headings.PROBE_DEFECT, "FeedViewModel#loadFeed", "starArticle")
+        val calls = result.traces
+            .filter { it.ownerType == "FeedQueries" && it.role == UnitRole.TREATMENT }
+            .flatMap { it.calls }
+        listOf("FeedQueries#loadFeed", "FeedQueries#refresh").forEach { operation ->
+            assertTrue(
+                "$operation が NORMAL で完了していない: $calls",
+                calls.any { "${it.method.declaringClass.simpleName}#${it.method.name}" == operation && it.completion == CallCompletion.NORMAL },
+            )
+        }
     }
 
     // ---- 本番の検査 ----
@@ -391,7 +400,12 @@ class QueryEffectCoverageTest {
 
         val observed = outcome.observed.map { Triple(it.operationId, it.port, it.op) }.toSet()
         val table = QueryWriteViolations.table.map { Triple(it.operationId, it.port, it.op) }.toSet()
-        assertTrue("観測が 0 件（空振り）", observed.isNotEmpty())
+        // 観測が 0 件でも空振りにならないことは、検査器が書込を観測できる対照で確かめる。
+        val control = QueryEffectFixtureTest.outcome.observed.map { Triple(it.operationId, it.port, it.op) }
+        assertTrue(
+            "検査器が負の fixture の書込を観測できない: $control",
+            Triple("HelperRewritesSameValue#load", "PreferencesStore", "markAchievementsSeen") in control,
+        )
         assertEquals("観測した組と移行違反の表の組が等しい", observed, table)
         QueryWriteViolations.known.forEach {
             assertTrue("既知の違反が観測されない: $it", Triple(it.operationId, it.port, it.op) in observed)
@@ -560,9 +574,13 @@ class QueryEffectCoverageTest {
         assertTrue("(1) 操作総数（行数）が無い", parsed[0].joinToString("\n").contains(OperationLedger.rows.size.toString()))
         assertTrue("(1) 公開操作の総数が無い", parsed[0].joinToString("\n").contains(population.operations.size.toString()))
         assertTrue("(2) 到達先が空", parsed[1].isNotEmpty())
-        assertTrue("(3) の行が行の形に合わない: ${parsed[2].filterNot { rowFormat.matches(it) }}", parsed[2].isNotEmpty() && parsed[2].all { rowFormat.matches(it) })
-        assertEquals("(3) の行は辞書順", parsed[2].sorted(), parsed[2])
-        assertEquals("(3) の件数の合計は観測の件数と等しい", outcome.observed.size, counts(parsed[2]))
+        if (outcome.observed.isEmpty()) {
+            assertEquals("(3) は観測が無いことを 1 行で示す", listOf("(観測した書込は無い)"), parsed[2])
+        } else {
+            assertTrue("(3) の行が行の形に合わない: ${parsed[2].filterNot { rowFormat.matches(it) }}", parsed[2].all { rowFormat.matches(it) })
+            assertEquals("(3) の行は辞書順", parsed[2].sorted(), parsed[2])
+            assertEquals("(3) の件数の合計は観測の件数と等しい", outcome.observed.size, counts(parsed[2]))
+        }
         assertTrue("(4) command の到達先を観測していない旨が無い", parsed[3].joinToString("\n").contains("command"))
         assertTrue("(5) 保証範囲の外側が 8 項目未満", parsed[4].size >= 8)
         assertTrue("run 内 ID の形が残っている", !Regex("""OUT[0-9]""").containsMatchIn(text))

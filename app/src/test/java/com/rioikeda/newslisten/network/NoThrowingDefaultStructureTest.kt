@@ -193,4 +193,36 @@ class NoThrowingDefaultStructureTest {
                 .containsMatchIn(text),
         )
     }
+
+    @Test
+    fun AppContainerはFeedStateを1つだけ作りFeedCommandsとFeedQueriesへ同じ値を渡す() {
+        // verifies: android-dec-108。状態を 2 つ作ると、画面が読む一覧と Star が除く一覧が別になり画面に何も起きない
+        val root = resolveMainSourceRoot()
+        val file = root.walkTopDown().firstOrNull { it.name == "AppContainer.kt" }
+            ?: error("走査ルート $root に AppContainer.kt が見つからない")
+        val code = file.readLines()
+            .filterNot { it.trimStart().let { line -> line.startsWith("//") || line.startsWith("*") || line.startsWith("/*") } }
+            .joinToString("\n")
+
+        val stateConstructions = Regex("""\bFeedState\(""").findAll(code).count()
+        check(stateConstructions > 0) { "${file.path} に FeedState( の構築が見つからない（vacuous pass ガード）" }
+        assertTrue("FeedState( の構築が 1 回でない（実際: $stateConstructions 回）", stateConstructions == 1)
+
+        val stateVal = Regex("""\bval\s+(\w+)\s*(?::\s*FeedState)?\s*(?:=|by\s+lazy\s*\{)\s*FeedState\(""")
+            .find(code)?.groupValues?.get(1)
+        check(stateVal != null) { "${file.path} に FeedState( を初期化子に持つ val が見つからない（vacuous pass ガード）" }
+
+        val commandsState = Regex("""\bFeedCommands\(\s*\w+\s*,\s*(\w+)\s*\)""").find(code)?.groupValues?.get(1)
+        val queriesState = Regex("""\bFeedQueries\(\s*\w+\s*,\s*(\w+)\s*\)""").find(code)?.groupValues?.get(1)
+        check(commandsState != null) { "${file.path} に FeedCommands(x, y) の構築が見つからない（vacuous pass ガード）" }
+        check(queriesState != null) { "${file.path} に FeedQueries(x, y) の構築が見つからない（vacuous pass ガード）" }
+        assertTrue(
+            "FeedCommands の状態（$commandsState）が FeedState を作る val（$stateVal）でない",
+            commandsState == stateVal,
+        )
+        assertTrue(
+            "FeedQueries の状態（$queriesState）が FeedState を作る val（$stateVal）でない",
+            queriesState == stateVal,
+        )
+    }
 }

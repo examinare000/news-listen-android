@@ -20,6 +20,10 @@ import com.rioikeda.newslisten.auth.CleanupStep
 import com.rioikeda.newslisten.auth.SubjectCleanup
 import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.feed.FeedViewModel
+import com.rioikeda.newslisten.feed.app.FeedApi
+import com.rioikeda.newslisten.feed.app.FeedCommands
+import com.rioikeda.newslisten.feed.app.FeedQueries
+import com.rioikeda.newslisten.feed.app.FeedState
 import com.rioikeda.newslisten.learning.LearningViewModel
 import com.rioikeda.newslisten.learning.app.LearningCommands
 import com.rioikeda.newslisten.learning.app.LearningDashboardQuery
@@ -33,6 +37,7 @@ import com.rioikeda.newslisten.network.AuthApiAdapter
 import com.rioikeda.newslisten.network.AuthInterceptor
 import com.rioikeda.newslisten.network.ConnectivityNetworkMonitor
 import com.rioikeda.newslisten.network.JavaFileSystem
+import com.rioikeda.newslisten.network.FeedApiAdapter
 import com.rioikeda.newslisten.network.LearningApiAdapter
 import com.rioikeda.newslisten.network.VocabularyTestApiAdapter
 import com.rioikeda.newslisten.network.KeystoreSessionStore
@@ -269,6 +274,7 @@ class AppContainer(context: Context) {
 
     private val learningApi = LearningApiAdapter(apiClient)
     private val vocabularyTestApi = VocabularyTestApiAdapter(apiClient)
+    private val feedApi: FeedApi = FeedApiAdapter(apiClient)
 
     /** 聴取ストリークの読み。AppScaffold・設定画面・再生が同じものを共有する。 */
     private val _streakQuery: StreakQuery = StreakQuery(
@@ -346,24 +352,29 @@ class AppContainer(context: Context) {
     private val sessionQueries: SessionQueries by lazy { SessionQueries(accountApi) }
 
     /**
-     * FeedViewModel（フィード一覧・Star/Dismiss・Undo）を生成して返す。
+     * Feed の共有の状態。[FeedCommands] と [FeedQueries] が同じ 1 つを受ける（別々だと、画面が読む一覧と
+     * Star が除く一覧が別になり、画面に何も起きない）。
      *
-     * Dispatcher: Dispatchers.Default.limitedParallelism(1) を使用し、状態変更を直列化する。
-     * WHY: FeedViewModel の読み取り→書き込み（_pendingAction.value の読み取り、null 代入、commit 送信）と
-     * stage の読み取り→変更→書き込み（_articles の読み取り、removeAt、_pendingAction 代入）が別スレッドで
+     * Dispatcher: Dispatchers.Default.limitedParallelism(1) で状態変更を直列化する。
+     * WHY: 保留の読み取り→null 代入→commit 送信と、stage の一覧の読み取り→変更→書き込みが別スレッドで
      * 競合すると、二重送信や記事消失が起こり得る。iOS の @MainActor による直列実行を Kotlin で再現するため、
-     * limitedParallelism(1) で全操作を単一スレッドで順序付ける。testDispatcher で差し替え可能。
+     * limitedParallelism(1) で全操作を単一スレッドで順序付ける。
+     */
+    private val feedState: FeedState by lazy { FeedState(Dispatchers.Default.limitedParallelism(1)) }
+
+    /**
+     * FeedViewModel（フィード一覧・Star/Dismiss・Undo）を生成して返す。
      *
      * by lazy でシングルトンキャッシュ化：画面回転時に FeedViewModel インスタンスが同じ
      * ままであることを保証し、フィード一覧の状態が保持される。
      *
-     * 要件3: onStarConfirmed は FeedScreen で feedback をキャプチャ後に設定。
+     * 要件3: Star の確定の事象は feedbackEvents に出る。FeedScreen がそれを集めて音を鳴らす。
      */
     private val _feedViewModel: FeedViewModel by lazy {
         FeedViewModel(
-            apiClient = apiClient,
-            dispatcher = Dispatchers.Default.limitedParallelism(1),
-            preferencesStore = preferencesStore,
+            commands = FeedCommands(feedApi, feedState),
+            queries = FeedQueries(feedApi, feedState),
+            preferences = preferencesSync.preferences,
         )
     }
 
@@ -498,7 +509,7 @@ class AppContainer(context: Context) {
      * SettingsViewModel（設定タブ: RSS ソース管理・おすすめサイト・生成クォータ・聴取ストリーク・
      * 難易度/再生速度のサーバー同期）を生成して返す（フェーズ10 P10 Task2）。
      *
-     * Dispatcher: FeedViewModel/PodcastViewModel と同じ理由で
+     * Dispatcher: feedState・PodcastViewModel と同じ理由で
      * Dispatchers.Default.limitedParallelism(1) を使う。sources リストの読み取り→書き込みが
      * 複数スレッドで競合すると更新の取りこぼしが起こり得るため、単一スレッドで直列化する。
      *
@@ -553,7 +564,7 @@ class AppContainer(context: Context) {
      * SessionsViewModel（ログイン中デバイス一覧・個別/一括失効）を生成して返す
      * （フェーズ11 P11 T4・issue #84 相当）。
      *
-     * Dispatcher: FeedViewModel/SettingsViewModel と同じ理由で
+     * Dispatcher: feedState・SettingsViewModel と同じ理由で
      * Dispatchers.Default.limitedParallelism(1) を使う。sessions リストの読み取り→書き込みが
      * 複数スレッドで競合すると一覧の取りこぼしが起こり得るため、単一スレッドで直列化する。
      *

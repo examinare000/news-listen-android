@@ -6,6 +6,13 @@ import com.rioikeda.newslisten.auth.domain.AccountUser
 import com.rioikeda.newslisten.auth.domain.Role
 import com.rioikeda.newslisten.auth.domain.SubjectId
 import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.core.Difficulty
+import com.rioikeda.newslisten.core.PlaybackSpeed
+import com.rioikeda.newslisten.feed.domain.Article
+import com.rioikeda.newslisten.preferences.ArticleOpenMode
+import com.rioikeda.newslisten.preferences.TimeFormat
+import com.rioikeda.newslisten.preferences.app.PreferencesView
+import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import com.rioikeda.newslisten.learning.app.AchievementRecord
 import com.rioikeda.newslisten.learning.app.DashboardRecord
 import com.rioikeda.newslisten.learning.app.StreakRecord
@@ -14,10 +21,8 @@ import com.rioikeda.newslisten.learning.app.VocabularySummary
 import com.rioikeda.newslisten.learning.app.VocabularyTestItemRecord
 import com.rioikeda.newslisten.learning.app.VocabularyTestSessionRecord
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.model.ArticleResponse
 import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.model.FeaturedSitesResponse
-import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
 import com.rioikeda.newslisten.model.OnboardingStatusResponse
 import com.rioikeda.newslisten.model.PodcastResponse
@@ -40,16 +45,30 @@ internal object ProbeData {
 
     fun <T> repeated(value: T, count: Int = DEPTH): List<Any?> = List(count) { value }
 
-    val article: ArticleResponse = ArticleResponse(
-        id = "article-1",
-        title = "A probe article",
-        url = "https://example.com/articles/1",
-        source = "example",
-        score = 0.9,
-        publishedAt = "2026-10-14T00:00:00Z",
+    /** `FeedApi#fetchFeed` の canned の値（1 件）。 */
+    val feedArticles: List<Article> = listOf(
+        Article(
+            id = "article-1",
+            title = "A probe article",
+            url = "https://example.com/articles/1",
+            source = "example",
+            score = 0.9,
+            publishedAt = "2026-10-14T00:00:00Z",
+            isRead = false,
+        ),
     )
 
-    val feed: FeedResponse = FeedResponse(articles = listOf(article), date = "2026-10-14")
+    /** `FeedViewModel` の probe が `preferences` に渡す設定の既定値。 */
+    val preferencesView: PreferencesView = PreferencesView(
+        defaultDifficulty = Difficulty.TOEIC_600,
+        defaultPlaybackSpeed = PlaybackSpeed.DEFAULT,
+        weeklyGoal = WeeklyGoal.DEFAULT,
+        articleOpenMode = ArticleOpenMode.DEFAULT,
+        timeFormat = TimeFormat.DEFAULT,
+        sfxEnabled = true,
+        hapticsEnabled = true,
+        seenAchievementIds = emptySet(),
+    )
 
     val podcast: Episode = EpisodeDecoder.decode(PodcastResponse(
         id = "podcast-1",

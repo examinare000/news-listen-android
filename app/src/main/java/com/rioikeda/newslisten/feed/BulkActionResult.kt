@@ -1,5 +1,7 @@
 package com.rioikeda.newslisten.feed
 
+import com.rioikeda.newslisten.feed.app.FeedNotice
+
 /**
  * 一括 Star 操作の結果情報（トースト表示用）。
  *
@@ -10,6 +12,8 @@ data class BulkActionResult(
     val successCount: Int,
     /** 失敗した記事数。 */
     val failureCount: Int,
+    /** 生成上限（429）に当たったときの次回可能時刻の知らせ。当たらなければ `null`。 */
+    val limit: FeedNotice.GenerationLimit? = null,
 ) {
     /** 操作結果の日本語説明。 */
     val message: String
