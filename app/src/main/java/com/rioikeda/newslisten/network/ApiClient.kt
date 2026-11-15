@@ -35,7 +35,7 @@ import kotlinx.serialization.json.JsonObject
  *
  * 正本: ios/NewsListenApp/NewsListenApp/Networking/APIClient.swift のミラー。
  */
-interface ApiClient : LearningApi, VocabularyTestApi {
+interface ApiClient {
     /** ログインしてセッショントークンとユーザー情報を取得する。 */
     suspend fun login(username: String, password: String): LoginResponse
 
@@ -136,9 +136,9 @@ interface ApiClient : LearningApi, VocabularyTestApi {
 
     suspend fun deleteVocabulary(vocabularyId: String): DeleteVocabularyResponse
 
-    override suspend fun fetchVocabularyTestSession(): VocabularyTestSessionResponse
+    suspend fun fetchVocabularyTestSession(): VocabularyTestSessionResponse
 
-    override suspend fun submitVocabularyTestResults(
+    suspend fun submitVocabularyTestResults(
         results: List<VocabularyTestResultItemRequest>,
     ): VocabularyTestResultResponse
 

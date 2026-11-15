@@ -50,7 +50,7 @@ data class EffectTypeCatalog(
             ports = listOf(
                 PortRow(
                     port = "ApiClient",
-                    interfaces = setOf("$NETWORK.ApiClient", "$NETWORK.VocabularyTestApi"),
+                    interfaces = setOf("$NETWORK.ApiClient"),
                     writes = setOf(
                         "login", "logout", "starArticle", "dismissArticle", "updatePlaybackPosition", "markCompleted",
                         "submitQuizAnswers", "registerDeviceToken", "unregisterDeviceToken", "createSource", "updateSource",
@@ -96,6 +96,13 @@ data class EffectTypeCatalog(
                     interfaces = setOf("com.rioikeda.newslisten.learning.app.LearningApi"),
                     writes = setOf("saveVocabulary", "submitQuizAnswers"),
                     sequenceReads = setOf("fetchDashboard", "fetchStreak", "hasVocabularyTest", "fetchVocabularySummary"),
+                    propertyReads = emptySet(),
+                ),
+                PortRow(
+                    port = "VocabularyTestApi",
+                    interfaces = setOf("com.rioikeda.newslisten.learning.app.VocabularyTestApi"),
+                    writes = setOf("submitVocabularyTestResults"),
+                    sequenceReads = setOf("fetchVocabularyTestSession"),
                     propertyReads = emptySet(),
                 ),
                 PortRow(
@@ -191,7 +198,7 @@ data class EffectTypeCatalog(
                 HookRow("OfflineLibrary#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("PreferencesSync#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("AuthSession#onSubjectResolved", HookKind.WRITE, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
-                HookRow("VocabularyTestViewModel#shuffle", HookKind.READ, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
+                HookRow("VocabularyTestCommands#shuffle", HookKind.READ, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("FcmTokenRegistrar#tokenProvider", HookKind.READ, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("FcmTokenRegistrar#permissionChecker", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("DSFeedback#sfxEnabled", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),

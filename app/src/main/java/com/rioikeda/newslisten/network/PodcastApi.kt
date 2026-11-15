@@ -4,7 +4,7 @@ import com.rioikeda.newslisten.catalog.domain.Episode
 
 /**
  * 再生 use case が使う狭い port（android-contract-18）。`ApiClient` の全 44 操作のうち、再生に必要な
- * 5 操作だけを切り出す。`LearningApi`/`VocabularyTestApi` と同方式。
+ * 5 操作だけを切り出す。`learning.app.LearningApi`・`learning.app.VocabularyTestApi` と同方式。
  *
  * 正本: docs/design/modules/android/2026-09-16-implementation-spec-playback-auth.md §2・§4 android-contract-18。
  */

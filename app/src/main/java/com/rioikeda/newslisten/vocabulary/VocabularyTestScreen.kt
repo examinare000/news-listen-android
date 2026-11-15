@@ -46,6 +46,8 @@ import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSFeedback
 import com.rioikeda.newslisten.designsystem.DSFeedbackVocabulary
 import com.rioikeda.newslisten.designsystem.DSSpacing
+import com.rioikeda.newslisten.learning.domain.RetestFeedback
+import com.rioikeda.newslisten.learning.domain.VocabularyTestPhase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -126,8 +128,10 @@ fun VocabularyTestScreen(
             }
 
             VocabularyTestPhase.SelfAssessment -> {
-                val item = uiState.currentAssessment
-                if (item != null) {
+                val term = uiState.currentTerm
+                val example = uiState.currentExample
+                val progress = uiState.progress
+                if (term != null && example != null && progress != null) {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -136,7 +140,7 @@ fun VocabularyTestScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            stringResource(R.string.vocabulary_test_progress, uiState.assessmentIndex + 1, uiState.items.size),
+                            stringResource(R.string.vocabulary_test_progress, progress.position, progress.total),
                             style = MaterialTheme.typography.labelMedium,
                             // TalkBack へ進行を通知（カード切替は視覚のみのため）
                             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
@@ -151,8 +155,8 @@ fun VocabularyTestScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         SelfAssessmentCard(
-                            term = item.term,
-                            example = item.example,
+                            term = term,
+                            example = example,
                             onAssess = { known -> coroutineScope.launch { viewModel.assess(known = known) } }
                         )
                         // Button controls accessible for TalkBack users and as fallback
@@ -183,8 +187,9 @@ fun VocabularyTestScreen(
             }
 
             VocabularyTestPhase.Retest -> {
-                val item = uiState.currentRetest
-                if (item != null) {
+                val term = uiState.currentTerm
+                val progress = uiState.progress
+                if (term != null && progress != null) {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -193,17 +198,17 @@ fun VocabularyTestScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            stringResource(R.string.vocabulary_test_progress, uiState.retestIndex + 1, uiState.retestItems.size),
+                            stringResource(R.string.vocabulary_test_progress, progress.position, progress.total),
                             style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                         )
-                        Text(item.term, style = MaterialTheme.typography.headlineLarge)
+                        Text(term, style = MaterialTheme.typography.headlineLarge)
                         Text(
                             stringResource(R.string.vocabulary_test_retest_question),
                             style = MaterialTheme.typography.bodyMedium
                         )
-                        uiState.currentChoices.forEach { choice ->
-                            val isCorrectChoice = choice == item.meaning
+                        uiState.choices.forEach { choice ->
+                            val isCorrectChoice = choice == uiState.correctMeaning
                             val isAnswerCorrect = uiState.retestFeedback is RetestFeedback.Correct
                             Button(
                                 onClick = { coroutineScope.launch { viewModel.answerRetest(choice) } },

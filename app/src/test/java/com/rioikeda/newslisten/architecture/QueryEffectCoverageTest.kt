@@ -14,6 +14,7 @@ import com.rioikeda.newslisten.catalog.episodeCatalogQueryProbes
 import com.rioikeda.newslisten.feed.feedViewModelQueryProbes
 import com.rioikeda.newslisten.learning.app.StreakQuery
 import com.rioikeda.newslisten.learning.learningCommandsQueryProbes
+import com.rioikeda.newslisten.learning.vocabularyTestCommandsQueryProbes
 import com.rioikeda.newslisten.learning.learningDashboardQueryQueryProbes
 import com.rioikeda.newslisten.learning.learningViewModelQueryProbes
 import com.rioikeda.newslisten.learning.streakQueryQueryProbes
@@ -43,6 +44,7 @@ import org.junit.Test
 internal val registeredQueryProbeSets: List<QueryProbeSet> = listOf(
     podcastViewModelQueryProbes,
     learningCommandsQueryProbes,
+    vocabularyTestCommandsQueryProbes,
     authViewModelQueryProbes,
     authSessionQueryProbes,
     accountViewModelQueryProbes,
@@ -195,7 +197,7 @@ class QueryEffectCoverageTest {
             "PasskeyCredentialsViewModel", "PasskeyLoginViewModel", "PasskeyRegistrationViewModel",
             "FeedViewModel", "LearningViewModel", "VocabularyTestViewModel", "SettingsViewModel", "OnboardingViewModel",
             "LearningDashboardQuery", "StreakQuery", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator", "EpisodeCatalog",
-            "PreferencesSync", "LearningCommands",
+            "PreferencesSync", "LearningCommands", "VocabularyTestCommands",
         )
 
         /** 登録 list の各 probe set を、本番の母集団・台帳・分類表で 1 回ずつ run した結果。 */
@@ -214,7 +216,7 @@ class QueryEffectCoverageTest {
     // ---- 本番の probe の網羅と配線 ----
 
     @Test(timeout = 600_000)
-    fun 登録listは12のViewModelとLearningCommandsとLearningDashboardQueryとStreakQueryとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
+    fun 登録listは12のViewModelとLearningCommandsとVocabularyTestCommandsとLearningDashboardQueryとStreakQueryとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
         val registered = registeredQueryProbeSets.map { it.owner }
         assertEquals("登録された probe set の所有者", owners.sorted(), registered.sorted())
 
@@ -270,7 +272,7 @@ class QueryEffectCoverageTest {
         data class Expected(val label: String, val owners: Set<String>, val kind: HookKind, val shape: HookShape)
 
         val expected = listOf(
-            Expected("VocabularyTestViewModel#shuffle", setOf("VocabularyTestViewModel"), HookKind.READ, HookShape.ONE_ARG),
+            Expected("VocabularyTestCommands#shuffle", setOf("VocabularyTestCommands", "VocabularyTestViewModel"), HookKind.READ, HookShape.ONE_ARG),
             Expected("PasskeyCommands#onLoginSuccess", setOf("PasskeyLoginViewModel"), HookKind.WRITE, HookShape.SUSPEND_ONE_ARG),
             Expected("FeedViewModel#onStarConfirmed", setOf("FeedViewModel"), HookKind.WRITE, HookShape.NO_ARG),
         )

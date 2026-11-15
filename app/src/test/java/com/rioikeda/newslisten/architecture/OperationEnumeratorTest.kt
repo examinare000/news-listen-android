@@ -28,18 +28,9 @@ class OperationEnumeratorTest {
         assertTrue("class を持たない母集団ファイル: $emptyFiles", emptyFiles.isEmpty())
 
         val vocabulary = population.classesByFile["vocabulary/VocabularyTestViewModel.kt"].orEmpty().map { it.simpleName }
-        assertTrue(
-            "VocabularyTestViewModel.kt の 5 型が揃っていない: $vocabulary",
-            vocabulary.containsAll(
-                listOf(
-                    "VocabularyTestPhase",
-                    "RetestFeedback",
-                    "VocabularyTestSummary",
-                    "VocabularyTestUiState",
-                    "VocabularyTestViewModel",
-                ),
-            ),
-        )
+        assertTrue("VocabularyTestViewModel.kt に VocabularyTestViewModel が無い: $vocabulary", "VocabularyTestViewModel" in vocabulary)
+        val commands = population.classesByFile["learning/app/VocabularyTestCommands.kt"].orEmpty().map { it.simpleName }
+        assertTrue("VocabularyTestCommands.kt に VocabularyTestCommands が無い: $commands", "VocabularyTestCommands" in commands)
 
         val ids = population.operations.map { it.id }.toSet()
         listOf("PodcastViewModel#fetchPodcasts", "FeedViewModel#getArticles", "StreakQuery#refresh").forEach {
