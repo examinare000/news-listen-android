@@ -17,7 +17,7 @@ import org.junit.Test
  */
 class QueryEffectFixtureTest {
 
-    private companion object {
+    internal companion object {
         private val callbackWrite = HookRow("FlowCollectFiresCallback#onChanged", HookKind.WRITE, HookShape.NO_ARG, HookWiring.SETTER)
         private val callbackRead = HookRow("FlowCollectReadsOnly#onChanged", HookKind.WRITE, HookShape.NO_ARG, HookWiring.SETTER)
 

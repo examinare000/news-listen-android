@@ -28,7 +28,7 @@ data class EpisodeListItem(val row: EpisodeRow, val isNowPlaying: Boolean)
  * Podcast タブの画面の状態と中継を担う ViewModel（presentation。android-dec-09）。
  *
  * 正本: ios/NewsListenApp/NewsListenApp/Podcast/PodcastViewModel.swift のミラー。
- * [AuthViewModel]/[com.rioikeda.newslisten.feed.FeedViewModel] と同様、
+ * [AuthViewModel] と同様、
  * androidx.lifecycle.ViewModel は継承しないプレーンな Kotlin クラスとして実装し、
  * Dispatcher をコンストラクタ注入する（viewModelScope 直書きだと Dispatcher をテストで
  * 差し替えられず TDD が回せないため）。

@@ -62,7 +62,9 @@ import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.DSFeedback
 import com.rioikeda.newslisten.designsystem.DSFeedbackVocabulary
 import com.rioikeda.newslisten.designsystem.RelevanceBar
-import com.rioikeda.newslisten.model.ArticleResponse
+import com.rioikeda.newslisten.feed.app.ArticleRow
+import com.rioikeda.newslisten.feed.app.FeedFeedbackEvent
+import com.rioikeda.newslisten.feed.domain.PendingCuration
 import com.rioikeda.newslisten.preferences.TimeFormat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -97,8 +99,8 @@ fun FeedScreen(viewModel: FeedViewModel, feedback: DSFeedback) {
 
     // 要件3: Star 操作の確定ジェスチャ直後に swipeConfirm フィードバック発火
     LaunchedEffect(feedback) {
-        viewModel.onStarConfirmed = {
-            feedback.play(DSFeedbackVocabulary.SWIPE_CONFIRM)
+        viewModel.feedbackEvents.collect {
+            if (it == FeedFeedbackEvent.SWIPE_CONFIRMED) feedback.play(DSFeedbackVocabulary.SWIPE_CONFIRM)
         }
     }
 
@@ -317,7 +319,7 @@ fun FeedScreen(viewModel: FeedViewModel, feedback: DSFeedback) {
  */
 @Composable
 private fun UndoToast(
-    pending: PendingArticleAction,
+    pending: PendingCuration,
     onUndo: () -> Unit,
     onCommit: () -> Unit,
     modifier: Modifier = Modifier
@@ -342,7 +344,7 @@ private fun UndoToast(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = pending.message,
+                text = pendingActionMessage(pending.kind),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.background
             )
@@ -361,7 +363,7 @@ private fun UndoToast(
  */
 @Composable
 private fun SelectionModeRow(
-    article: ArticleResponse,
+    article: ArticleRow,
     isSelected: Boolean,
     timeFormat: TimeFormat,
     onToggle: () -> Unit,
@@ -400,7 +402,7 @@ private fun SelectionModeRow(
  */
 @Composable
 private fun ArticleCardRow(
-    article: ArticleResponse,
+    article: ArticleRow,
     isExpanded: Boolean,
     timeFormat: TimeFormat,
     onTap: () -> Unit,
@@ -541,7 +543,7 @@ private fun ArticleCardRow(
  */
 @Composable
 private fun ArticleCardContent(
-    article: ArticleResponse,
+    article: ArticleRow,
     isExpanded: Boolean,
     timeFormat: TimeFormat,
     modifier: Modifier = Modifier
@@ -589,4 +591,10 @@ private fun ArticleCardContent(
         // 関連スコアバー
         RelevanceBar(score = article.score, modifier = Modifier.padding(top = DSSpacing.xs))
     }
+}
+
+/** 取り消しトーストの文言。 */
+internal fun pendingActionMessage(kind: PendingCuration.Kind): String = when (kind) {
+    PendingCuration.Kind.STAR -> "スターしました"
+    PendingCuration.Kind.DISMISS -> "削除しました"
 }

@@ -995,7 +995,7 @@ object ArchitectureScanner {
 
     private val portNames = listOf(
         "PlayerController", "PasskeyProvider", "PreferencesStore", "PodcastApi",
-        "LearningApi", "VocabularyTestApi", "SessionStore", "NetworkMonitoring",
+        "LearningApi", "VocabularyTestApi", "FeedApi", "SessionStore", "NetworkMonitoring",
     )
     private val portRegexes = portNames.associateWith { Regex("""(?<![A-Za-z0-9_])(get)?$it\b""") }
     private const val PREFERENCES_SETTER = "preferencesStore.set"

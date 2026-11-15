@@ -62,12 +62,13 @@ object LayerMap {
         "learning/domain/VocabularyKey.kt",
         "learning/domain/QuizGrade.kt",
         "learning/domain/VocabularyTestSession.kt",
+        "feed/domain/Article.kt",
+        "feed/domain/PendingCuration.kt",
     )
 
     private val application = listOf(
         "auth/SubjectCleanup.kt",
         "feed/BulkActionResult.kt",
-        "feed/PendingArticleAction.kt",
         "notification/FcmTokenRegistrar.kt",
         "podcast/OfflineLibrary.kt",
         "podcast/app/PlaybackCoordinator.kt",
@@ -83,6 +84,9 @@ object LayerMap {
         "learning/app/LearningCommands.kt",
         "learning/app/LearningNotice.kt",
         "learning/app/VocabularyTestCommands.kt",
+        "feed/app/FeedCommands.kt",
+        "feed/app/FeedQueries.kt",
+        "feed/app/FeedState.kt",
     )
 
     private val port = listOf(
@@ -95,6 +99,7 @@ object LayerMap {
         "account/app/AccountApi.kt",
         "learning/app/LearningApi.kt",
         "learning/app/VocabularyTestApi.kt",
+        "feed/app/FeedApi.kt",
         "network/PodcastApi.kt",
         "network/SessionStore.kt",
         "network/NetworkMonitoring.kt",
@@ -111,6 +116,8 @@ object LayerMap {
         "passkey/app/PasskeyRow.kt",
         "passkey/app/PasskeyOutcomes.kt",
         "learning/app/LearningReadModels.kt",
+        "feed/app/ArticleRow.kt",
+        "feed/app/FeedNotice.kt",
     )
 
     private val adapter = listOf(
@@ -133,6 +140,7 @@ object LayerMap {
         "network/AccountApiAdapter.kt",
         "network/LearningApiAdapter.kt",
         "network/VocabularyTestApiAdapter.kt",
+        "network/FeedApiAdapter.kt",
         "network/AuthApiAdapter.kt",
         "observability/CrashReporter.kt",
         "observability/CrashReportFormatter.kt",

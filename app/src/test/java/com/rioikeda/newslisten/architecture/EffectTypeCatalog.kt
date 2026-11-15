@@ -106,6 +106,13 @@ data class EffectTypeCatalog(
                     propertyReads = emptySet(),
                 ),
                 PortRow(
+                    port = "FeedApi",
+                    interfaces = setOf("com.rioikeda.newslisten.feed.app.FeedApi"),
+                    writes = setOf("star", "dismiss"),
+                    sequenceReads = setOf("fetchFeed"),
+                    propertyReads = emptySet(),
+                ),
+                PortRow(
                     port = "PreferencesApi",
                     interfaces = setOf("com.rioikeda.newslisten.preferences.app.PreferencesApi"),
                     writes = setOf("updateDefaultDifficulty", "updateDefaultPlaybackSpeed", "updateWeeklyGoalEpisodes"),
@@ -187,7 +194,6 @@ data class EffectTypeCatalog(
                     "PasskeyCommands#onRegistered", HookKind.WRITE, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR,
                     reason = "規則どおり WRITE（中身は loadCredentials だが保守側に倒す）",
                 ),
-                HookRow("FeedViewModel#onStarConfirmed", HookKind.WRITE, HookShape.NO_ARG, HookWiring.SETTER),
                 HookRow(
                     "TabItem#screen", HookKind.WRITE, HookShape.NO_ARG, HookWiring.CONSTRUCTOR,
                     reason = "Composable の関数型（JVM では Function2<Composer, Integer, Unit>）。Composable の局所変数だけが持ち、probe のグラフに入らない",

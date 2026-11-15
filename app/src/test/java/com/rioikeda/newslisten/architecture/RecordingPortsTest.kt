@@ -238,6 +238,27 @@ class RecordingPortsTest {
     }
 
     @Test
+    fun RecordingFeedApiはstarとdismissを書込としfetchFeedを列の読みとして返す() {
+        val env = ProbeEnvironment.create(
+            scenarioA(canned = mapOf("FeedApi#fetchFeed" to ProbeData.repeated(ProbeData.feedArticles))),
+        )
+
+        runBlocking {
+            env.feedApi.star("a", null)
+            env.feedApi.dismiss("a")
+        }
+        val fetched = runBlocking { env.feedApi.fetchFeed() }
+
+        assertEquals(
+            "書込は star・dismiss の 2 件で、fetchFeed は積まない",
+            listOf("FeedApi" to "star", "FeedApi" to "dismiss"),
+            env.recorder.writes.map { it.port to it.op },
+        )
+        assertEquals(ProbeData.feedArticles, fetched)
+        assertTrue("feedApi は記録 fake の一覧に登録されている", env.fakes.any { it === env.feedApi })
+    }
+
+    @Test
     fun propertyの読みの初期値はscenarioが与えた値になる() {
         val scenario = scenarioA(initialProperties = mapOf("NetworkMonitoring#getIsOnline" to false))
         val env = ProbeEnvironment.create(scenario)
