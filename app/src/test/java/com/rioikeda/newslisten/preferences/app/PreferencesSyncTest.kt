@@ -71,6 +71,7 @@ class PreferencesSyncTest {
     private class ProbeStore(val inner: InMemoryPreferencesStore = InMemoryPreferencesStore()) : PreferencesStore by inner {
         var writeFailure: IOException? = null
         var beforeDifficultyWrite: suspend () -> Unit = {}
+        var beforeAchievementWrite: suspend () -> Unit = {}
 
         override suspend fun setDefaultDifficulty(difficulty: Difficulty) {
             beforeDifficultyWrite()
@@ -81,6 +82,12 @@ class PreferencesSyncTest {
         override suspend fun setDefaultPlaybackSpeed(speed: Double) {
             writeFailure?.let { throw it }
             inner.setDefaultPlaybackSpeed(speed)
+        }
+
+        override suspend fun markAchievementsSeen(ids: Set<String>) {
+            beforeAchievementWrite()
+            writeFailure?.let { throw it }
+            inner.markAchievementsSeen(ids)
         }
 
         override suspend fun setWeeklyGoalEpisodes(episodes: Int) {
@@ -553,6 +560,50 @@ class PreferencesSyncTest {
         cleanup.await()
 
         assertStoreIsDefault(store)
+    }
+
+    @Test
+    fun `android-dec-56 既読の保存は開始時の主体と今の主体が違えば書かず同じなら書く`() = runTest {
+        // verifies: android-dec-56 / android-dec-94 / android-cmd-learning-04
+        val rig = newRig()
+        rig.subject = "u-2"
+
+        rig.sync.markAchievementsSeen(setOf("streak_7"), startedAs = "u-1")
+
+        assertEquals(emptySet<String>(), rig.store.seenAchievementIds.value)
+
+        rig.sync.markAchievementsSeen(setOf("streak_7"), startedAs = "u-2")
+
+        assertEquals(setOf("streak_7"), rig.store.seenAchievementIds.value)
+    }
+
+    @Test
+    fun `android-dec-56 既読の保存は現在の主体がnullなら開始時の主体がnullでない限り書かない`() = runTest {
+        // verifies: android-dec-56 / android-dec-94
+        val rig = newRig()
+        rig.subject = null
+
+        rig.sync.markAchievementsSeen(setOf("streak_7"), startedAs = "u-1")
+
+        assertEquals(emptySet<String>(), rig.store.seenAchievementIds.value)
+    }
+
+    @Test
+    fun `android-dec-56 既読の書込の途中で始まった後始末は書込の完了を待ち最終の既読は空になる`() = runTest {
+        // verifies: android-dec-56 / android-cmd-learning-04
+        val writeGate = CompletableDeferred<Unit>()
+        val store = ProbeStore().apply { beforeAchievementWrite = { writeGate.await() } }
+        val rig = newRig(store = store)
+        val write = async { rig.sync.markAchievementsSeen(setOf("streak_7"), startedAs = "u-1") }
+        runCurrent()
+        val cleanup = async { rig.sync.clearSubjectScoped() }
+        runCurrent()
+
+        writeGate.complete(Unit)
+        write.await()
+        cleanup.await()
+
+        assertEquals(emptySet<String>(), store.seenAchievementIds.value)
     }
 
     @Test

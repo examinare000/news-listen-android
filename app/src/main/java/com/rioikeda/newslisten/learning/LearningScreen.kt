@@ -33,7 +33,11 @@ import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSFeedback
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.RelevanceBar
-import com.rioikeda.newslisten.model.LearningDashboardResponse
+import com.rioikeda.newslisten.learning.app.LearningDashboardView
+import com.rioikeda.newslisten.learning.app.MonthlyActivityRow
+import com.rioikeda.newslisten.learning.app.UnlockedAchievement
+import com.rioikeda.newslisten.learning.app.VocabularyRow
+import com.rioikeda.newslisten.learning.app.WeeklyGoalProgress
 import com.rioikeda.newslisten.vocabulary.VocabularyTestScreen
 import com.rioikeda.newslisten.vocabulary.VocabularyTestViewModel
 import kotlinx.coroutines.launch
@@ -118,7 +122,7 @@ fun LearningScreen(
                             ProgressSection(dashboard = uiState.dashboard!!)
                         }
 
-                        if (uiState.hasVocabularyTest) {
+                        if (uiState.dashboard!!.hasVocabularyTest) {
                             item {
                                 Column(
                                     verticalArrangement = Arrangement.spacedBy(DSSpacing.s)
@@ -140,22 +144,22 @@ fun LearningScreen(
 
                         item {
                             AchievementsSection(
-                                achievements = uiState.dashboard!!.achievements.orEmpty(),
+                                achievements = uiState.dashboard!!.unlockedAchievements,
                                 newlyUnlocked = uiState.newlyUnlockedAchievements,
                                 onClear = { viewModel.clearAchievementHighlight() }
                             )
                         }
 
-                        if (uiState.recentVocabulary.isNotEmpty()) {
+                        if (uiState.dashboard!!.recentVocabulary.isNotEmpty()) {
                             item {
                                 VocabularySection(
-                                    vocabularyCount = uiState.vocabularyCount,
-                                    recentVocabulary = uiState.recentVocabulary,
-                                    hasTest = uiState.hasVocabularyTest,
+                                    vocabularyCount = uiState.dashboard!!.vocabularyCount,
+                                    recentVocabulary = uiState.dashboard!!.recentVocabulary,
+                                    hasTest = uiState.dashboard!!.hasVocabularyTest,
                                     onTestClick = { showVocabularyTest = true }
                                 )
                             }
-                        } else if (uiState.vocabularyCount == 0) {
+                        } else if (uiState.dashboard!!.vocabularyCount == 0) {
                             item {
                                 Text(
                                     stringResource(R.string.learning_vocabulary_load_failed),
@@ -188,7 +192,7 @@ fun LearningScreen(
 }
 
 @Composable
-private fun ProgressSection(dashboard: LearningDashboardResponse) {
+private fun ProgressSection(dashboard: LearningDashboardView) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -202,9 +206,9 @@ private fun ProgressSection(dashboard: LearningDashboardResponse) {
         )
 
         // Streak
-        if (dashboard.streak.currentStreakDays > 0) {
+        if (dashboard.streakDays > 0) {
             Text(
-                stringResource(R.string.streak_format, dashboard.streak.currentStreakDays),
+                stringResource(R.string.streak_format, dashboard.streakDays),
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -213,11 +217,11 @@ private fun ProgressSection(dashboard: LearningDashboardResponse) {
         // Weekly goal
         dashboard.weeklyGoal?.let { goal ->
             Text(
-                goal.progressText,
+                weeklyGoalProgressText(goal),
                 style = MaterialTheme.typography.bodyMedium
             )
             RelevanceBar(
-                score = goal.progressFraction.toDouble(),
+                score = goal.fraction.toDouble(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .semantics {
@@ -230,8 +234,8 @@ private fun ProgressSection(dashboard: LearningDashboardResponse) {
 
 @Composable
 private fun AchievementsSection(
-    achievements: List<com.rioikeda.newslisten.model.AchievementResponse>,
-    newlyUnlocked: List<com.rioikeda.newslisten.model.AchievementResponse>,
+    achievements: List<UnlockedAchievement>,
+    newlyUnlocked: List<UnlockedAchievement>,
     onClear: () -> Unit
 ) {
     val unlockedById = achievements.associateBy { it.id }
@@ -320,7 +324,7 @@ private fun AchievementsSection(
 @Composable
 private fun VocabularySection(
     vocabularyCount: Int,
-    recentVocabulary: List<com.rioikeda.newslisten.model.VocabularyItemResponse>,
+    recentVocabulary: List<VocabularyRow>,
     hasTest: Boolean,
     onTestClick: () -> Unit
 ) {
@@ -361,8 +365,8 @@ private fun VocabularySection(
 
 @Composable
 private fun HistorySection(
-    weeklyGoal: com.rioikeda.newslisten.model.WeeklyGoalResponse?,
-    monthlyActivity: List<com.rioikeda.newslisten.model.MonthlyActivityResponse>
+    weeklyGoal: WeeklyGoalProgress?,
+    monthlyActivity: List<MonthlyActivityRow>
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -391,7 +395,7 @@ private fun HistorySection(
                             style = MaterialTheme.typography.bodySmall
                         )
                         RelevanceBar(
-                            score = (record.completed.toDouble() / maxOf(record.goal, 1)).coerceIn(0.0, 1.0),
+                            score = record.rate,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -422,7 +426,7 @@ private fun HistorySection(
                             style = MaterialTheme.typography.bodySmall
                         )
                         RelevanceBar(
-                            score = (activity.activeDays.toDouble() / 31.0).coerceIn(0.0, 1.0),
+                            score = activity.rate,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -433,7 +437,7 @@ private fun HistorySection(
 }
 
 @Composable
-private fun AccumulationSection(dashboard: LearningDashboardResponse) {
+private fun AccumulationSection(dashboard: LearningDashboardView) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -461,7 +465,7 @@ private fun AccumulationSection(dashboard: LearningDashboardResponse) {
 }
 
 @Composable
-private fun QuizTrendSection(dashboard: LearningDashboardResponse) {
+private fun QuizTrendSection(dashboard: LearningDashboardView) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -474,10 +478,10 @@ private fun QuizTrendSection(dashboard: LearningDashboardResponse) {
             style = MaterialTheme.typography.headlineSmall
         )
         Text(
-            stringResource(R.string.learning_quiz_episodes, dashboard.quiz.quizzedEpisodes),
+            stringResource(R.string.learning_quiz_episodes, dashboard.quizzedEpisodes),
             style = MaterialTheme.typography.bodyMedium
         )
-        dashboard.quiz.averageCorrectRate?.let { rate ->
+        dashboard.averageCorrectRate?.let { rate ->
             Text(
                 stringResource(R.string.learning_quiz_rate, rate * 100),
                 style = MaterialTheme.typography.bodyMedium
@@ -488,13 +492,13 @@ private fun QuizTrendSection(dashboard: LearningDashboardResponse) {
                 style = MaterialTheme.typography.bodyMedium
             )
         }
-        if (dashboard.quiz.trend.isNotEmpty()) {
+        if (dashboard.recentQuizTrend.isNotEmpty()) {
             Text(
                 stringResource(R.string.learning_quiz_trend),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            dashboard.quiz.trend.takeLast(3).forEach { point ->
+            dashboard.recentQuizTrend.forEach { point ->
                 Text(
                     "${point.gradedAt.take(10)} - ${String.format("%.0f", point.correctRate * 100)}%",
                     style = MaterialTheme.typography.bodySmall
@@ -503,3 +507,7 @@ private fun QuizTrendSection(dashboard: LearningDashboardResponse) {
         }
     }
 }
+
+/** 今週の目標の文言。進みの値は read model が持ち、文言は画面が決める。 */
+internal fun weeklyGoalProgressText(progress: WeeklyGoalProgress): String =
+    "今週 ${progress.completedThisWeek}/目標 ${progress.goalEpisodes} 本"

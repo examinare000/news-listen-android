@@ -41,8 +41,8 @@ import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedScreen
 import com.rioikeda.newslisten.feed.FeedViewModel
-import com.rioikeda.newslisten.engagement.ListeningStreakStore
-import com.rioikeda.newslisten.model.ListeningStreakResponse
+import com.rioikeda.newslisten.learning.app.LearningFeedbackEvent
+import com.rioikeda.newslisten.learning.app.StreakQuery
 import com.rioikeda.newslisten.designsystem.DSFeedbackVocabulary
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.rememberDSFeedback
@@ -83,25 +83,24 @@ fun AppScaffold(
     sessionsViewModel: SessionsViewModel,
     passkeyRegistrationViewModel: PasskeyRegistrationViewModel,
     passkeyCredentialsViewModel: PasskeyCredentialsViewModel,
-    listeningStreakStore: ListeningStreakStore,
+    streakQuery: StreakQuery,
     appContainer: com.rioikeda.newslisten.di.AppContainer? = null,
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val feedback = rememberDSFeedback(settingsViewModel.preferences)
-    val listeningStreak by listeningStreakStore.listeningStreak.collectAsStateWithLifecycle()
+    val streak by streakQuery.streak.collectAsStateWithLifecycle()
 
-    // 要件4: streak 増加検知の一本化。AppContainer で onStreakIncreased へ feedback を配線。
-    // AppScaffold でのみ feedback が available なため、ここで設定する。
-    LaunchedEffect(feedback, listeningStreakStore) {
-        if (listeningStreakStore is com.rioikeda.newslisten.engagement.ApiListeningStreakStore) {
-            listeningStreakStore.onStreakIncreased = {
-                feedback.play(DSFeedbackVocabulary.STREAK_UP)
+    // streak 増加の事象を集めて音にする。AppScaffold でのみ feedback が available なため、ここで集める。
+    LaunchedEffect(feedback, streakQuery) {
+        streakQuery.feedbackEvents.collect { event ->
+            when (event) {
+                LearningFeedbackEvent.STREAK_INCREASED -> feedback.play(DSFeedbackVocabulary.STREAK_UP)
             }
         }
     }
 
     LaunchedEffect(Unit) {
-        listeningStreakStore.refresh()
+        streakQuery.refresh()
     }
 
     // predictive back: トップ画面でない場合、戻る操作でトップ（index 0）へ戻す
@@ -146,7 +145,7 @@ fun AppScaffold(
 
     Scaffold(
         topBar = {
-            if (selectedTab != 3 && shouldShowStreakBadge(listeningStreak)) {
+            if (selectedTab != 3 && streak?.visible == true) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -160,11 +159,11 @@ fun AppScaffold(
                         contentColor = MaterialTheme.colorScheme.primary,
                         shape = MaterialTheme.shapes.small,
                         modifier = Modifier.semantics {
-                            contentDescription = "聴取ストリーク ${listeningStreak!!.currentStreakDays}日連続"
+                            contentDescription = "聴取ストリーク ${streak!!.days}日連続"
                         }
                     ) {
                         Text(
-                            text = "${listeningStreak!!.currentStreakDays}日連続",
+                            text = "${streak!!.days}日連続",
                             style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.padding(
                                 horizontal = DSSpacing.s,
@@ -193,9 +192,6 @@ fun AppScaffold(
         }
     }
 }
-
-internal fun shouldShowStreakBadge(streak: ListeningStreakResponse?): Boolean =
-    streak != null && streak.currentStreakDays > 0 && streak.lastListenedDay != null
 
 /** タブの構成要素（ラベル、アイコン、画面 Composable）。 */
 private data class TabItem(

@@ -20,9 +20,10 @@ import com.rioikeda.newslisten.auth.CleanupStep
 import com.rioikeda.newslisten.auth.SubjectCleanup
 import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.feed.FeedViewModel
-import com.rioikeda.newslisten.engagement.ApiListeningStreakStore
-import com.rioikeda.newslisten.engagement.ListeningStreakStore
 import com.rioikeda.newslisten.learning.LearningViewModel
+import com.rioikeda.newslisten.learning.app.LearningCommands
+import com.rioikeda.newslisten.learning.app.LearningDashboardQuery
+import com.rioikeda.newslisten.learning.app.StreakQuery
 import com.rioikeda.newslisten.network.AccountApiAdapter
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.vocabulary.VocabularyTestViewModel
@@ -31,6 +32,7 @@ import com.rioikeda.newslisten.network.AuthApiAdapter
 import com.rioikeda.newslisten.network.AuthInterceptor
 import com.rioikeda.newslisten.network.ConnectivityNetworkMonitor
 import com.rioikeda.newslisten.network.JavaFileSystem
+import com.rioikeda.newslisten.network.LearningApiAdapter
 import com.rioikeda.newslisten.network.KeystoreSessionStore
 import com.rioikeda.newslisten.network.OkHttpApiClient
 import com.rioikeda.newslisten.network.PodcastApiAdapter
@@ -263,18 +265,15 @@ class AppContainer(context: Context) {
         )
     }
 
-    private val _listeningStreakStore: ApiListeningStreakStore = ApiListeningStreakStore(
-        apiClient = apiClient,
+    private val learningApi = LearningApiAdapter(apiClient)
+
+    /** 聴取ストリークの読み。AppScaffold・設定画面・再生が同じものを共有する。 */
+    private val _streakQuery: StreakQuery = StreakQuery(
+        api = learningApi,
         dispatcher = Dispatchers.Default.limitedParallelism(1),
     )
 
-    fun getListeningStreakStore(): ListeningStreakStore = _listeningStreakStore
-
-    /**
-     * 内部アクセス用: AppScaffold で feedback をキャプチャ後に onStreakIncreased をセット。
-     * 型安全性のため ApiListeningStreakStore 型で直接公開（実装に依存する）。
-     */
-    internal fun getApiListeningStreakStore(): ApiListeningStreakStore = _listeningStreakStore
+    fun getStreakQuery(): StreakQuery = _streakQuery
 
     /**
      * 主体離脱の後始末の手順列（ADR-104）。呼出元の cancel で止まらないよう、`SupervisorJob` の長寿命 scope で動かす。
@@ -411,7 +410,7 @@ class AppContainer(context: Context) {
             offlineLibrary = offlineLibrary,
             networkMonitor = networkMonitor,
             preferencesStore = preferencesStore,
-            listeningStreakStore = _listeningStreakStore,
+            streakQuery = _streakQuery,
             dispatcher = podcastDispatcher,
             currentSubject = authSession::currentSubjectId,
             episodeLookup = _episodeCatalog,
@@ -454,9 +453,13 @@ class AppContainer(context: Context) {
      */
     private val _learningViewModel: LearningViewModel by lazy {
         LearningViewModel(
-            api = apiClient,
-            preferencesStore = preferencesStore,
-            dispatcher = Dispatchers.Default.limitedParallelism(1),
+            query = LearningDashboardQuery(
+                api = learningApi,
+                preferencesStore = preferencesStore,
+                currentSubject = authSession::currentSubjectId,
+                dispatcher = Dispatchers.Default.limitedParallelism(1),
+            ),
+            commands = LearningCommands(preferencesSync),
         )
     }
 
@@ -501,7 +504,7 @@ class AppContainer(context: Context) {
             isAdminProvider = {
                 (authSession.authState.value as? AuthState.Authenticated)?.user?.role?.isAdmin == true
             },
-            listeningStreakStore = _listeningStreakStore,
+            streakQuery = _streakQuery,
         )
     }
 

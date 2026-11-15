@@ -560,7 +560,7 @@ fun SettingsScreen(
                         Text(
                             text = stringResource(
                                 R.string.settings_listening_streak_days,
-                                streak.currentStreakDays
+                                streak.days
                             ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onBackground

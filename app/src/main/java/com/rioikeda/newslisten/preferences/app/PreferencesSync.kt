@@ -125,6 +125,14 @@ class PreferencesSync(
         }
     }
 
+    /** 既読を端末へ保存する。[startedAs] が今の主体と違えば書かずに捨てる。照合と書込は後始末と同じ [Mutex] の中で行う。 */
+    suspend fun markAchievementsSeen(ids: Set<String>, startedAs: String?) {
+        mutex.withLock {
+            if (currentSubject() != startedAs) return@withLock
+            store.markAchievementsSeen(ids)
+        }
+    }
+
     suspend fun clearSubjectScoped() {
         mutex.withLock { store.clearSubjectScoped() }
     }

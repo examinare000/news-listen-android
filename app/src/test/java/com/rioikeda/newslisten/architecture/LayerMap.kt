@@ -57,13 +57,14 @@ object LayerMap {
         "core/PlaybackSpeed.kt",
         "preferences/domain/WeeklyGoal.kt",
         "preferences/domain/PreferenceSyncResult.kt",
+        "learning/domain/Achievement.kt",
+        "learning/domain/MonthlyActivity.kt",
     )
 
     private val application = listOf(
         "auth/SubjectCleanup.kt",
         "feed/BulkActionResult.kt",
         "feed/PendingArticleAction.kt",
-        "engagement/ListeningStreakStore.kt",
         "notification/FcmTokenRegistrar.kt",
         "podcast/OfflineLibrary.kt",
         "podcast/app/PlaybackCoordinator.kt",
@@ -74,6 +75,9 @@ object LayerMap {
         "account/app/AccountCommands.kt",
         "account/app/SessionQueries.kt",
         "passkey/app/PasskeyCommands.kt",
+        "learning/app/LearningDashboardQuery.kt",
+        "learning/app/StreakQuery.kt",
+        "learning/app/LearningCommands.kt",
     )
 
     private val port = listOf(
@@ -84,6 +88,7 @@ object LayerMap {
         "preferences/app/PreferencesApi.kt",
         "auth/app/AuthApi.kt",
         "account/app/AccountApi.kt",
+        "learning/app/LearningApi.kt",
         "network/PodcastApi.kt",
         "network/LearningApi.kt",
         "network/VocabularyTestApi.kt",
@@ -101,6 +106,7 @@ object LayerMap {
         "account/app/RevokedSessionsReceipt.kt",
         "passkey/app/PasskeyRow.kt",
         "passkey/app/PasskeyOutcomes.kt",
+        "learning/app/LearningReadModels.kt",
     )
 
     private val adapter = listOf(
@@ -121,6 +127,7 @@ object LayerMap {
         "network/PodcastApiAdapter.kt",
         "network/PreferencesApiAdapter.kt",
         "network/AccountApiAdapter.kt",
+        "network/LearningApiAdapter.kt",
         "network/AuthApiAdapter.kt",
         "observability/CrashReporter.kt",
         "observability/CrashReportFormatter.kt",

@@ -19,11 +19,11 @@ class EffectTypeCatalogTest {
     // ---- 本番 ----
 
     @Test
-    fun 本番の分類表は13のportと21のhookを持つ() {
+    fun 本番の分類表は14のportと20のhookを持つ() {
         assertEquals(
             setOf(
                 "ApiClient", "PodcastApi", "PreferencesStore", "SessionStore", "PlayerController",
-                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi", "AuthApi", "AccountApi",
+                "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi", "AuthApi", "AccountApi", "LearningApi",
             ),
             production.ports.map { it.port }.toSet(),
         )
@@ -41,6 +41,18 @@ class EffectTypeCatalogTest {
         assertEquals("ApiClient 系の列の読み（GET）は 16", 16, api.sequenceReads.size)
         assertTrue(api.writes.containsAll(listOf("markCompleted", "updatePlaybackPosition", "starArticle", "dismissArticle")))
         assertTrue(api.sequenceReads.containsAll(listOf("fetchFeed", "fetchVocabularyTestSession", "fetchListeningStreak")))
+
+        // 学習の読み取り境界は独立した port 行になり、ApiClient 行は network.LearningApi を継承元に持たない（本 slice で移行）。
+        val learning = portRow(production, "LearningApi")
+        assertEquals(setOf("com.rioikeda.newslisten.learning.app.LearningApi"), learning.interfaces)
+        assertTrue(learning.writes.isEmpty())
+        assertEquals(setOf("fetchDashboard", "fetchStreak", "hasVocabularyTest", "fetchVocabularySummary"), learning.sequenceReads)
+        assertTrue(learning.propertyReads.isEmpty())
+        assertTrue(
+            "ApiClient 行の interfaces に network.LearningApi が残っている",
+            api.interfaces.none { it.endsWith(".network.LearningApi") },
+        )
+        assertTrue(api.sequenceReads.containsAll(listOf("fetchLearningDashboard", "fetchVocabulary")))
 
         val preferences = portRow(production, "PreferencesStore")
         assertEquals(9, preferences.writes.size)
@@ -68,8 +80,8 @@ class EffectTypeCatalogTest {
         assertEquals(setOf("createCredential", "getCredential"), portRow(production, "PasskeyProvider").writes)
         assertEquals(setOf("playSound", "performHaptic"), portRow(production, "FeedbackPlayer").writes)
 
-        assertEquals("hook は 21 個", 21, production.hooks.size)
-        assertEquals("公開 callback（SETTER）は 2 つ", 2, production.hooks.count { it.wiring == HookWiring.SETTER })
+        assertEquals("hook は 20 個", 20, production.hooks.size)
+        assertEquals("公開 callback（SETTER）は 1 つ", 1, production.hooks.count { it.wiring == HookWiring.SETTER })
         assertTrue(production.hooks.filter { it.wiring == HookWiring.SETTER }.all { it.kind == HookKind.WRITE })
     }
 

@@ -6,18 +6,19 @@ import com.rioikeda.newslisten.auth.domain.AccountUser
 import com.rioikeda.newslisten.auth.domain.Role
 import com.rioikeda.newslisten.auth.domain.SubjectId
 import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.learning.app.AchievementRecord
+import com.rioikeda.newslisten.learning.app.DashboardRecord
+import com.rioikeda.newslisten.learning.app.StreakRecord
+import com.rioikeda.newslisten.learning.app.VocabularyRecord
+import com.rioikeda.newslisten.learning.app.VocabularySummary
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.model.AchievementResponse
 import com.rioikeda.newslisten.model.ArticleResponse
 import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.model.FeaturedSitesResponse
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
-import com.rioikeda.newslisten.model.LearningDashboardResponse
-import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.OnboardingStatusResponse
 import com.rioikeda.newslisten.model.PodcastResponse
-import com.rioikeda.newslisten.model.QuizStatsResponse
 import com.rioikeda.newslisten.model.RssSource
 import com.rioikeda.newslisten.model.RssSourcesResponse
 import com.rioikeda.newslisten.model.VocabularyItemResponse
@@ -90,15 +91,22 @@ internal object ProbeData {
         ),
     )
 
-    val dashboard: LearningDashboardResponse = LearningDashboardResponse(
-        streak = ListeningStreakResponse(currentStreakDays = 1, todayListened = true, lastListenedDay = "2026-10-14"),
+    val dashboardRecord: DashboardRecord = DashboardRecord(
+        streak = StreakRecord(days = 1, todayListened = true, lastListenedDay = "2026-10-14"),
         totalEpisodes = 1,
         vocabularyAcquired = 1,
-        quiz = QuizStatsResponse(quizzedEpisodes = 0, averageCorrectRate = null, trend = emptyList()),
+        quizzedEpisodes = 0,
+        averageCorrectRate = null,
+        quizTrend = emptyList(),
         monthlyActivity = emptyList(),
         currentDifficulty = "toeic_600",
         weeklyGoal = null,
-        achievements = listOf(AchievementResponse(id = "first-listen", unlockedAt = "2026-10-14T00:00:00Z")),
+        achievements = listOf(AchievementRecord(id = "first-listen", unlockedAt = "2026-10-14T00:00:00Z")),
+    )
+
+    val vocabularySummary: VocabularySummary = VocabularySummary(
+        count = 1,
+        items = listOf(VocabularyRecord(term = "term", meaning = "meaning", registeredAt = "2026-10-14T00:00:00Z")),
     )
 
     val featuredSite: FeaturedSite = FeaturedSite(id = "site-1", name = "Example", url = "https://example.com/rss")
@@ -123,7 +131,7 @@ internal object ProbeData {
 
     /** 聴取日数が呼ぶたびに 1 日ずつ増える列（初回より 2 回目が大きい）。 */
     fun increasingStreaks(): List<Any?> = List(DEPTH) {
-        ListeningStreakResponse(currentStreakDays = it + 1, todayListened = true, lastListenedDay = "2026-10-14")
+        StreakRecord(days = it + 1, todayListened = true, lastListenedDay = "2026-10-14")
     }
 
     /** scenario A（読み成功）。`warmUp` が無ければ、無い理由が要る。 */

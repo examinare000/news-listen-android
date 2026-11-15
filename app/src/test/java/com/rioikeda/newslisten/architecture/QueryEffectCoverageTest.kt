@@ -11,10 +11,11 @@ import com.rioikeda.newslisten.auth.authSessionQueryProbes
 import com.rioikeda.newslisten.auth.authViewModelQueryProbes
 import com.rioikeda.newslisten.auth.subjectCleanupQueryProbes
 import com.rioikeda.newslisten.catalog.episodeCatalogQueryProbes
-import com.rioikeda.newslisten.engagement.ApiListeningStreakStore
-import com.rioikeda.newslisten.engagement.apiListeningStreakStoreQueryProbes
 import com.rioikeda.newslisten.feed.feedViewModelQueryProbes
+import com.rioikeda.newslisten.learning.app.StreakQuery
+import com.rioikeda.newslisten.learning.learningDashboardQueryQueryProbes
 import com.rioikeda.newslisten.learning.learningViewModelQueryProbes
+import com.rioikeda.newslisten.learning.streakQueryQueryProbes
 import com.rioikeda.newslisten.onboarding.onboardingViewModelQueryProbes
 import com.rioikeda.newslisten.passkey.passkeyCredentialsViewModelQueryProbes
 import com.rioikeda.newslisten.passkey.passkeyLoginViewModelQueryProbes
@@ -53,7 +54,8 @@ internal val registeredQueryProbeSets: List<QueryProbeSet> = listOf(
     vocabularyTestViewModelQueryProbes,
     settingsViewModelQueryProbes,
     onboardingViewModelQueryProbes,
-    apiListeningStreakStoreQueryProbes,
+    learningDashboardQueryQueryProbes,
+    streakQueryQueryProbes,
     offlineLibraryQueryProbes,
     subjectCleanupQueryProbes,
     playbackCoordinatorQueryProbes,
@@ -190,7 +192,7 @@ class QueryEffectCoverageTest {
             "PodcastViewModel", "AuthViewModel", "AuthSession", "AccountViewModel", "SessionsViewModel", "SessionQueries",
             "PasskeyCredentialsViewModel", "PasskeyLoginViewModel", "PasskeyRegistrationViewModel",
             "FeedViewModel", "LearningViewModel", "VocabularyTestViewModel", "SettingsViewModel", "OnboardingViewModel",
-            "ApiListeningStreakStore", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator", "EpisodeCatalog",
+            "LearningDashboardQuery", "StreakQuery", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator", "EpisodeCatalog",
             "PreferencesSync",
         )
 
@@ -210,7 +212,7 @@ class QueryEffectCoverageTest {
     // ---- 本番の probe の網羅と配線 ----
 
     @Test(timeout = 600_000)
-    fun 登録listは12のViewModelとApiListeningStreakStoreとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
+    fun 登録listは12のViewModelとLearningDashboardQueryとStreakQueryとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
         val registered = registeredQueryProbeSets.map { it.owner }
         assertEquals("登録された probe set の所有者", owners.sorted(), registered.sorted())
 
@@ -245,9 +247,9 @@ class QueryEffectCoverageTest {
             assertTrue("$owner の trace が無い", traces.isNotEmpty())
             traces.forEach { trace ->
                 assertEquals(
-                    "$owner のグラフの ApiListeningStreakStore はちょうど 1 つ",
+                    "$owner のグラフの StreakQuery はちょうど 1 つ",
                     1,
-                    trace.graph.count { it is ApiListeningStreakStore },
+                    trace.graph.count { it is StreakQuery },
                 )
             }
         }
@@ -269,12 +271,6 @@ class QueryEffectCoverageTest {
             Expected("VocabularyTestViewModel#shuffle", setOf("VocabularyTestViewModel"), HookKind.READ, HookShape.ONE_ARG),
             Expected("PasskeyCommands#onLoginSuccess", setOf("PasskeyLoginViewModel"), HookKind.WRITE, HookShape.SUSPEND_ONE_ARG),
             Expected("FeedViewModel#onStarConfirmed", setOf("FeedViewModel"), HookKind.WRITE, HookShape.NO_ARG),
-            Expected(
-                "ApiListeningStreakStore#onStreakIncreased",
-                setOf("SettingsViewModel", "PlaybackCoordinator"),
-                HookKind.WRITE,
-                HookShape.NO_ARG,
-            ),
         )
         assertTrue("trace が空", allTraces.isNotEmpty())
 
@@ -330,19 +326,19 @@ class QueryEffectCoverageTest {
     }
 
     @Test(timeout = 600_000)
-    fun 組立のlambdaを新しい2つの環境で呼ぶとApiListeningStreakStoreは別のオブジェクトになる() {
+    fun 組立のlambdaを新しい2つの環境で呼ぶとStreakQueryは別のオブジェクトになる() {
         listOf("SettingsViewModel", "PlaybackCoordinator").forEach { owner ->
             val set = registeredQueryProbeSets.single { it.owner == owner }
             val scenario = set.scenarios.first()
 
             fun storeOf(root: Any): Any = root.javaClass.declaredFields
-                .filter { ApiListeningStreakStore::class.java.isAssignableFrom(it.type) || it.type.name.endsWith("ListeningStreakStore") }
+                .filter { StreakQuery::class.java.isAssignableFrom(it.type) }
                 .map { it.apply { isAccessible = true }.get(root) }
                 .single { it != null }!!
 
             val first = storeOf(set.assemble(ProbeEnvironment.create(scenario)))
             val second = storeOf(set.assemble(ProbeEnvironment.create(scenario)))
-            assertNotSame("$owner: 組立のたびに store を新しく作る", first, second)
+            assertNotSame("$owner: 組立のたびに StreakQuery を新しく作る", first, second)
         }
     }
 

@@ -42,7 +42,7 @@ class OperationEnumeratorTest {
         )
 
         val ids = population.operations.map { it.id }.toSet()
-        listOf("PodcastViewModel#fetchPodcasts", "FeedViewModel#getArticles", "ListeningStreakStore#refresh").forEach {
+        listOf("PodcastViewModel#fetchPodcasts", "FeedViewModel#getArticles", "StreakQuery#refresh").forEach {
             assertTrue("公開操作に $it が無い", it in ids)
         }
     }

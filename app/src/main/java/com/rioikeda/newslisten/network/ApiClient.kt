@@ -126,7 +126,7 @@ interface ApiClient : LearningApi, VocabularyTestApi {
     /** 聴取ストリーク（連続聴取日数）を取得する（フェーズ10 P10、issue #165）。 */
     suspend fun fetchListeningStreak(): ListeningStreakResponse
 
-    override suspend fun fetchLearningDashboard(): LearningDashboardResponse
+    suspend fun fetchLearningDashboard(): LearningDashboardResponse
 
     suspend fun updateWeeklyGoalEpisodes(weeklyGoalEpisodes: Int): PreferencesResponse
 

@@ -6,7 +6,7 @@ import com.rioikeda.newslisten.core.PlaybackQueue
 import com.rioikeda.newslisten.core.PlaybackSource
 import com.rioikeda.newslisten.core.resolvePlaybackSource
 import com.rioikeda.newslisten.core.resolveResumePosition
-import com.rioikeda.newslisten.engagement.ListeningStreakStore
+import com.rioikeda.newslisten.learning.app.StreakQuery
 import com.rioikeda.newslisten.network.NetworkMonitoring
 import com.rioikeda.newslisten.network.PodcastApi
 import com.rioikeda.newslisten.podcast.OfflineLibrary
@@ -118,7 +118,7 @@ class PlaybackCoordinator(
     private val offlineLibrary: OfflineLibrary,
     private val networkMonitor: NetworkMonitoring,
     private val preferencesStore: PreferencesStore,
-    private val listeningStreakStore: ListeningStreakStore?,
+    private val streakQuery: StreakQuery?,
     private val dispatcher: CoroutineDispatcher,
     private val currentSubject: () -> String?,
     private val episodeLookup: EpisodeLookup,
@@ -524,7 +524,7 @@ class PlaybackCoordinator(
             }
         }
         if (totalSeconds != null) syncPosition(podcastId, totalSeconds)
-        listeningStreakStore?.refresh()
+        streakQuery?.refresh()
     }
 
     /** 完聴の後の自動前進。次が無ければ Stopped にする。キューは次を読むだけで、書込は startEpisode が取得の後に行う。 */

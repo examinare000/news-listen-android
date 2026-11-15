@@ -3,8 +3,9 @@ package com.rioikeda.newslisten.podcast.app
 import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.core.PlaybackSpeed
-import com.rioikeda.newslisten.engagement.ListeningStreakStore
-import com.rioikeda.newslisten.model.ListeningStreakResponse
+import com.rioikeda.newslisten.learning.app.FakeLearningApi
+import com.rioikeda.newslisten.learning.app.StreakQuery
+import com.rioikeda.newslisten.learning.app.StreakRecord
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.EpisodeDecoder
@@ -35,8 +36,6 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -109,7 +108,7 @@ class PlaybackCoordinatorTest {
         playerController: FakePlayerController,
         cacheManager: AudioCacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
         networkMonitor: StubNetworkMonitor = StubNetworkMonitor(initialIsOnline = true),
-        listeningStreakStore: ListeningStreakStore? = null,
+        streakQuery: StreakQuery? = null,
         preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
         currentSubject: () -> String? = { "u1" },
     ): PlaybackCoordinator =
@@ -120,7 +119,7 @@ class PlaybackCoordinatorTest {
             episodeLookup = lookup,
             networkMonitor = networkMonitor,
             preferencesStore = preferencesStore,
-            listeningStreakStore = listeningStreakStore,
+            streakQuery = streakQuery,
             dispatcher = StandardTestDispatcher(testScheduler),
             currentSubject = currentSubject,
         )
@@ -481,12 +480,19 @@ class PlaybackCoordinatorTest {
             onUpdatePlaybackPosition = { id, _ -> if (id == "p1") p1 else p2 },
             onMarkCompleted = { throw ApiException.NetworkError(IOException("offline")) },
         )
-        val streakStore = FakeListeningStreakStore()
+        var streakFetchCount = 0
+        val learningApi = FakeLearningApi().apply {
+            onFetchStreak = {
+                streakFetchCount++
+                StreakRecord(0, false, null)
+            }
+        }
+        val streakQuery = StreakQuery(learningApi, StandardTestDispatcher(testScheduler))
         val player = FakePlayerController()
         val coordinator = newCoordinator(
             apiClient = apiClient,
             playerController = player,
-            listeningStreakStore = streakStore,
+            streakQuery = streakQuery,
         )
         coordinator.playNow(p1)
         coordinator.playNext(p2)
@@ -494,7 +500,7 @@ class PlaybackCoordinatorTest {
         emit(player, PlaybackState.Ended(300.0))
 
         assertEquals(p2.id, coordinator.nowPlaying.value?.episodeId)
-        assertEquals(1, streakStore.refreshCallCount)
+        assertEquals(1, streakFetchCount)
         assertEquals(2, player.playCallCount)
         coordinator.stopForSubjectLeave()
     }
@@ -3152,16 +3158,5 @@ class PlaybackCoordinatorTest {
 
         assertNull(coordinator.notice.value)
         coordinator.stopForSubjectLeave()
-    }
-}
-
-private class FakeListeningStreakStore : ListeningStreakStore {
-    override val listeningStreak: StateFlow<ListeningStreakResponse?> = MutableStateFlow(null)
-    override val loadFailed: StateFlow<Boolean> = MutableStateFlow(false)
-    var refreshCallCount = 0
-        private set
-
-    override suspend fun refresh() {
-        refreshCallCount++
     }
 }
