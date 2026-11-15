@@ -37,6 +37,10 @@ import com.rioikeda.newslisten.model.VocabularyTestResultItemRequest
 import com.rioikeda.newslisten.model.VocabularyTestResultResponse
 import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
 import com.rioikeda.newslisten.account.app.AccountApi
+import com.rioikeda.newslisten.learning.app.DashboardRecord
+import com.rioikeda.newslisten.learning.app.LearningApi
+import com.rioikeda.newslisten.learning.app.StreakRecord
+import com.rioikeda.newslisten.learning.app.VocabularySummary
 import com.rioikeda.newslisten.account.app.PasskeyOptions
 import com.rioikeda.newslisten.account.app.PasskeyRecord
 import com.rioikeda.newslisten.account.app.SessionRecord
@@ -414,6 +418,22 @@ class RecordingAccountApi(
         core.write("passkeyLoginVerify")
         return RecordingDefaults.issuedSession
     }
+}
+
+/** 学習タブの読みの port [LearningApi] の記録 fake。4 操作とも列の読みで、scenario B では注入した失敗を投げる。 */
+class RecordingLearningApi(
+    val recorder: EffectRecorder,
+    val scenario: ProbeScenario,
+) : LearningApi {
+    private val core = ApiFake(recorder, scenario, port = "LearningApi")
+
+    override suspend fun fetchDashboard(): DashboardRecord = core.read("fetchDashboard")
+
+    override suspend fun fetchStreak(): StreakRecord = core.read("fetchStreak")
+
+    override suspend fun hasVocabularyTest(): Boolean = core.read("hasVocabularyTest")
+
+    override suspend fun fetchVocabularySummary(): VocabularySummary = core.read("fetchVocabularySummary")
 }
 
 /** 設定のサーバー往復 port [PreferencesApi] の記録 fake。列の読みは [ApiFake.read] と同じく先頭で注入された失敗を投げる。 */
@@ -851,6 +871,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
     val podcastApi: RecordingPodcastApi = RecordingPodcastApi(recorder, scenario)
     val authApi: RecordingAuthApi = RecordingAuthApi(recorder, scenario)
     val accountApi: RecordingAccountApi = RecordingAccountApi(recorder, scenario)
+    val learningApi: RecordingLearningApi = RecordingLearningApi(recorder, scenario)
     val preferencesApi: RecordingPreferencesApi = RecordingPreferencesApi(recorder, scenario)
     val preferencesStore: RecordingPreferencesStore = RecordingPreferencesStore(recorder, scenario)
     val sessionStore: RecordingSessionStore = RecordingSessionStore(recorder, scenario)
@@ -863,7 +884,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
 
     /** この実行単位の記録 fake の全部。配線の検査が「記録 fake であること」を照合する。 */
     val fakes: List<Any> = listOf(
-        apiClient, podcastApi, authApi, accountApi, preferencesApi, preferencesStore, sessionStore, playerController,
+        apiClient, podcastApi, authApi, accountApi, learningApi, preferencesApi, preferencesStore, sessionStore, playerController,
         fileSystem, audioStore, networkMonitor, passkeyProvider, feedbackPlayer,
     )
 

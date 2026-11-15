@@ -16,7 +16,7 @@ internal val podcastViewModelQueryProbes: QueryProbeSet = run {
         "PodcastApi#fetchPodcasts" to ProbeData.repeated(ProbeData.podcastList),
         "PodcastApi#fetchPodcast" to ProbeData.repeated(ProbeData.podcast),
         "ApiClient#fetchVocabulary" to ProbeData.repeated(ProbeData.vocabularyList),
-        "ApiClient#fetchListeningStreak" to ProbeData.increasingStreaks(),
+        "LearningApi#fetchStreak" to ProbeData.increasingStreaks(),
         "AudioStore#isCached" to ProbeData.repeated(false, 64),
     )
     // 先に一覧を読み込んでから id で再生を始める（未知の id は無視されるので、読み込まずに呼ぶと probe が空振りする）。

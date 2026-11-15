@@ -393,7 +393,7 @@ class ArchitectureStructureTest {
                 listOf("var a1 = 0"),
             ),
             Case(
-                "②ApiListeningStreakStore の形（`) : Y {` と副構築子）",
+                "②副構築子を持つ型の形（`) : Y {` と副構築子）",
                 fixture(
                     "class X(",
                     "    private val a: Int,",

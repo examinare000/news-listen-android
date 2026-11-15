@@ -66,15 +66,15 @@ class OperationLedgerTest {
     @Test
     fun interfaceと実装を別の行にすると失敗する() {
         val rows = OperationLedger.rows
-        val merged = rows.single { "ApiListeningStreakStore#refresh" in it.aliases + it.id }
-        assertEquals("前提: interface の行が実装を alias に持つ", "ListeningStreakStore#refresh", merged.id)
+        val merged = rows.single { "AndroidFeedbackPlayer#playSound" in it.aliases + it.id }
+        assertEquals("前提: interface の行が実装を alias に持つ", "FeedbackPlayer#playSound", merged.id)
         val split = rows - merged +
-            merged.copy(aliases = merged.aliases - "ApiListeningStreakStore#refresh") +
-            probeQuery("ApiListeningStreakStore#refresh")
+            merged.copy(aliases = merged.aliases - "AndroidFeedbackPlayer#playSound") +
+            probeQuery("AndroidFeedbackPlayer#playSound")
 
         val findings = LedgerChecks.reconcile(ProductionWorld.population, split)
 
-        findings.requireFinding(Headings.SPLIT_INTERFACE_IMPLEMENTATION, "ApiListeningStreakStore#refresh")
+        findings.requireFinding(Headings.SPLIT_INTERFACE_IMPLEMENTATION, "AndroidFeedbackPlayer#playSound")
     }
 
     @Test

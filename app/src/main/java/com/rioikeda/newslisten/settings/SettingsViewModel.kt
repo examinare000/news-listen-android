@@ -1,11 +1,10 @@
 package com.rioikeda.newslisten.settings
 
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.engagement.ApiListeningStreakStore
-import com.rioikeda.newslisten.engagement.ListeningStreakStore
+import com.rioikeda.newslisten.learning.app.StreakBadge
+import com.rioikeda.newslisten.learning.app.StreakQuery
 import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
-import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.RssSource
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.preferences.ArticleOpenMode
@@ -50,8 +49,7 @@ class SettingsViewModel(
      * 呼び出し時点で都度評価する関数にしている。
      */
     private val isAdminProvider: () -> Boolean = { false },
-    private val listeningStreakStore: ListeningStreakStore =
-        ApiListeningStreakStore(apiClient, dispatcher),
+    private val streakQuery: StreakQuery,
 ) {
     private val _sources = MutableStateFlow<List<RssSource>>(emptyList())
     val sources: StateFlow<List<RssSource>> = _sources.asStateFlow()
@@ -77,8 +75,8 @@ class SettingsViewModel(
     val generationQuotaLoadFailed: StateFlow<Boolean> = _generationQuotaLoadFailed.asStateFlow()
 
     /** 聴取ストリーク（issue #165）。未取得・取得失敗時は `null`。 */
-    val listeningStreak: StateFlow<ListeningStreakResponse?> = listeningStreakStore.listeningStreak
-    val listeningStreakLoadFailed: StateFlow<Boolean> = listeningStreakStore.loadFailed
+    val listeningStreak: StateFlow<StreakBadge?> = streakQuery.streak
+    val listeningStreakLoadFailed: StateFlow<Boolean> = streakQuery.loadFailed
 
     /** RSS ソース一覧を取得して [sources] を更新する。失敗時は [errorMessage] に反映する。 */
     suspend fun loadSources(): Unit = withContext(dispatcher) {
@@ -174,7 +172,7 @@ class SettingsViewModel(
      * 聴取ストリーク（連続聴取日数）を取得する（issue #165）。
      * 404 時は graceful degradation: セクション非表示（[listeningStreakLoadFailed] は立てない）。
      */
-    suspend fun loadListeningStreak() = listeningStreakStore.refresh()
+    suspend fun loadListeningStreak() = streakQuery.refresh()
 
     /** 設定の現在値と選択肢。画面が読む。 */
     val preferences: StateFlow<PreferencesView> = preferencesSync.preferences

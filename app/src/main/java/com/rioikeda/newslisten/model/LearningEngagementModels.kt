@@ -35,13 +35,7 @@ data class WeeklyGoalResponse(
     val week: String,
     @SerialName("completed_this_week") val completedThisWeek: Int,
     val history: List<WeeklyGoalRecordResponse>,
-) {
-    val progressText: String
-        get() = "今週 $completedThisWeek/目標 $goalEpisodes 本"
-
-    val progressFraction: Float
-        get() = if (goalEpisodes <= 0) 0f else (completedThisWeek.toFloat() / goalEpisodes).coerceIn(0f, 1f)
-}
+)
 
 @Serializable
 data class AchievementResponse(

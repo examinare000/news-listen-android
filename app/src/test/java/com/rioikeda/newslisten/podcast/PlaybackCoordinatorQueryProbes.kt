@@ -6,7 +6,7 @@ import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.catalog.probeEpisodeCatalog
-import com.rioikeda.newslisten.engagement.probeListeningStreakStore
+import com.rioikeda.newslisten.learning.probeStreakQuery
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
 import java.util.Collections
 import java.util.WeakHashMap
@@ -28,7 +28,7 @@ internal fun probePlaybackCoordinator(
         offlineLibrary = offlineLibrary,
         networkMonitor = env.networkMonitor,
         preferencesStore = env.preferencesStore,
-        listeningStreakStore = probeListeningStreakStore(env),
+        streakQuery = probeStreakQuery(env),
         dispatcher = env.newDispatcher(),
         currentSubject = env.hooks.read("PlaybackCoordinator#currentSubject") { null },
         episodeLookup = catalog,
@@ -47,7 +47,7 @@ internal val playbackCoordinatorQueryProbes: QueryProbeSet = run {
     val canned = mapOf(
         "PodcastApi#fetchPodcasts" to ProbeData.repeated(ProbeData.podcastList),
         "PodcastApi#fetchPodcast" to ProbeData.repeated(ProbeData.podcast),
-        "ApiClient#fetchListeningStreak" to ProbeData.increasingStreaks(),
+        "LearningApi#fetchStreak" to ProbeData.increasingStreaks(),
         "AudioStore#isCached" to ProbeData.repeated(false, 64),
     )
     // 先に一覧を読み込んでから id で再生を始める（未知の id は無視されるので、読み込まずに呼ぶと probe が空振りする）。

@@ -1,23 +1,33 @@
 package com.rioikeda.newslisten.learning
 
-import com.rioikeda.newslisten.architecture.CallSpec
 import com.rioikeda.newslisten.architecture.ProbeData
+import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
+import com.rioikeda.newslisten.learning.app.LearningCommands
+import com.rioikeda.newslisten.preferences.probePreferencesSync
 
-/** `LearningViewModel#load` は読み込みの中で既読の実績を保存する（既知の違反）。呼出ごとに保存するので同値の書込も数える。 */
-internal val learningViewModelQueryProbes: QueryProbeSet = queryProbeSet(
-    owner = "LearningViewModel",
-    scenarios = listOf(
-        ProbeData.readSuccess(
-            canned = mapOf(
-                "ApiClient#fetchLearningDashboard" to ProbeData.repeated(ProbeData.dashboard),
-                "ApiClient#fetchVocabulary" to ProbeData.repeated(ProbeData.vocabularyList),
-                "ApiClient#fetchVocabularyTestSession" to ProbeData.repeated(ProbeData.vocabularyTestSession),
-            ),
-            noWarmUpReason = "COMMAND は画面の強調を消すだけで、load の観測に前提の状態が要らない",
+/**
+ * `LearningViewModel` の query は state の getter だけ。warm-up で `load()` を済ませ、既読の保存（command）が
+ * 済んだ状態で観測する。`load()` 自体は command なので呼び方に載せない。
+ */
+internal val learningViewModelQueryProbes: QueryProbeSet = run {
+    val canned = mapOf(
+        "LearningApi#fetchDashboard" to ProbeData.repeated(ProbeData.dashboardRecord),
+        "LearningApi#fetchVocabularySummary" to ProbeData.repeated(ProbeData.vocabularySummary),
+        "LearningApi#hasVocabularyTest" to ProbeData.repeated(true),
+    )
+    val warmUp: suspend (Any, ProbeEnvironment) -> Unit = { owner, _ -> (owner as LearningViewModel).load() }
+    queryProbeSet(
+        owner = "LearningViewModel",
+        scenarios = listOf(
+            ProbeData.readSuccess(canned, warmUp),
+            ProbeData.readFailure(warmUp = warmUp),
         ),
-        ProbeData.readFailure(noWarmUpReason = "読みが失敗する scenario では保存に至らない"),
-    ),
-    calls = listOf(CallSpec("LearningViewModel#load")),
-) { env -> LearningViewModel(env.apiClient, env.preferencesStore, env.newDispatcher()) }
+    ) { env ->
+        LearningViewModel(
+            query = probeLearningDashboardQuery(env),
+            commands = LearningCommands(probePreferencesSync(env)),
+        )
+    }
+}

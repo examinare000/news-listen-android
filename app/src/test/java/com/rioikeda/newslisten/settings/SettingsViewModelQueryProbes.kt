@@ -4,18 +4,18 @@ import com.rioikeda.newslisten.architecture.CallSpec
 import com.rioikeda.newslisten.architecture.ProbeData
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
-import com.rioikeda.newslisten.engagement.probeListeningStreakStore
+import com.rioikeda.newslisten.learning.probeStreakQuery
 import com.rioikeda.newslisten.preferences.probePreferencesSync
 
 /**
  * `SettingsViewModel` の query。`SettingsViewModel#getPreferencesSyncFailed` は、自分のグラフの `PreferencesSync` の状態を読むだけで書かない。
- * `loadListeningStreak` は、自分のグラフの store の `refresh` を呼ぶ（callback の発火を観測する）。 */
+ * `loadListeningStreak` は、自分のグラフの `StreakQuery` の `refresh` を呼ぶ。 */
 internal val settingsViewModelQueryProbes: QueryProbeSet = run {
     val canned = mapOf(
         "ApiClient#fetchSources" to ProbeData.repeated(ProbeData.sources),
         "ApiClient#fetchFeaturedSites" to ProbeData.repeated(ProbeData.featuredSites),
         "ApiClient#fetchGenerationQuota" to ProbeData.repeated(ProbeData.generationQuota),
-        "ApiClient#fetchListeningStreak" to ProbeData.increasingStreaks(),
+        "LearningApi#fetchStreak" to ProbeData.increasingStreaks(),
     )
     val warmUp: suspend (Any, com.rioikeda.newslisten.architecture.ProbeEnvironment) -> Unit = { owner, _ ->
         val viewModel = owner as SettingsViewModel
@@ -40,7 +40,7 @@ internal val settingsViewModelQueryProbes: QueryProbeSet = run {
             preferencesSync = probePreferencesSync(env),
             dispatcher = env.newDispatcher(),
             isAdminProvider = env.hooks.read("SettingsViewModel#isAdminProvider") { false },
-            listeningStreakStore = probeListeningStreakStore(env),
+            streakQuery = probeStreakQuery(env),
         )
     }
 }

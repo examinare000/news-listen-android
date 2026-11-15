@@ -79,7 +79,7 @@ class QueueViewTest {
             ),
             networkMonitor = StubNetworkMonitor(initialIsOnline = true),
             preferencesStore = InMemoryPreferencesStore(),
-            listeningStreakStore = null,
+            streakQuery = null,
             dispatcher = StandardTestDispatcher(testScheduler),
             currentSubject = { "u1" },
             episodeLookup = lookup,

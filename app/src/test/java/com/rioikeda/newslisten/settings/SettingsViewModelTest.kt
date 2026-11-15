@@ -5,7 +5,9 @@ import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.core.PlaybackSpeed
 import com.rioikeda.newslisten.model.FeaturedSite
 import com.rioikeda.newslisten.model.GenerationQuotaResponse
-import com.rioikeda.newslisten.model.ListeningStreakResponse
+import com.rioikeda.newslisten.learning.app.FakeLearningApi
+import com.rioikeda.newslisten.learning.app.StreakQuery
+import com.rioikeda.newslisten.learning.app.StreakRecord
 import com.rioikeda.newslisten.model.PreferencesResponse
 import com.rioikeda.newslisten.model.RssSource
 import com.rioikeda.newslisten.model.RssSourcesResponse
@@ -52,12 +54,14 @@ class SettingsViewModelTest {
         preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
         preferencesSync: PreferencesSync = newPreferencesSync(apiClient, preferencesStore),
         isAdminProvider: () -> Boolean = { false },
+        learningApi: FakeLearningApi = FakeLearningApi(),
     ): SettingsViewModel =
         SettingsViewModel(
             apiClient = apiClient,
             preferencesSync = preferencesSync,
             dispatcher = StandardTestDispatcher(testScheduler),
             isAdminProvider = isAdminProvider,
+            streakQuery = StreakQuery(learningApi, StandardTestDispatcher(testScheduler)),
         )
 
     /** 書込だけが `IOException` で失敗する store（DataStore の書込失敗の模擬）。 */
@@ -393,21 +397,23 @@ class SettingsViewModelTest {
 
     @Test
     fun loadListeningStreak成功でlisteningStreakが更新される() = runTest {
-        val streak = ListeningStreakResponse(currentStreakDays = 3, todayListened = true, lastListenedDay = "2026-07-08")
         val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchListeningStreak = { streak }),
+            learningApi = FakeLearningApi().apply { onFetchStreak = { StreakRecord(3, true, "2026-07-08") } },
         )
 
         viewModel.loadListeningStreak()
 
-        assertEquals(streak, viewModel.listeningStreak.value)
+        val streak = checkNotNull(viewModel.listeningStreak.value)
+        assertEquals(3, streak.days)
+        assertTrue(streak.todayListened)
+        assertEquals("2026-07-08", streak.lastListenedDay)
         assertFalse(viewModel.listeningStreakLoadFailed.value)
     }
 
     @Test
     fun loadListeningStreakは404でgracefulにnullとなりLoadFailedは立たない() = runTest {
         val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchListeningStreak = { throw ApiException.NotFound() }),
+            learningApi = FakeLearningApi().apply { onFetchStreak = { throw ApiException.NotFound() } },
         )
 
         viewModel.loadListeningStreak()
@@ -419,7 +425,7 @@ class SettingsViewModelTest {
     @Test
     fun loadListeningStreakは404以外の失敗でLoadFailedが立つ() = runTest {
         val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchListeningStreak = { throw ApiException.HttpError(500) }),
+            learningApi = FakeLearningApi().apply { onFetchStreak = { throw ApiException.HttpError(500) } },
         )
 
         viewModel.loadListeningStreak()

@@ -39,8 +39,6 @@ class LearningEngagementContractTest {
             """.trimIndent(),
         )
 
-        assertEquals("今週 7/目標 5 本", dashboard.weeklyGoal?.progressText)
-        assertEquals(1f, dashboard.weeklyGoal?.progressFraction)
         assertEquals(4, dashboard.weeklyGoal?.history?.single()?.completed)
         assertEquals("first_episode_completed", dashboard.achievements?.single()?.id)
     }

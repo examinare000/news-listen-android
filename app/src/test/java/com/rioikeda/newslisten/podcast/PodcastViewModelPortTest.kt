@@ -60,7 +60,7 @@ class PodcastViewModelPortTest {
                 offlineLibrary = offlineLibrary,
                 networkMonitor = StubNetworkMonitor(initialIsOnline = true),
                 preferencesStore = InMemoryPreferencesStore(),
-                listeningStreakStore = null,
+                streakQuery = null,
                 dispatcher = dispatcher,
                 currentSubject = { null },
                 episodeLookup = FakeEpisodeLookup(),

@@ -3,7 +3,7 @@ package com.rioikeda.newslisten.podcast
 import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.engagement.ListeningStreakStore
+import com.rioikeda.newslisten.learning.app.StreakQuery
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.model.QuizAnswerResponse
 import com.rioikeda.newslisten.model.QuizGradeResult
@@ -99,7 +99,7 @@ class PodcastViewModelTest {
         playerController: FakePlayerController,
         cacheManager: AudioCacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
         networkMonitor: StubNetworkMonitor = StubNetworkMonitor(initialIsOnline = true),
-        listeningStreakStore: ListeningStreakStore? = null,
+        streakQuery: StreakQuery? = null,
         preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
         currentSubject: () -> String? = { "u1" },
     ): PodcastViewModel {
@@ -114,7 +114,7 @@ class PodcastViewModelTest {
                 offlineLibrary = offlineLibrary,
                 networkMonitor = networkMonitor,
                 preferencesStore = preferencesStore,
-                listeningStreakStore = listeningStreakStore,
+                streakQuery = streakQuery,
                 dispatcher = dispatcher,
                 currentSubject = currentSubject,
                 episodeLookup = lookup,
@@ -362,7 +362,7 @@ class PodcastViewModelTest {
                 offlineLibrary = offlineLibrary,
                 networkMonitor = StubNetworkMonitor(initialIsOnline = true),
                 preferencesStore = InMemoryPreferencesStore(),
-                listeningStreakStore = null,
+                streakQuery = null,
                 dispatcher = dispatcher,
                 currentSubject = { "u1" },
                 episodeLookup = lookup,
@@ -693,7 +693,7 @@ class PodcastViewModelTest {
             offlineLibrary = offlineLibrary,
             networkMonitor = StubNetworkMonitor(initialIsOnline = true),
             preferencesStore = InMemoryPreferencesStore(),
-            listeningStreakStore = null,
+            streakQuery = null,
             dispatcher = dispatcher,
             currentSubject = { "u1" },
             episodeLookup = lookup,

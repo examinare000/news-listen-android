@@ -50,7 +50,7 @@ data class EffectTypeCatalog(
             ports = listOf(
                 PortRow(
                     port = "ApiClient",
-                    interfaces = setOf("$NETWORK.ApiClient", "$NETWORK.LearningApi", "$NETWORK.VocabularyTestApi"),
+                    interfaces = setOf("$NETWORK.ApiClient", "$NETWORK.VocabularyTestApi"),
                     writes = setOf(
                         "login", "logout", "starArticle", "dismissArticle", "updatePlaybackPosition", "markCompleted",
                         "submitQuizAnswers", "registerDeviceToken", "unregisterDeviceToken", "createSource", "updateSource",
@@ -89,6 +89,13 @@ data class EffectTypeCatalog(
                         "passkeyRegisterOptions", "passkeyRegisterVerify", "passkeyLoginOptions", "passkeyLoginVerify",
                     ),
                     sequenceReads = setOf("listSessions", "listPasskeyCredentials"),
+                    propertyReads = emptySet(),
+                ),
+                PortRow(
+                    port = "LearningApi",
+                    interfaces = setOf("com.rioikeda.newslisten.learning.app.LearningApi"),
+                    writes = emptySet(),
+                    sequenceReads = setOf("fetchDashboard", "fetchStreak", "hasVocabularyTest", "fetchVocabularySummary"),
                     propertyReads = emptySet(),
                 ),
                 PortRow(
@@ -174,12 +181,11 @@ data class EffectTypeCatalog(
                     reason = "規則どおり WRITE（中身は loadCredentials だが保守側に倒す）",
                 ),
                 HookRow("FeedViewModel#onStarConfirmed", HookKind.WRITE, HookShape.NO_ARG, HookWiring.SETTER),
-                HookRow("ApiListeningStreakStore#onStreakIncreased", HookKind.WRITE, HookShape.NO_ARG, HookWiring.SETTER),
                 HookRow(
                     "TabItem#screen", HookKind.WRITE, HookShape.NO_ARG, HookWiring.CONSTRUCTOR,
                     reason = "Composable の関数型（JVM では Function2<Composer, Integer, Unit>）。Composable の局所変数だけが持ち、probe のグラフに入らない",
                 ),
-                HookRow("ApiListeningStreakStore#fetchListeningStreak", HookKind.READ, HookShape.SUSPEND_NO_ARG, HookWiring.CONSTRUCTOR),
+                HookRow("LearningDashboardQuery#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("SettingsViewModel#isAdminProvider", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("PlaybackCoordinator#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("OfflineLibrary#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
