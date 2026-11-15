@@ -46,7 +46,7 @@ class LearningViewModelTest {
         val store = RecordingPreferencesStore(log, InMemoryPreferencesStore(initialSeenAchievementIds = seen))
         lateinit var rig: Rig
         val query = LearningDashboardQuery(api, store, { rig.subject }, StandardTestDispatcher(testScheduler))
-        val commands = LearningCommands(PreferencesSync(NoopPreferencesApi, store, { rig.subject }, backgroundScope))
+        val commands = LearningCommands(api, PreferencesSync(NoopPreferencesApi, store, { rig.subject }, backgroundScope), StandardTestDispatcher(testScheduler))
         rig = Rig(LearningViewModel(query, commands), api, store, log)
         return rig
     }
@@ -103,7 +103,7 @@ class LearningViewModelTest {
     fun `登録語彙は最新5件に絞り期日語がある時だけ単語テストを表示する`() = runTest {
         val rig = rig()
         rig.api.onFetchVocabularySummary = {
-            VocabularySummary(7, (1..7).map { VocabularyRecord("term-$it", "意味-$it", "2026-07-${30 - it}") })
+            VocabularySummary(7, (1..7).map { VocabularyRecord("p-$it", "term-$it", "意味-$it", "2026-07-${30 - it}") })
         }
         rig.api.onHasVocabularyTest = { true }
 

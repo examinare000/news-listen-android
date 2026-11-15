@@ -5,6 +5,9 @@ import com.rioikeda.newslisten.model.AchievementResponse
 import com.rioikeda.newslisten.model.LearningDashboardResponse
 import com.rioikeda.newslisten.model.ListeningStreakResponse
 import com.rioikeda.newslisten.model.MonthlyActivityResponse
+import com.rioikeda.newslisten.model.QuizAnswerRequest
+import com.rioikeda.newslisten.model.QuizAnswerResponse
+import com.rioikeda.newslisten.model.QuizGradeResult
 import com.rioikeda.newslisten.model.QuizStatsResponse
 import com.rioikeda.newslisten.model.QuizTrendPointResponse
 import com.rioikeda.newslisten.model.VocabularyItemResponse
@@ -50,6 +53,24 @@ class LearningApiAdapterTest {
         override suspend fun fetchVocabularyTestSession(): VocabularyTestSessionResponse {
             failure?.let { throw it }
             return session
+        }
+
+        val savedVocabularyCalls = mutableListOf<Pair<String, String>>()
+        var savedVocabulary: VocabularyItemResponse? = null
+
+        override suspend fun saveVocabulary(podcastId: String, term: String): VocabularyItemResponse {
+            savedVocabularyCalls += podcastId to term
+            failure?.let { throw it }
+            return checkNotNull(savedVocabulary)
+        }
+
+        val submittedQuizCalls = mutableListOf<Pair<String, QuizAnswerRequest>>()
+        var quizResponse: QuizAnswerResponse? = null
+
+        override suspend fun submitQuizAnswers(id: String, request: QuizAnswerRequest): QuizAnswerResponse {
+            submittedQuizCalls += id to request
+            failure?.let { throw it }
+            return checkNotNull(quizResponse)
         }
     }
 
@@ -147,9 +168,70 @@ class LearningApiAdapterTest {
         val summary = LearningApiAdapter(client).fetchVocabularySummary()
 
         assertEquals(42, summary.count)
+        assertEquals((1..7).map { "p-$it" }, summary.items.map { it.episodeId })
         assertEquals((1..7).map { "term-$it" }, summary.items.map { it.term })
         assertEquals((1..7).map { "意味-$it" }, summary.items.map { it.meaning })
         assertEquals((1..7).map { "2026-07-0$it" }, summary.items.map { it.registeredAt })
+    }
+
+    @Test
+    fun `android-dec-102 saveVocabularyはpodcastIdをepisodeIdへ写し例外を透過する`() = runTest {
+        val client = StubApiClient().apply {
+            savedVocabulary = VocabularyItemResponse("v", "p-1", "term", "意味", "ex", "2026-07-01")
+        }
+
+        val record = LearningApiAdapter(client).saveVocabulary("p-1", "term")
+
+        assertEquals(listOf("p-1" to "term"), client.savedVocabularyCalls)
+        assertEquals("p-1", record.episodeId)
+        assertEquals("term", record.term)
+        assertEquals("意味", record.meaning)
+        assertEquals("2026-07-01", record.registeredAt)
+
+        val failure = ApiException.HttpError(500)
+        client.failure = failure
+        try {
+            LearningApiAdapter(client).saveVocabulary("p-1", "term")
+            fail("ApiException が投げられるはず")
+        } catch (e: ApiException) {
+            assertSame(failure, e)
+        }
+    }
+
+    @Test
+    fun `android-deriv-22 submitQuizAnswersは回答をrequestに包み採点結果を率を変えずに写し例外を透過する`() = runTest {
+        val client = StubApiClient().apply {
+            quizResponse = QuizAnswerResponse(
+                correctCount = 1,
+                total = 2,
+                correctRate = 0.3,
+                results = listOf(
+                    QuizGradeResult(questionIndex = 0, selectedIndex = 0, correctIndex = 0, isCorrect = true),
+                    QuizGradeResult(questionIndex = 1, selectedIndex = 2, correctIndex = 1, isCorrect = false),
+                ),
+            )
+        }
+
+        val record = LearningApiAdapter(client).submitQuizAnswers("p-1", listOf(0, 1))
+
+        assertEquals("p-1", client.submittedQuizCalls.single().first)
+        assertEquals(listOf(0, 1), client.submittedQuizCalls.single().second.answers)
+        assertEquals(1, record.correctCount)
+        assertEquals(2, record.total)
+        assertEquals(0.3, record.correctRate, 0.0) // 件数から再計算しない（0.5 にならない）
+        assertEquals(listOf(0, 1), record.items.map { it.questionIndex })
+        assertEquals(listOf(0, 2), record.items.map { it.selectedIndex })
+        assertEquals(listOf(0, 1), record.items.map { it.correctIndex })
+        assertEquals(listOf(true, false), record.items.map { it.isCorrect })
+
+        val failure = ApiException.NotFound()
+        client.failure = failure
+        try {
+            LearningApiAdapter(client).submitQuizAnswers("p-1", listOf(0))
+            fail("ApiException が投げられるはず")
+        } catch (e: ApiException.NotFound) {
+            assertSame(failure, e)
+        }
     }
 
     @Test

@@ -87,11 +87,6 @@ class PlaybackNoticeTest {
     }
 
     @Test
-    fun `android-dec-70 VocabularyFailedの文言は基点と同じ`() {
-        assertEquals("語彙の登録に失敗しました", PlaybackNotice.VocabularyFailed.message)
-    }
-
-    @Test
     fun `android-dec-70 unplayableは再生できる行ならnullを返す`() {
         assertNull(PlaybackNotice.unplayable(episode(status = "completed")))
     }

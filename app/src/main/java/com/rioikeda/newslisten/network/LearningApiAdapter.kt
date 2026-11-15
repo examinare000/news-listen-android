@@ -4,14 +4,17 @@ import com.rioikeda.newslisten.learning.app.AchievementRecord
 import com.rioikeda.newslisten.learning.app.DashboardRecord
 import com.rioikeda.newslisten.learning.app.LearningApi
 import com.rioikeda.newslisten.learning.app.MonthlyActivityRecord
+import com.rioikeda.newslisten.learning.app.QuizGradeRecord
+import com.rioikeda.newslisten.learning.app.QuizItemRecord
 import com.rioikeda.newslisten.learning.app.QuizTrendRecord
 import com.rioikeda.newslisten.learning.app.StreakRecord
 import com.rioikeda.newslisten.learning.app.VocabularyRecord
 import com.rioikeda.newslisten.learning.app.VocabularySummary
 import com.rioikeda.newslisten.learning.app.WeeklyGoalRecord
 import com.rioikeda.newslisten.learning.app.WeeklyHistoryRecord
+import com.rioikeda.newslisten.model.QuizAnswerRequest
 
-/** [ApiClient] の学習系の読みを包み、DTO を port の部品に変える。例外は呼び手へそのまま伝える。 */
+/** [ApiClient] の学習系の読み書きを包み、DTO を port の部品に変える。例外は呼び手へそのまま伝える。 */
 internal class LearningApiAdapter(private val apiClient: ApiClient) : LearningApi {
     override suspend fun fetchDashboard(): DashboardRecord {
         val response = apiClient.fetchLearningDashboard()
@@ -50,7 +53,22 @@ internal class LearningApiAdapter(private val apiClient: ApiClient) : LearningAp
         val response = apiClient.fetchVocabulary()
         return VocabularySummary(
             count = response.count,
-            items = response.vocabulary.map { VocabularyRecord(it.term, it.meaning, it.registeredAt) },
+            items = response.vocabulary.map { VocabularyRecord(it.podcastId, it.term, it.meaning, it.registeredAt) },
+        )
+    }
+
+    override suspend fun saveVocabulary(episodeId: String, term: String): VocabularyRecord {
+        val saved = apiClient.saveVocabulary(episodeId, term)
+        return VocabularyRecord(saved.podcastId, saved.term, saved.meaning, saved.registeredAt)
+    }
+
+    override suspend fun submitQuizAnswers(episodeId: String, answers: List<Int>): QuizGradeRecord {
+        val response = apiClient.submitQuizAnswers(episodeId, QuizAnswerRequest(answers))
+        return QuizGradeRecord(
+            correctCount = response.correctCount,
+            total = response.total,
+            correctRate = response.correctRate,
+            items = response.results.map { QuizItemRecord(it.questionIndex, it.selectedIndex, it.correctIndex, it.isCorrect) },
         )
     }
 }

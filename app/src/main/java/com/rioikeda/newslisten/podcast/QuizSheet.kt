@@ -42,12 +42,12 @@ import com.rioikeda.newslisten.designsystem.DSFeedback
 import com.rioikeda.newslisten.designsystem.DSFeedbackVocabulary
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.success
-import com.rioikeda.newslisten.model.QuizAnswerResponse
+import com.rioikeda.newslisten.learning.domain.QuizGrade
 import com.rioikeda.newslisten.podcast.app.NowPlaying
 import kotlinx.coroutines.launch
 
-internal fun quizFeedbackVocabulary(correctRate: Double): DSFeedbackVocabulary =
-    if (correctRate >= 0.5) DSFeedbackVocabulary.CORRECT else DSFeedbackVocabulary.INCORRECT
+internal fun quizFeedbackVocabulary(grade: QuizGrade): DSFeedbackVocabulary =
+    if (grade.passed) DSFeedbackVocabulary.CORRECT else DSFeedbackVocabulary.INCORRECT
 
 /** 公開設問を提示し、サーバー採点後に正解と選択した誤答を意味色で示す。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,14 +55,14 @@ internal fun quizFeedbackVocabulary(correctRate: Double): DSFeedbackVocabulary =
 fun QuizSheet(
     nowPlaying: NowPlaying,
     feedback: DSFeedback,
-    submit: suspend (podcastId: String, answers: List<Int>) -> QuizAnswerResponse,
+    submit: suspend (podcastId: String, answers: List<Int>) -> QuizGrade,
     onDismiss: () -> Unit,
 ) {
     val questions = nowPlaying.quiz.orEmpty()
     val selections = remember(nowPlaying.episodeId) {
         mutableStateListOf<Int?>().apply { repeat(questions.size) { add(null) } }
     }
-    var grade by remember(nowPlaying.episodeId) { mutableStateOf<QuizAnswerResponse?>(null) }
+    var grade by remember(nowPlaying.episodeId) { mutableStateOf<QuizGrade?>(null) }
     var isSubmitting by remember(nowPlaying.episodeId) { mutableStateOf(false) }
     var isUnavailable by remember(nowPlaying.episodeId) { mutableStateOf(false) }
     var errorMessage by remember(nowPlaying.episodeId) { mutableStateOf<String?>(null) }
@@ -116,9 +116,7 @@ fun QuizSheet(
                                     style = MaterialTheme.typography.titleLarge,
                                 )
                                 question.options.forEachIndexed { optionIndex, option ->
-                                    val gradeItem = result?.results?.firstOrNull {
-                                        it.questionIndex == questionIndex
-                                    }
+                                    val gradeItem = result?.itemFor(questionIndex)
                                     val isCorrect = gradeItem?.correctIndex == optionIndex
                                     val isSelectedIncorrect =
                                         gradeItem?.selectedIndex == optionIndex && gradeItem?.isCorrect == false
@@ -190,7 +188,7 @@ fun QuizSheet(
                                     try {
                                         val response = submit(nowPlaying.episodeId, selections.filterNotNull())
                                         grade = response
-                                        feedback.play(quizFeedbackVocabulary(response.correctRate))
+                                        feedback.play(quizFeedbackVocabulary(response))
                                     } catch (_: ApiException.NotFound) {
                                         isUnavailable = true
                                     } catch (_: ApiException) {

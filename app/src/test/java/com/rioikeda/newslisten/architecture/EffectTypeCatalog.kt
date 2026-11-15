@@ -94,7 +94,7 @@ data class EffectTypeCatalog(
                 PortRow(
                     port = "LearningApi",
                     interfaces = setOf("com.rioikeda.newslisten.learning.app.LearningApi"),
-                    writes = emptySet(),
+                    writes = setOf("saveVocabulary", "submitQuizAnswers"),
                     sequenceReads = setOf("fetchDashboard", "fetchStreak", "hasVocabularyTest", "fetchVocabularySummary"),
                     propertyReads = emptySet(),
                 ),

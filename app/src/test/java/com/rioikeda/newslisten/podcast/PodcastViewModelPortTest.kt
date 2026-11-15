@@ -2,9 +2,10 @@ package com.rioikeda.newslisten.podcast
 
 import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.learning.app.FakeLearningApi
+import com.rioikeda.newslisten.learning.app.testLearningCommands
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.network.AudioCacheManager
-import com.rioikeda.newslisten.network.BaseFakeApiClient
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
@@ -41,9 +42,7 @@ class PodcastViewModelPortTest {
     fun fetchPodcastsはpodcastApi経由で呼ばれapiClient経由では呼ばれない() = runTest {
         // verifies: android-contract-18
         val podcastApi = FakePodcastApi(onFetchPodcasts = { listOf(podcast("p1")) })
-        // 何も stub しない基底を渡す。fetchPodcasts が誤って apiClient 経由で呼ばれたら error で fail する。
-        val apiClient = object : BaseFakeApiClient() {}
-
+        // PodcastViewModel は ApiClient を受けない。fetchPodcasts は podcastApi だけを通る。
         val offlineLibrary = OfflineLibrary(
             AudioCacheManager(FakeFileSystem(), baseDir = "/cache"),
             podcastApi,
@@ -53,7 +52,7 @@ class PodcastViewModelPortTest {
         )
         val dispatcher = StandardTestDispatcher(testScheduler)
         val viewModel = PodcastViewModel(
-            apiClient = apiClient,
+            learningCommands = testLearningCommands(FakeLearningApi(), backgroundScope, dispatcher),
             coordinator = PlaybackCoordinator(
                 podcastApi = podcastApi,
                 playerController = FakePlayerController(),

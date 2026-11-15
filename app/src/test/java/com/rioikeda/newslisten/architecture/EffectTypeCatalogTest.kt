@@ -42,10 +42,10 @@ class EffectTypeCatalogTest {
         assertTrue(api.writes.containsAll(listOf("markCompleted", "updatePlaybackPosition", "starArticle", "dismissArticle")))
         assertTrue(api.sequenceReads.containsAll(listOf("fetchFeed", "fetchVocabularyTestSession", "fetchListeningStreak")))
 
-        // 学習の読み取り境界は独立した port 行になり、ApiClient 行は network.LearningApi を継承元に持たない（本 slice で移行）。
+        // 学習の port は独立した port 行になり、ApiClient 行は network.LearningApi を継承元に持たない（本 slice で移行）。
         val learning = portRow(production, "LearningApi")
         assertEquals(setOf("com.rioikeda.newslisten.learning.app.LearningApi"), learning.interfaces)
-        assertTrue(learning.writes.isEmpty())
+        assertEquals(setOf("saveVocabulary", "submitQuizAnswers"), learning.writes)
         assertEquals(setOf("fetchDashboard", "fetchStreak", "hasVocabularyTest", "fetchVocabularySummary"), learning.sequenceReads)
         assertTrue(learning.propertyReads.isEmpty())
         assertTrue(

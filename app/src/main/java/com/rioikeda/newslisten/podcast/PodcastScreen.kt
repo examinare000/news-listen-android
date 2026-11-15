@@ -41,6 +41,7 @@ import androidx.compose.ui.res.stringResource
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.DSFeedback
+import com.rioikeda.newslisten.learning.app.LearningCommands
 
 /**
  * Podcast タブのルートスクリーン。一覧表示と再生中のプレイヤーを担う。
@@ -53,7 +54,7 @@ import com.rioikeda.newslisten.designsystem.DSFeedback
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
+fun PodcastScreen(viewModel: PodcastViewModel, learningCommands: LearningCommands, feedback: DSFeedback) {
     val episodes by viewModel.episodes.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val notice by viewModel.notice.collectAsState()
@@ -202,7 +203,7 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
 
         // プレイヤー表示エリア（再生中のときのみ）
         if (nowPlaying != null) {
-            AudioPlayerSection(viewModel = viewModel, feedback = feedback)
+            AudioPlayerSection(viewModel = viewModel, learningCommands = learningCommands, feedback = feedback)
         }
     }
 
@@ -235,6 +236,6 @@ fun PodcastScreen(viewModel: PodcastViewModel, feedback: DSFeedback) {
     // 初期化：一覧を読み込む
     LaunchedEffect(Unit) {
         viewModel.fetchPodcasts()
-        viewModel.loadVocabularyRegistrations()
+        learningCommands.loadVocabularyRegistrations()
     }
 }

@@ -5,6 +5,11 @@ import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import com.rioikeda.newslisten.preferences.TimeFormat
 import com.rioikeda.newslisten.core.Difficulty
+import com.rioikeda.newslisten.preferences.app.PreferencesApi
+import com.rioikeda.newslisten.preferences.app.PreferencesSync
+import com.rioikeda.newslisten.preferences.app.ServerPreferences
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 
 /** 呼出の順を共有の記録へ積む [LearningApi] の fake。応答と失敗は操作ごとに差し替える。 */
 class FakeLearningApi(private val log: MutableList<String> = mutableListOf()) : LearningApi {
@@ -12,6 +17,16 @@ class FakeLearningApi(private val log: MutableList<String> = mutableListOf()) : 
     var onFetchStreak: suspend () -> StreakRecord = { StreakRecord(0, false, null) }
     var onHasVocabularyTest: suspend () -> Boolean = { false }
     var onFetchVocabularySummary: suspend () -> VocabularySummary = { VocabularySummary(0, emptyList()) }
+    var onSaveVocabulary: suspend (episodeId: String, term: String) -> VocabularyRecord =
+        { episodeId, term -> VocabularyRecord(episodeId, term, "意味", "2026-07-29T03:00:00+00:00") }
+    var onSubmitQuizAnswers: suspend (episodeId: String, answers: List<Int>) -> QuizGradeRecord =
+        { _, _ -> error("submitQuizAnswers is not stubbed") }
+
+    /** saveVocabulary に渡された (episodeId, term)。 */
+    val saveVocabularyCalls: MutableList<Pair<String, String>> = mutableListOf()
+
+    /** submitQuizAnswers に渡された (episodeId, answers)。 */
+    val submitQuizAnswersCalls: MutableList<Pair<String, List<Int>>> = mutableListOf()
 
     override suspend fun fetchDashboard(): DashboardRecord {
         log += "fetchDashboard"
@@ -31,6 +46,18 @@ class FakeLearningApi(private val log: MutableList<String> = mutableListOf()) : 
     override suspend fun fetchVocabularySummary(): VocabularySummary {
         log += "fetchVocabularySummary"
         return onFetchVocabularySummary()
+    }
+
+    override suspend fun saveVocabulary(episodeId: String, term: String): VocabularyRecord {
+        log += "saveVocabulary"
+        saveVocabularyCalls += episodeId to term
+        return onSaveVocabulary(episodeId, term)
+    }
+
+    override suspend fun submitQuizAnswers(episodeId: String, answers: List<Int>): QuizGradeRecord {
+        log += "submitQuizAnswers"
+        submitQuizAnswersCalls += episodeId to answers
+        return onSubmitQuizAnswers(episodeId, answers)
     }
 }
 
@@ -109,3 +136,18 @@ fun dashboardRecord(
     weeklyGoal = weeklyGoal,
     achievements = achievements,
 )
+
+private object NoopPreferencesApi : PreferencesApi {
+    override suspend fun fetchPreferences(): ServerPreferences = ServerPreferences("toeic_600", 1.0, 3)
+    override suspend fun updateDefaultDifficulty(code: String) {}
+    override suspend fun updateDefaultPlaybackSpeed(speed: Double) {}
+    override suspend fun updateWeeklyGoalEpisodes(episodes: Int) {}
+}
+
+/** 学習の中継だけを観測するテスト向けの [LearningCommands]。設定の同期は使わないので何もしない api を渡す。 */
+fun testLearningCommands(api: LearningApi, scope: CoroutineScope, dispatcher: CoroutineDispatcher): LearningCommands =
+    LearningCommands(
+        api = api,
+        preferencesSync = PreferencesSync(NoopPreferencesApi, InMemoryPreferencesStore(), { "u1" }, scope),
+        dispatcher = dispatcher,
+    )

@@ -22,9 +22,8 @@ object Allowlist {
         files.map { AllowEntry(ruleId, it, target, owner) }
 
     val entries: List<AllowEntry> =
-        // android-dep-02 (12)
-        rule("android-dep-02", "model", "android-slice-learning-02", "podcast/QuizSheet.kt", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-02", "model", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
+        // android-dep-02 (10)
+        rule("android-dep-02", "model", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
             rule(
                 "android-dep-02", "model", "android-slice-periphery-01",
                 "feed/FeedViewModel.kt",
@@ -50,8 +49,7 @@ object Allowlist {
             rule("android-dep-03", "model", "android-slice-periphery-01", "feed/PendingArticleAction.kt") +
             rule("android-dep-03", "model", "android-slice-learning-03", "network/LearningApi.kt", "network/VocabularyTestApi.kt") +
 
-            // android-dep-04 (16)
-            rule("android-dep-04", "model", "android-slice-learning-02", "podcast/QuizSheet.kt") +
+            // android-dep-04 (13)
             rule("android-dep-04", "model", "android-slice-periphery-01", "feed/FeedScreen.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-02", "onboarding/OnboardingScreen.kt", "settings/SettingsScreen.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
@@ -59,8 +57,6 @@ object Allowlist {
             rule("android-dep-04", "PreferencesStore", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
             rule("android-dep-04", "model", "android-slice-periphery-02", "onboarding/OnboardingViewModel.kt", "settings/SettingsViewModel.kt") +
             rule("android-dep-04", "network", "android-slice-periphery-02", "onboarding/OnboardingViewModel.kt", "settings/SettingsViewModel.kt") +
-            rule("android-dep-04", "model", "android-slice-learning-02", "podcast/PodcastViewModel.kt") +
-            rule("android-dep-04", "network", "android-slice-learning-02", "podcast/PodcastViewModel.kt") +
             rule("android-dep-04", "model", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
             rule("android-dep-04", "VocabularyTestApi", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
             rule("android-dep-04", "network", "android-slice-learning-03", "vocabulary/VocabularyTestViewModel.kt") +
@@ -68,13 +64,11 @@ object Allowlist {
             // android-dep-09 (1)
             rule("android-dep-09", "= e.message", "android-slice-periphery-01", "feed/FeedViewModel.kt") +
 
-            // android-check-02 (4)
-            rule("android-check-02", "fetchVocabulary", "android-slice-learning-02", "network/LearningApi.kt") +
+            // android-check-02 (3)
             rule("android-check-02", "fetchVocabularyTestSession", "android-slice-learning-03", "network/LearningApi.kt") +
             rule("android-check-02", "fetchVocabularyTestSession", "android-slice-learning-03", "network/VocabularyTestApi.kt") +
             rule("android-check-02", "submitVocabularyTestResults", "android-slice-learning-03", "network/VocabularyTestApi.kt") +
 
-            // android-check-04 (2)
-            rule("android-check-04", "correctRate >=", "android-slice-learning-02", "podcast/QuizSheet.kt") +
+            // android-check-04 (1)
             rule("android-check-04", "limit == 0", "android-slice-periphery-02", "settings/SettingsScreen.kt")
 }

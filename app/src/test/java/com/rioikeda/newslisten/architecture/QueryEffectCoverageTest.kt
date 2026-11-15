@@ -13,6 +13,7 @@ import com.rioikeda.newslisten.auth.subjectCleanupQueryProbes
 import com.rioikeda.newslisten.catalog.episodeCatalogQueryProbes
 import com.rioikeda.newslisten.feed.feedViewModelQueryProbes
 import com.rioikeda.newslisten.learning.app.StreakQuery
+import com.rioikeda.newslisten.learning.learningCommandsQueryProbes
 import com.rioikeda.newslisten.learning.learningDashboardQueryQueryProbes
 import com.rioikeda.newslisten.learning.learningViewModelQueryProbes
 import com.rioikeda.newslisten.learning.streakQueryQueryProbes
@@ -41,6 +42,7 @@ import org.junit.Test
 /** 登録 list。後続 slice が操作・query を足したら、その所有者の probe set をここに足す。 */
 internal val registeredQueryProbeSets: List<QueryProbeSet> = listOf(
     podcastViewModelQueryProbes,
+    learningCommandsQueryProbes,
     authViewModelQueryProbes,
     authSessionQueryProbes,
     accountViewModelQueryProbes,
@@ -193,7 +195,7 @@ class QueryEffectCoverageTest {
             "PasskeyCredentialsViewModel", "PasskeyLoginViewModel", "PasskeyRegistrationViewModel",
             "FeedViewModel", "LearningViewModel", "VocabularyTestViewModel", "SettingsViewModel", "OnboardingViewModel",
             "LearningDashboardQuery", "StreakQuery", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator", "EpisodeCatalog",
-            "PreferencesSync",
+            "PreferencesSync", "LearningCommands",
         )
 
         /** 登録 list の各 probe set を、本番の母集団・台帳・分類表で 1 回ずつ run した結果。 */
@@ -212,7 +214,7 @@ class QueryEffectCoverageTest {
     // ---- 本番の probe の網羅と配線 ----
 
     @Test(timeout = 600_000)
-    fun 登録listは12のViewModelとLearningDashboardQueryとStreakQueryとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
+    fun 登録listは12のViewModelとLearningCommandsとLearningDashboardQueryとStreakQueryとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
         val registered = registeredQueryProbeSets.map { it.owner }
         assertEquals("登録された probe set の所有者", owners.sorted(), registered.sorted())
 

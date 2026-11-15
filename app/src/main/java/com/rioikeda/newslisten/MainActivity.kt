@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
         val learningViewModel = appContainer.getLearningViewModel()
         val settingsViewModel = appContainer.getSettingsViewModel()
         val streakQuery = appContainer.getStreakQuery()
+        val learningCommands = appContainer.getLearningCommands()
         val accountViewModel = appContainer.getAccountViewModel()
         val sessionsViewModel = appContainer.getSessionsViewModel()
         val onboardingViewModel = appContainer.getOnboardingViewModel()
@@ -186,6 +187,7 @@ class MainActivity : ComponentActivity() {
                                 passkeyRegistrationViewModel,
                                 passkeyCredentialsViewModel,
                                 streakQuery,
+                                learningCommands,
                                 appContainer,
                             )
                         }

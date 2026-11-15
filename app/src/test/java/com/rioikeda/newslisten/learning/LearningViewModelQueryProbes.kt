@@ -4,8 +4,6 @@ import com.rioikeda.newslisten.architecture.ProbeData
 import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
-import com.rioikeda.newslisten.learning.app.LearningCommands
-import com.rioikeda.newslisten.preferences.probePreferencesSync
 
 /**
  * `LearningViewModel` の query は state の getter だけ。warm-up で `load()` を済ませ、既読の保存（command）が
@@ -27,7 +25,7 @@ internal val learningViewModelQueryProbes: QueryProbeSet = run {
     ) { env ->
         LearningViewModel(
             query = probeLearningDashboardQuery(env),
-            commands = LearningCommands(probePreferencesSync(env)),
+            commands = probeLearningCommands(env),
         )
     }
 }

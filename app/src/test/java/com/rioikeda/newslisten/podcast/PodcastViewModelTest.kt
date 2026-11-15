@@ -3,12 +3,12 @@ package com.rioikeda.newslisten.podcast
 import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.core.ApiException
+import com.rioikeda.newslisten.learning.app.FakeLearningApi
+import com.rioikeda.newslisten.learning.app.LearningCommands
+import com.rioikeda.newslisten.learning.app.LearningNotice
 import com.rioikeda.newslisten.learning.app.StreakQuery
+import com.rioikeda.newslisten.learning.app.testLearningCommands
 import com.rioikeda.newslisten.model.PodcastResponse
-import com.rioikeda.newslisten.model.QuizAnswerResponse
-import com.rioikeda.newslisten.model.QuizGradeResult
-import com.rioikeda.newslisten.model.VocabularyItemResponse
-import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
@@ -94,6 +94,10 @@ class PodcastViewModelTest {
         download(episode.id)
     }
 
+    // 学習の中継（クイズ・語彙）は LearningCommands が持つ。失敗を起こしたいテストは FakeLearningApi を差し替えて渡す。
+    private fun TestScope.learningCommands(api: FakeLearningApi = FakeLearningApi()): LearningCommands =
+        testLearningCommands(api, backgroundScope, StandardTestDispatcher(testScheduler))
+
     private fun TestScope.newViewModel(
         apiClient: FakePodcastApiClient,
         playerController: FakePlayerController,
@@ -102,12 +106,13 @@ class PodcastViewModelTest {
         streakQuery: StreakQuery? = null,
         preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
         currentSubject: () -> String? = { "u1" },
+        learningCommands: LearningCommands = learningCommands(),
     ): PodcastViewModel {
         val offlineLibrary = OfflineLibrary(cacheManager, apiClient, lookup, currentSubject, StandardTestDispatcher(testScheduler))
         // 現行は 1 つの dispatcher が再生と一覧の両方を直列化する。Coordinator と ViewModel で同じ値を共有して範囲を保つ。
         val dispatcher = StandardTestDispatcher(testScheduler)
         return PodcastViewModel(
-            apiClient = apiClient.learning,
+            learningCommands = learningCommands,
             coordinator = PlaybackCoordinator(
                 podcastApi = apiClient,
                 playerController = playerController,
@@ -355,7 +360,7 @@ class PodcastViewModelTest {
         val offlineLibrary = OfflineLibrary(cacheManager, apiClient, lookup, { "u1" }, StandardTestDispatcher(testScheduler))
         val dispatcher = StandardTestDispatcher(testScheduler)
         val viewModel = PodcastViewModel(
-            apiClient = apiClient.learning,
+            learningCommands = learningCommands(),
             coordinator = PlaybackCoordinator(
                 podcastApi = apiClient,
                 playerController = FakePlayerController(),
@@ -389,159 +394,6 @@ class PodcastViewModelTest {
         assertNull(viewModel.notice.value)
         assertFalse(cacheManager.isCached("u1", "X"))
     }
-
-    // --- submitQuizAnswers（要件1: podcastId 明示化） ---
-
-    @Test
-    fun submitQuizAnswersは指定のpodcastIdで送信する() = runTest {
-        val quizResponse = QuizAnswerResponse(
-            correctCount = 2,
-            total = 3,
-            correctRate = 2.0 / 3.0,
-            results = listOf(
-                QuizGradeResult(
-                    questionIndex = 0,
-                    isCorrect = true,
-                    correctIndex = 0,
-                    selectedIndex = 0,
-                ),
-                QuizGradeResult(
-                    questionIndex = 1,
-                    isCorrect = true,
-                    correctIndex = 1,
-                    selectedIndex = 1,
-                ),
-                QuizGradeResult(
-                    questionIndex = 2,
-                    isCorrect = false,
-                    correctIndex = 2,
-                    selectedIndex = 0,
-                ),
-            ),
-        )
-        var submittedId = ""
-        val apiClient = FakePodcastApiClient(
-            onSubmitQuizAnswers = { podcastId, _ ->
-                submittedId = podcastId
-                quizResponse
-            },
-        )
-        val viewModel = newViewModel(apiClient, FakePlayerController())
-
-        val response = viewModel.submitQuizAnswers("podcast-1", listOf(0, 1, 0))
-
-        assertEquals("podcast-1", submittedId)
-        assertEquals(2, response.correctCount)
-        assertEquals(3, response.total)
-    }
-
-    @Test
-    fun submitQuizAnswersの送信前にnowPlayingが変わっても指定podcastIdで送信する() = runTest {
-        val p1 = podcast(id = "p1")
-        val p2 = podcast(id = "p2")
-        val quizResponse = QuizAnswerResponse(
-            correctCount = 1,
-            total = 1,
-            correctRate = 1.0,
-            results = listOf(
-                QuizGradeResult(
-                    questionIndex = 0,
-                    isCorrect = true,
-                    correctIndex = 0,
-                    selectedIndex = 0,
-                ),
-            ),
-        )
-        var submittedId = ""
-        val apiClient = FakePodcastApiClient(
-            onFetchPodcast = { id -> if (id == "p1") p1 else p2 },
-            onSubmitQuizAnswers = { podcastId, _ ->
-                submittedId = podcastId
-                quizResponse
-            },
-            onUpdatePlaybackPosition = { id, _ -> if (id == "p1") p1 else p2 },
-        )
-        val player = FakePlayerController()
-        val viewModel = newViewModel(apiClient, player)
-
-        viewModel.playNow(p1)
-        viewModel.playNow(p2)
-
-        val response = viewModel.submitQuizAnswers("p1", listOf(0))
-
-        assertEquals("p1", submittedId)
-        assertEquals(p2.id, viewModel.nowPlaying.value?.episodeId)
-
-        viewModel.stopForSubjectLeave()
-    }
-
-    @Test
-    fun submitQuizAnswersが失敗時は例外をスロー() = runTest {
-        val apiClient = FakePodcastApiClient(
-            onSubmitQuizAnswers = { _, _ -> throw ApiException.HttpError(500) },
-        )
-        val viewModel = newViewModel(apiClient, FakePlayerController())
-
-        try {
-            viewModel.submitQuizAnswers("podcast-1", listOf(0))
-            throw AssertionError("例外をスロー予定")
-        } catch (e: ApiException.HttpError) {
-            assertEquals(500, e.code)
-        }
-    }
-
-    @Test
-    fun `登録語彙の初期取得成功で習得済み判定へ反映する`() = runTest {
-        val apiClient = FakePodcastApiClient(
-            onFetchVocabulary = {
-                VocabularyListResponse(
-                    vocabulary = listOf(vocabularyItem("p1", "Resilient")),
-                    count = 1,
-                )
-            },
-        )
-        val viewModel = newViewModel(apiClient, FakePlayerController())
-
-        viewModel.loadVocabularyRegistrations()
-
-        assertTrue(viewModel.isVocabularyRegistered("p1", " resilient "))
-    }
-
-    @Test
-    fun `登録語彙の初期取得失敗はPodcast表示を妨げない`() = runTest {
-        val apiClient = FakePodcastApiClient(
-            onFetchVocabulary = { throw ApiException.HttpError(500) },
-        )
-        val viewModel = newViewModel(apiClient, FakePlayerController())
-
-        viewModel.loadVocabularyRegistrations()
-
-        assertTrue(viewModel.registeredVocabularyKeys.value.isEmpty())
-        assertNull(viewModel.notice.value)
-    }
-
-    @Test
-    fun `語彙の習得登録は冪等で同じ語を二重送信しない`() = runTest {
-        val apiClient = FakePodcastApiClient(
-            onSaveVocabulary = { podcastId, term -> vocabularyItem(podcastId, term) },
-        )
-        val viewModel = newViewModel(apiClient, FakePlayerController())
-
-        viewModel.saveVocabulary("p1", "Resilient")
-        viewModel.saveVocabulary("p1", " resilient ")
-
-        assertEquals(listOf("p1" to "Resilient"), apiClient.saveVocabularyCalls)
-        assertTrue(viewModel.isVocabularyRegistered("p1", "resilient"))
-    }
-
-    private fun vocabularyItem(podcastId: String, term: String) = VocabularyItemResponse(
-        vocabularyId = "${podcastId}__${term.trim().lowercase()}",
-        podcastId = podcastId,
-        term = term,
-        meaning = "回復力のある",
-        example = "The system is resilient.",
-        registeredAt = "2026-07-29T03:00:00+00:00",
-    )
 
     /** player の事象を注入し、購読が session へ反映するまで進める（同じ値の連続は届かないので呼び分ける）。 */
     private fun TestScope.emit(player: FakePlayerController, state: PlaybackState) {
@@ -637,14 +489,15 @@ class PodcastViewModelTest {
         assertEquals(listOf(null, "生成中のため再生できません", fetchOfflineMessage, null), recorded)
     }
 
+    private fun failingSave(failure: ApiException = ApiException.NetworkError(RuntimeException("save"))) =
+        FakeLearningApi().apply { onSaveVocabulary = { _, _ -> throw failure } }
+
     @Test
     fun `android-dec-63 android-dec-71 android-dec-08 noticeは自前の失敗を最優先しCatalogの失敗が次で再生の失敗が最後でdismissNoticeで合成が消える`() = runTest {
         val fetchFailure = ApiException.NetworkError(RuntimeException("offline"))
-        val apiClient = FakePodcastApiClient(
-            onFetchPodcasts = { throw fetchFailure },
-            onSaveVocabulary = { _, _ -> throw ApiException.NetworkError(RuntimeException("save")) },
-        )
-        val viewModel = newViewModel(apiClient, FakePlayerController())
+        val apiClient = FakePodcastApiClient(onFetchPodcasts = { throw fetchFailure })
+        val learning = learningCommands(failingSave())
+        val viewModel = newViewModel(apiClient, FakePlayerController(), learningCommands = learning)
 
         viewModel.playNow(podcast(status = "processing")) // 再生の失敗だけがある
         assertEquals("生成中のため再生できません", viewModel.notice.value?.message)
@@ -652,7 +505,7 @@ class PodcastViewModelTest {
         viewModel.fetchPodcasts() // Catalog の失敗が重なると、再生の失敗より優先される
         assertEquals(fetchOfflineMessage, viewModel.notice.value?.message)
 
-        viewModel.saveVocabulary("p1", "term") // 自前の失敗が重なると、自前の値が見える
+        learning.registerVocabulary("p1", "term") // 自前の失敗が重なると、自前の値が見える
         val own = viewModel.notice.value
         assertNotNull(own)
         assertTrue(own?.message != fetchOfflineMessage && own?.message != "生成中のため再生できません")
@@ -663,12 +516,10 @@ class PodcastViewModelTest {
 
     @Test
     fun `android-dec-63 android-dec-71 fetchPodcastsが成功してもVM自身の失敗は消えない`() = runTest {
-        val apiClient = FakePodcastApiClient(
-            onFetchPodcasts = { listOf(podcast("1")) },
-            onSaveVocabulary = { _, _ -> throw ApiException.NetworkError(RuntimeException("save")) },
-        )
-        val viewModel = newViewModel(apiClient, FakePlayerController())
-        viewModel.saveVocabulary("p1", "term")
+        val apiClient = FakePodcastApiClient(onFetchPodcasts = { listOf(podcast("1")) })
+        val learning = learningCommands(failingSave())
+        val viewModel = newViewModel(apiClient, FakePlayerController(), learningCommands = learning)
+        learning.registerVocabulary("p1", "term")
         val own = viewModel.notice.value
         assertNotNull(own)
 
@@ -682,7 +533,6 @@ class PodcastViewModelTest {
     fun `android-dec-71 dismissNoticeは3つの持ち主の知らせをそれぞれ消す`() = runTest {
         val apiClient = FakePodcastApiClient(
             onFetchPodcasts = { throw ApiException.NetworkError(RuntimeException("offline")) },
-            onSaveVocabulary = { _, _ -> throw ApiException.NetworkError(RuntimeException("save")) },
         )
         val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
         val offlineLibrary = OfflineLibrary(cacheManager, apiClient, lookup, { "u1" }, StandardTestDispatcher(testScheduler))
@@ -699,8 +549,9 @@ class PodcastViewModelTest {
             episodeLookup = lookup,
         )
         val catalog = EpisodeCatalog(apiClient, dispatcher) { offlineLibrary.syncDownloadedState(it) }
+        val learning = learningCommands(failingSave())
         val viewModel = PodcastViewModel(
-            apiClient = apiClient.learning,
+            learningCommands = learning,
             coordinator = coordinator,
             catalog = catalog,
             offlineLibrary = offlineLibrary,
@@ -708,7 +559,7 @@ class PodcastViewModelTest {
         )
         viewModel.playNow(podcast(status = "processing")) // 再生の持ち主
         viewModel.fetchPodcasts() // Catalog の持ち主
-        viewModel.saveVocabulary("p1", "term") // VM 自身
+        learning.registerVocabulary("p1", "term") // VM 自身（Learning）
         assertNotNull(coordinator.notice.value)
         assertNotNull(catalog.notice.value)
         assertEquals(vocabularyFailedMessage, viewModel.notice.value?.message)
@@ -717,21 +568,76 @@ class PodcastViewModelTest {
 
         assertNull(coordinator.notice.value)
         assertNull(catalog.notice.value)
-        // VM 自身の値は、他の 2 つが null の状態で合成が null になることで確かめる
+        assertNull(learning.notice.value)
+        // 自前の `_notice` は、他の持ち主が全て null の状態で合成が null になることで確かめる
         assertNull(viewModel.notice.value)
     }
 
     @Test
     fun `語彙の登録の失敗は固定の文言の知らせになりApiExceptionの種類によらず例外のmessageを出さない`() = runTest {
-        val apiClient = FakePodcastApiClient(
-            onSaveVocabulary = { _, _ -> throw ApiException.HttpError(500) },
-        )
-        val viewModel = newViewModel(apiClient, FakePlayerController())
+        val learning = learningCommands(failingSave(ApiException.HttpError(500)))
+        val viewModel = newViewModel(FakePodcastApiClient(), FakePlayerController(), learningCommands = learning)
 
-        viewModel.saveVocabulary("p1", "term")
+        learning.registerVocabulary("p1", "term")
 
-        assertEquals(PlaybackNotice.VocabularyFailed, viewModel.notice.value)
+        assertEquals(PlaybackNotice.Learning(LearningNotice.VocabularyFailed), viewModel.notice.value)
         assertEquals(vocabularyFailedMessage, viewModel.notice.value?.message)
+    }
+
+    // 保存の失敗（ダウンロード）を起こす。取得と音声は成功し、ディスクの書込だけが失敗する。
+    private fun TestScope.saveFailingViewModel(learning: LearningCommands): PodcastViewModel {
+        val p1 = podcast(id = "p1")
+        val apiClient = FakePodcastApiClient(onFetchPodcast = { p1 }, onDownloadAudio = { byteArrayOf(1) })
+        val fileSystem = FakeFileSystem().apply { writeException = java.io.IOException("disk full") }
+        return newViewModel(
+            apiClient,
+            FakePlayerController(),
+            cacheManager = AudioCacheManager(fileSystem, baseDir = "/cache"),
+            learningCommands = learning,
+        )
+    }
+
+    @Test
+    fun `android-dec-100 語彙の失敗の後にダウンロードの失敗が起きるとダウンロードの知らせが見える`() = runTest {
+        val learning = learningCommands(failingSave())
+        val viewModel = saveFailingViewModel(learning)
+        learning.registerVocabulary("p1", "term")
+        assertEquals(vocabularyFailedMessage, viewModel.notice.value?.message)
+
+        viewModel.download(podcast(id = "p1"))
+
+        assertEquals(PlaybackNotice.SaveFailed, viewModel.notice.value)
+        assertNull(learning.notice.value)
+    }
+
+    @Test
+    fun `android-dec-100 ダウンロードの失敗の後に語彙の失敗が起きると語彙の知らせが見える`() = runTest {
+        val learning = learningCommands(failingSave())
+        val viewModel = saveFailingViewModel(learning)
+        viewModel.download(podcast(id = "p1"))
+        assertEquals(PlaybackNotice.SaveFailed, viewModel.notice.value)
+
+        learning.registerVocabulary("p1", "term")
+
+        assertEquals(PlaybackNotice.Learning(LearningNotice.VocabularyFailed), viewModel.notice.value)
+    }
+
+    @Test
+    fun `android-dec-100 dismissNoticeは隠れていた知らせを途中で見せずに消す`() = runTest {
+        val learning = learningCommands(failingSave())
+        val viewModel = saveFailingViewModel(learning)
+        viewModel.download(podcast(id = "p1")) // 自前の `_notice` = SaveFailed
+        learning.registerVocabulary("p1", "term") // Learning が優先して見える
+        val recorded = mutableListOf<String?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.notice.collect { recorded += it?.message } }
+        runCurrent()
+        recorded.clear()
+
+        viewModel.dismissNotice()
+        runCurrent()
+
+        assertEquals(listOf<String?>(null), recorded)
+        assertFalse(recorded.contains("音声を保存できませんでした"))
     }
 
     @Test

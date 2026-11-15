@@ -39,7 +39,10 @@ import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
 import com.rioikeda.newslisten.account.app.AccountApi
 import com.rioikeda.newslisten.learning.app.DashboardRecord
 import com.rioikeda.newslisten.learning.app.LearningApi
+import com.rioikeda.newslisten.learning.app.QuizGradeRecord
+import com.rioikeda.newslisten.learning.app.QuizItemRecord
 import com.rioikeda.newslisten.learning.app.StreakRecord
+import com.rioikeda.newslisten.learning.app.VocabularyRecord
 import com.rioikeda.newslisten.learning.app.VocabularySummary
 import com.rioikeda.newslisten.account.app.PasskeyOptions
 import com.rioikeda.newslisten.account.app.PasskeyRecord
@@ -420,7 +423,7 @@ class RecordingAccountApi(
     }
 }
 
-/** 学習タブの読みの port [LearningApi] の記録 fake。4 操作とも列の読みで、scenario B では注入した失敗を投げる。 */
+/** 学習の port [LearningApi] の記録 fake。読み 4 操作は列の読みで、scenario B では注入した失敗を投げる。書き 2 操作は書込として記録し、どの scenario でも失敗しない。 */
 class RecordingLearningApi(
     val recorder: EffectRecorder,
     val scenario: ProbeScenario,
@@ -434,6 +437,21 @@ class RecordingLearningApi(
     override suspend fun hasVocabularyTest(): Boolean = core.read("hasVocabularyTest")
 
     override suspend fun fetchVocabularySummary(): VocabularySummary = core.read("fetchVocabularySummary")
+
+    override suspend fun saveVocabulary(episodeId: String, term: String): VocabularyRecord {
+        core.write("saveVocabulary")
+        return VocabularyRecord(episodeId = "default-episode", term = "default-term", meaning = "default-meaning", registeredAt = "2026-10-14T00:00:00Z")
+    }
+
+    override suspend fun submitQuizAnswers(episodeId: String, answers: List<Int>): QuizGradeRecord {
+        core.write("submitQuizAnswers")
+        return QuizGradeRecord(
+            correctCount = 1,
+            total = 1,
+            correctRate = 1.0,
+            items = listOf(QuizItemRecord(questionIndex = 0, selectedIndex = 0, correctIndex = 0, isCorrect = true)),
+        )
+    }
 }
 
 /** 設定のサーバー往復 port [PreferencesApi] の記録 fake。列の読みは [ApiFake.read] と同じく先頭で注入された失敗を投げる。 */

@@ -59,6 +59,8 @@ object LayerMap {
         "preferences/domain/PreferenceSyncResult.kt",
         "learning/domain/Achievement.kt",
         "learning/domain/MonthlyActivity.kt",
+        "learning/domain/VocabularyKey.kt",
+        "learning/domain/QuizGrade.kt",
     )
 
     private val application = listOf(
@@ -78,6 +80,7 @@ object LayerMap {
         "learning/app/LearningDashboardQuery.kt",
         "learning/app/StreakQuery.kt",
         "learning/app/LearningCommands.kt",
+        "learning/app/LearningNotice.kt",
     )
 
     private val port = listOf(

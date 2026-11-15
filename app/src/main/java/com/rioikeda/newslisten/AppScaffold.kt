@@ -41,6 +41,7 @@ import com.rioikeda.newslisten.auth.AuthState
 import com.rioikeda.newslisten.auth.AuthViewModel
 import com.rioikeda.newslisten.feed.FeedScreen
 import com.rioikeda.newslisten.feed.FeedViewModel
+import com.rioikeda.newslisten.learning.app.LearningCommands
 import com.rioikeda.newslisten.learning.app.LearningFeedbackEvent
 import com.rioikeda.newslisten.learning.app.StreakQuery
 import com.rioikeda.newslisten.designsystem.DSFeedbackVocabulary
@@ -84,6 +85,7 @@ fun AppScaffold(
     passkeyRegistrationViewModel: PasskeyRegistrationViewModel,
     passkeyCredentialsViewModel: PasskeyCredentialsViewModel,
     streakQuery: StreakQuery,
+    learningCommands: LearningCommands,
     appContainer: com.rioikeda.newslisten.di.AppContainer? = null,
 ) {
     var selectedTab by remember { mutableStateOf(0) }
@@ -119,7 +121,7 @@ fun AppScaffold(
         TabItem(
             label = stringResource(R.string.tab_podcast),
             icon = Icons.Filled.Favorite,
-            screen = { PodcastScreen(podcastViewModel, feedback) }
+            screen = { PodcastScreen(podcastViewModel, learningCommands, feedback) }
         ),
         TabItem(
             label = stringResource(R.string.tab_learning),

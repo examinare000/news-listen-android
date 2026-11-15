@@ -46,6 +46,8 @@ import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.DSFeedback
 import com.rioikeda.newslisten.catalog.domain.EpisodeGlossaryEntry
 import com.rioikeda.newslisten.catalog.domain.EpisodeTranscriptSegment
+import com.rioikeda.newslisten.learning.app.LearningCommands
+import com.rioikeda.newslisten.learning.domain.VocabularyKey
 import com.rioikeda.newslisten.podcast.app.NowPlaying
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -61,14 +63,14 @@ import kotlinx.coroutines.launch
  * - 再生速度セグメント
  */
 @Composable
-fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
+fun AudioPlayerSection(viewModel: PodcastViewModel, learningCommands: LearningCommands, feedback: DSFeedback) {
     val nowPlaying by viewModel.nowPlaying.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
     val currentTime by viewModel.positionSeconds.collectAsState()
     val duration by viewModel.durationSeconds.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
-    val registeredVocabularyKeys by viewModel.registeredVocabularyKeys.collectAsState()
-    val savingVocabularyKeys by viewModel.savingVocabularyKeys.collectAsState()
+    val registeredVocabularyKeys by learningCommands.registeredVocabularyKeys.collectAsState()
+    val savingVocabularyKeys by learningCommands.savingVocabularyKeys.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     var isTranscriptExpanded by remember { mutableStateOf(false) }
@@ -133,7 +135,7 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
                     savingVocabularyKeys = savingVocabularyKeys,
                     onSave = { term ->
                         coroutineScope.launch {
-                            viewModel.saveVocabulary(podcastId, term)
+                            learningCommands.registerVocabulary(podcastId, term)
                         }
                     },
                 )
@@ -154,7 +156,7 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, feedback: DSFeedback) {
                 QuizSheet(
                     nowPlaying = snapshot,
                     feedback = feedback,
-                    submit = viewModel::submitQuizAnswers,
+                    submit = learningCommands::submitQuiz,
                     onDismiss = { quizNowPlaying = null },
                 )
             }
@@ -296,8 +298,8 @@ private fun VocabularySection(
     entries: List<EpisodeGlossaryEntry>,
     isExpanded: Boolean,
     onToggle: () -> Unit,
-    registeredVocabularyKeys: Set<String>,
-    savingVocabularyKeys: Set<String>,
+    registeredVocabularyKeys: Set<VocabularyKey>,
+    savingVocabularyKeys: Set<VocabularyKey>,
     onSave: (String) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -365,7 +367,7 @@ private fun VocabularySection(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        val key = "$podcastId::${entry.term.trim().lowercase()}"
+                        val key = VocabularyKey.of(podcastId, entry.term)
                         val isRegistered = key in registeredVocabularyKeys
                         val isSaving = key in savingVocabularyKeys
                         Button(

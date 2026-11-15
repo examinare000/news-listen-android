@@ -132,7 +132,7 @@ interface ApiClient : LearningApi, VocabularyTestApi {
 
     suspend fun saveVocabulary(podcastId: String, term: String): VocabularyItemResponse
 
-    override suspend fun fetchVocabulary(): VocabularyListResponse
+    suspend fun fetchVocabulary(): VocabularyListResponse
 
     suspend fun deleteVocabulary(vocabularyId: String): DeleteVocabularyResponse
 
