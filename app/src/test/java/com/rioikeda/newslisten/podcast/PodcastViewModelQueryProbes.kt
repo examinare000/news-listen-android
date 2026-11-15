@@ -1,11 +1,11 @@
 package com.rioikeda.newslisten.podcast
 
-import com.rioikeda.newslisten.architecture.CallSpec
 import com.rioikeda.newslisten.architecture.ProbeData
 import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.catalog.probeEpisodeCatalog
+import com.rioikeda.newslisten.learning.probeLearningCommands
 
 /**
  * `PodcastViewModel` の query。warm-up で再生を始め、15 秒周期の位置同期（内部 scope の timer）を張った状態で観測する。
@@ -15,7 +15,6 @@ internal val podcastViewModelQueryProbes: QueryProbeSet = run {
     val canned = mapOf(
         "PodcastApi#fetchPodcasts" to ProbeData.repeated(ProbeData.podcastList),
         "PodcastApi#fetchPodcast" to ProbeData.repeated(ProbeData.podcast),
-        "ApiClient#fetchVocabulary" to ProbeData.repeated(ProbeData.vocabularyList),
         "LearningApi#fetchStreak" to ProbeData.increasingStreaks(),
         "AudioStore#isCached" to ProbeData.repeated(false, 64),
     )
@@ -37,15 +36,11 @@ internal val podcastViewModelQueryProbes: QueryProbeSet = run {
             ProbeData.readSuccess(canned, warmUpSuccess),
             ProbeData.readFailure(canned = mapOf("AudioStore#isCached" to ProbeData.repeated(false, 64)), warmUp = warmUpFailure),
         ),
-        calls = listOf(
-            CallSpec("PodcastViewModel#loadVocabularyRegistrations"),
-            CallSpec("PodcastViewModel#isVocabularyRegistered") { listOf("podcast-1", "term") },
-        ),
     ) { env ->
         val catalog = probeEpisodeCatalog(env)
         val offlineLibrary = probeOfflineLibrary(env, catalog)
         PodcastViewModel(
-            apiClient = env.apiClient,
+            learningCommands = probeLearningCommands(env),
             coordinator = probePlaybackCoordinator(env, offlineLibrary, catalog),
             catalog = catalog,
             offlineLibrary = offlineLibrary,

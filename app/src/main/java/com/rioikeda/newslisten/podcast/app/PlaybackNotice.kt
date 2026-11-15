@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.podcast.app
 
 import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.learning.app.LearningNotice
 
 /**
  * 画面に出す再生の知らせの種類（android-dec-69）。文言は種類が固定で持ち、画面は [message] だけを読む（android-dec-70）。
@@ -51,8 +52,9 @@ sealed interface PlaybackNotice {
         override val message = "音声を削除できませんでした"
     }
 
-    data object VocabularyFailed : PlaybackNotice {
-        override val message = "語彙の登録に失敗しました"
+    /** 学習の操作の知らせ（android-dec-100）。文言は [LearningNotice] が持つ。 */
+    data class Learning(val notice: LearningNotice) : PlaybackNotice {
+        override val message: String get() = notice.message
     }
 
     companion object {

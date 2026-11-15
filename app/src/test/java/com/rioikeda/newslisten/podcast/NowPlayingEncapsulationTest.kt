@@ -7,6 +7,8 @@ import com.rioikeda.newslisten.catalog.domain.EpisodeKind
 import com.rioikeda.newslisten.catalog.domain.EpisodeQuizQuestion
 import com.rioikeda.newslisten.catalog.domain.EpisodeSourceKind
 import com.rioikeda.newslisten.catalog.domain.EpisodeTranscriptSegment
+import com.rioikeda.newslisten.learning.app.FakeLearningApi
+import com.rioikeda.newslisten.learning.app.testLearningCommands
 import com.rioikeda.newslisten.network.AudioCacheManager
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
@@ -86,7 +88,7 @@ class NowPlayingEncapsulationTest {
             episodeLookup = lookup,
         )
         val viewModel = PodcastViewModel(
-            apiClient = apiClient.learning,
+            learningCommands = testLearningCommands(FakeLearningApi(), backgroundScope, dispatcher),
             coordinator = coordinator,
             catalog = EpisodeCatalog(apiClient, dispatcher) { offlineLibrary.syncDownloadedState(it) },
             offlineLibrary = offlineLibrary,

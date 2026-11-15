@@ -1,7 +1,8 @@
 package com.rioikeda.newslisten.learning.app
 
 /**
- * 学習タブの読みの port。実装は失敗を例外のまま呼び手へ伝える。
+ * 学習の port。読み（ダッシュボード・連続記録・語彙）と書き（語彙の登録・クイズの送信）を持つ。
+ * 実装は失敗を例外のまま呼び手へ伝える。
  *
  * 戻り値はこのファイルの部品だけ。DTO・JSON・リードモデルは出さない。
  */
@@ -15,6 +16,12 @@ interface LearningApi {
 
     /** 件数と語彙の全件。件数を絞るのは呼び手の責務。 */
     suspend fun fetchVocabularySummary(): VocabularySummary
+
+    /** 語彙を登録する（書き）。 */
+    suspend fun saveVocabulary(episodeId: String, term: String): VocabularyRecord
+
+    /** クイズの回答を送り、採点結果を受ける（書き）。404 は `ApiException.NotFound` のまま伝える。 */
+    suspend fun submitQuizAnswers(episodeId: String, answers: List<Int>): QuizGradeRecord
 }
 
 data class StreakRecord(
@@ -64,6 +71,7 @@ data class DashboardRecord(
 )
 
 data class VocabularyRecord(
+    val episodeId: String,
     val term: String,
     val meaning: String,
     val registeredAt: String,
@@ -72,4 +80,18 @@ data class VocabularyRecord(
 data class VocabularySummary(
     val count: Int,
     val items: List<VocabularyRecord>,
+)
+
+data class QuizItemRecord(
+    val questionIndex: Int,
+    val selectedIndex: Int,
+    val correctIndex: Int,
+    val isCorrect: Boolean,
+)
+
+data class QuizGradeRecord(
+    val correctCount: Int,
+    val total: Int,
+    val correctRate: Double,
+    val items: List<QuizItemRecord>,
 )

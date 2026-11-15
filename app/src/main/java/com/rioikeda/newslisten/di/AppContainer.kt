@@ -431,7 +431,7 @@ class AppContainer(context: Context) {
      */
     private val _podcastViewModel: PodcastViewModel by lazy {
         PodcastViewModel(
-            apiClient = apiClient,
+            learningCommands = _learningCommands,
             coordinator = _playbackCoordinator,
             catalog = _episodeCatalog,
             offlineLibrary = offlineLibrary,
@@ -440,6 +440,16 @@ class AppContainer(context: Context) {
     }
 
     fun getPodcastViewModel(): PodcastViewModel = _podcastViewModel
+
+    /**
+     * 学習の入口。`PodcastViewModel`・`LearningViewModel`・画面が同じ instance を共有する。
+     * 語彙の key の読み書きは `PodcastViewModel` と同じ [podcastDispatcher] の上で直列化する。
+     */
+    private val _learningCommands: LearningCommands by lazy {
+        LearningCommands(api = learningApi, preferencesSync = preferencesSync, dispatcher = podcastDispatcher)
+    }
+
+    fun getLearningCommands(): LearningCommands = _learningCommands
 
     /**
      * LearningViewModel（学習タブ: ダッシュボード・実績・登録語彙）を生成して返す。
@@ -459,7 +469,7 @@ class AppContainer(context: Context) {
                 currentSubject = authSession::currentSubjectId,
                 dispatcher = Dispatchers.Default.limitedParallelism(1),
             ),
-            commands = LearningCommands(preferencesSync),
+            commands = _learningCommands,
         )
     }
 

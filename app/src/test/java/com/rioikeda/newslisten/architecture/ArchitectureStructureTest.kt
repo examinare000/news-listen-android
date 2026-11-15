@@ -149,7 +149,7 @@ class ArchitectureStructureTest {
     @Test
     fun android_check_05_検査つき生成の型の構築子が公開でない() {
         // verifies: CI-12 / T-07（対象の型が main に現れるまで skip）
-        val types = listOf("Episode", "SubjectId", "PlaybackSpeed", "WeeklyGoal")
+        val types = listOf("Episode", "SubjectId", "PlaybackSpeed", "WeeklyGoal", "VocabularyKey")
         val declared = types.filter { ArchitectureScanner.topLevelDeclarationFile(mainSources, it) != null }
         assumeTrue("対象の型が main に無い（android-slice-episode-01・android-slice-prefs-01・android-slice-account-01 が足す）", declared.isNotEmpty())
 

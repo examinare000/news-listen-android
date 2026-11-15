@@ -106,7 +106,7 @@ internal object ProbeData {
 
     val vocabularySummary: VocabularySummary = VocabularySummary(
         count = 1,
-        items = listOf(VocabularyRecord(term = "term", meaning = "meaning", registeredAt = "2026-10-14T00:00:00Z")),
+        items = listOf(VocabularyRecord(episodeId = "podcast-1", term = "term", meaning = "meaning", registeredAt = "2026-10-14T00:00:00Z")),
     )
 
     val featuredSite: FeaturedSite = FeaturedSite(id = "site-1", name = "Example", url = "https://example.com/rss")

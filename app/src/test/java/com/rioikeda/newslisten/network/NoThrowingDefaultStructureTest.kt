@@ -59,7 +59,7 @@ class NoThrowingDefaultStructureTest {
     }
 
     @Test
-    fun EpisodeCatalogは再生5操作をpodcastApi経由で呼びPodcastViewModelはpodcastApiを呼ばず語彙_クイズ3操作だけをapiClient経由で呼ぶ() {
+    fun EpisodeCatalogは再生5操作をpodcastApi経由で呼びPodcastViewModelはpodcastApiもapiClientも呼ばない() {
         // verifies: android-contract-18
         val root = resolveMainSourceRoot()
         val catalogFile = root.walkTopDown().firstOrNull { it.name == "EpisodeCatalog.kt" }
@@ -72,7 +72,6 @@ class NoThrowingDefaultStructureTest {
         val playbackOps = setOf(
             "fetchPodcasts", "fetchPodcast", "updatePlaybackPosition", "markCompleted", "downloadAudio",
         )
-        val vocabQuizOps = setOf("fetchVocabulary", "saveVocabulary", "submitQuizAnswers")
 
         val catalogPodcastApiCalls = Regex("""\bpodcastApi\.(\w+)\(""")
             .findAll(catalogText).map { it.groupValues[1] }.toSet()
@@ -90,8 +89,8 @@ class NoThrowingDefaultStructureTest {
             viewModelPodcastApiCalls.isEmpty(),
         )
         assertTrue(
-            "PodcastViewModel の apiClient 経由の呼出は語彙・クイズ3操作のみであるべき（実際: $viewModelApiClientCalls）",
-            viewModelApiClientCalls.all { it in vocabQuizOps },
+            "PodcastViewModel は apiClient を呼ばない（実際: $viewModelApiClientCalls）",
+            viewModelApiClientCalls.isEmpty(),
         )
     }
 

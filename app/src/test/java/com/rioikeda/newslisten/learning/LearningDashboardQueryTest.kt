@@ -49,7 +49,7 @@ class LearningDashboardQueryTest {
         return rig
     }
 
-    private fun vocabulary(count: Int) = (1..count).map { VocabularyRecord("term-$it", "意味-$it", "2026-07-$it") }
+    private fun vocabulary(count: Int) = (1..count).map { VocabularyRecord("p-$it", "term-$it", "意味-$it", "2026-07-$it") }
 
     @Test
     fun `android-query-learning-01 派生値は週の目標の進み・記録の達成率・月の率・推移の直近3件になる`() = runTest {
@@ -177,7 +177,9 @@ class LearningDashboardQueryTest {
 
         // readAs は不透明なので、command に渡した結果（旧主体 u-1 と照合され書かれない）で観測する
         val commands = LearningCommands(
-            PreferencesSync(NoopPreferencesApi, rig.store, { rig.subject }, backgroundScope),
+            api = rig.api,
+            preferencesSync = PreferencesSync(NoopPreferencesApi, rig.store, { rig.subject }, backgroundScope),
+            dispatcher = StandardTestDispatcher(testScheduler),
         )
         commands.markAchievementsSeen(setOf("streak_7"), view.readAs)
         assertEquals(emptySet<String>(), rig.store.seenAchievementIds.value)
@@ -192,7 +194,9 @@ class LearningDashboardQueryTest {
         val rig = rig()
         rig.api.onFetchDashboard = { dashboardRecord(achievements = listOf(AchievementRecord("streak_7", "2026-07-29"))) }
         val commands = LearningCommands(
-            PreferencesSync(NoopPreferencesApi, rig.store, { rig.subject }, backgroundScope),
+            api = rig.api,
+            preferencesSync = PreferencesSync(NoopPreferencesApi, rig.store, { rig.subject }, backgroundScope),
+            dispatcher = StandardTestDispatcher(testScheduler),
         )
 
         val first = checkNotNull(rig.query.load())

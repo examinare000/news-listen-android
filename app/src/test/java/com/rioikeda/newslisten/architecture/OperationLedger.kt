@@ -38,8 +38,8 @@ object OperationLedger {
         facade: String? = null,
     ) = LedgerRow(id, OperationKind.QUERY, QueryEvidence.PROBE, aliases, specId = specId, facade = facade, reason = reason)
 
-    private fun structural(id: String, reason: String) =
-        LedgerRow(id, OperationKind.QUERY, QueryEvidence.STRUCTURAL, reason = reason)
+    private fun structural(id: String, reason: String, aliases: Set<String> = emptySet()) =
+        LedgerRow(id, OperationKind.QUERY, QueryEvidence.STRUCTURAL, aliases, reason = reason)
 
     private fun command(
         id: String,
@@ -148,6 +148,15 @@ object OperationLedger {
         query("LearningViewModel#getUiState", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-learning-01", facade = "android-slice-learning-01"),
         command("LearningViewModel#load", "学習のダッシュボードを読み、続けて既読の実績を保存する command", specId = "android-cmd-learning-04", facade = "android-slice-learning-01"),
         command("LearningCommands#markAchievementsSeen", "既読の実績を PreferencesSync へ保存させる command", specId = "android-cmd-learning-04"),
+        command("LearningCommands#submitQuiz", "クイズの回答を送って採点を受ける command（POST。結果は receipt の QuizGrade）", specId = "android-cmd-learning-01"),
+        command("LearningCommands#registerVocabulary", "語彙を登録する command（POST。失敗は notice に出す）", specId = "android-cmd-learning-02"),
+        command("LearningCommands#dismissNotice", "学習の知らせを消す command"),
+        query("LearningCommands#getRegisteredVocabularyKeys", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-learning-03"),
+        query("LearningCommands#getSavingVocabularyKeys", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-learning-03"),
+        query("LearningCommands#getNotice", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-learning-03"),
+        query("LearningCommands#isVocabularyRegistered", "登録済みの語彙を判定する query", specId = "android-query-learning-03"),
+        query("LearningCommands#loadVocabularyRegistrations", "登録済みの語彙を読む query", specId = "android-query-learning-03"),
+        structural("LearningNotice#getMessage", "学習の知らせの種類（値）", aliases = setOf("LearningNotice.VocabularyFailed#getMessage")),
         query("LearningDashboardQuery#getView", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-learning-01"),
         query("LearningDashboardQuery#load", "学習のダッシュボードを読む query（書かない）", specId = "android-query-learning-01"),
         structural("LearningScreenKt#weeklyGoalProgressText", "今週の目標の文言の純粋関数"),
@@ -235,24 +244,18 @@ object OperationLedger {
         query("PodcastViewModel#getNowPlaying", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-playback-01", facade = "android-slice-playapp-01"),
         query("PodcastViewModel#getPlaybackSpeed", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-playback-03", facade = "android-slice-playapp-01"),
         query("PodcastViewModel#getPositionSeconds", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-playback-03", facade = "android-slice-playapp-01"),
-        query("PodcastViewModel#getRegisteredVocabularyKeys", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-learning-03", facade = "android-slice-learning-02"),
-        query("PodcastViewModel#getSavingVocabularyKeys", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-learning-03", facade = "android-slice-learning-02"),
         query("PodcastViewModel#isLoading", "StateFlow を公開する getter（投影を読むだけ）", facade = "android-slice-playapp-01"),
         query("PodcastViewModel#isPlaying", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-playback-03", facade = "android-slice-playapp-01"),
-        query("PodcastViewModel#isVocabularyRegistered", "登録済みの語彙を読む query", specId = "android-query-learning-03", facade = "android-slice-learning-02"),
-        query("PodcastViewModel#loadVocabularyRegistrations", "登録済みの語彙を読む query", specId = "android-query-learning-03", facade = "android-slice-learning-02"),
         command("PodcastViewModel#playNext", "キューへ積む command（何も再生していなければ再生を始める）", specId = "android-cmd-playback-02", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#playNow", "再生を開始する command", specId = "android-cmd-playback-01", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#removeDownload", "音声のダウンロード・削除の command", specId = "android-cmd-playback-08", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#removeFromQueue", "キューを並べ替える command", specId = "android-cmd-playback-03", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#retry", "失敗した再生を取得からやり直す command（Errored のときだけ）", specId = "android-cmd-playback-05", facade = "android-slice-playapp-01"),
-        command("PodcastViewModel#saveVocabulary", "語彙を登録する command（POST）", specId = "android-cmd-learning-02", facade = "android-slice-learning-02"),
         command("PodcastViewModel#seekTo", "再生の操作を player に送る command", specId = "android-cmd-playback-04", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#setSpeed", "再生の操作を player に送る command", specId = "android-cmd-playback-04", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#skipBackward", "再生の操作を player に送る command", specId = "android-cmd-playback-04", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#skipForward", "再生の操作を player に送る command", specId = "android-cmd-playback-04", facade = "android-slice-playapp-01"),
         command("PodcastViewModel#stopForSubjectLeave", "主体の離脱で再生を止めキューを空にする command（位置は送らない）", specId = "android-cmd-playback-06", facade = "android-slice-playapp-01"),
-        command("PodcastViewModel#submitQuizAnswers", "クイズの回答を送って採点を受ける command（POST。結果の DTO を返す既知の例外）", specId = "android-cmd-learning-01", facade = "android-slice-learning-02"),
         command("PodcastViewModel#togglePlayPause", "再生の操作を player に送る command", specId = "android-cmd-playback-04", facade = "android-slice-playapp-01"),
         structural("QuizSheetKt#quizFeedbackVocabulary", "クイズの結果から音を決める純粋関数"),
         structural("RetestFeedback.Incorrect#getCorrectMeaning", "再テストの結果（値）"),
