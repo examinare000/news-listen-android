@@ -20,6 +20,7 @@ import com.rioikeda.newslisten.learning.vocabularyTestCommandsQueryProbes
 import com.rioikeda.newslisten.learning.learningDashboardQueryQueryProbes
 import com.rioikeda.newslisten.learning.learningViewModelQueryProbes
 import com.rioikeda.newslisten.learning.streakQueryQueryProbes
+import com.rioikeda.newslisten.onboarding.onboardingCommandsQueryProbes
 import com.rioikeda.newslisten.onboarding.onboardingViewModelQueryProbes
 import com.rioikeda.newslisten.passkey.passkeyCredentialsViewModelQueryProbes
 import com.rioikeda.newslisten.passkey.passkeyLoginViewModelQueryProbes
@@ -28,6 +29,7 @@ import com.rioikeda.newslisten.podcast.offlineLibraryQueryProbes
 import com.rioikeda.newslisten.podcast.playbackCoordinatorQueryProbes
 import com.rioikeda.newslisten.podcast.podcastViewModelQueryProbes
 import com.rioikeda.newslisten.settings.settingsViewModelQueryProbes
+import com.rioikeda.newslisten.settings.sourcesQueriesQueryProbes
 import com.rioikeda.newslisten.vocabulary.vocabularyTestViewModelQueryProbes
 import java.io.File
 import java.util.Collections
@@ -61,6 +63,8 @@ internal val registeredQueryProbeSets: List<QueryProbeSet> = listOf(
     vocabularyTestViewModelQueryProbes,
     settingsViewModelQueryProbes,
     onboardingViewModelQueryProbes,
+    sourcesQueriesQueryProbes,
+    onboardingCommandsQueryProbes,
     learningDashboardQueryQueryProbes,
     streakQueryQueryProbes,
     offlineLibraryQueryProbes,
@@ -200,7 +204,7 @@ class QueryEffectCoverageTest {
             "PasskeyCredentialsViewModel", "PasskeyLoginViewModel", "PasskeyRegistrationViewModel",
             "FeedViewModel", "LearningViewModel", "VocabularyTestViewModel", "SettingsViewModel", "OnboardingViewModel",
             "LearningDashboardQuery", "StreakQuery", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator", "EpisodeCatalog",
-            "PreferencesSync", "LearningCommands", "VocabularyTestCommands", "FeedQueries",
+            "PreferencesSync", "LearningCommands", "VocabularyTestCommands", "FeedQueries", "SourcesQueries", "OnboardingCommands",
         )
 
         /** 登録 list の各 probe set を、本番の母集団・台帳・分類表で 1 回ずつ run した結果。 */
@@ -219,7 +223,7 @@ class QueryEffectCoverageTest {
     // ---- 本番の probe の網羅と配線 ----
 
     @Test(timeout = 600_000)
-    fun 登録listは12のViewModelとFeedQueriesとLearningCommandsとVocabularyTestCommandsとLearningDashboardQueryとStreakQueryとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
+    fun 登録listは12のViewModelとFeedQueriesとSourcesQueriesとOnboardingCommandsとLearningCommandsとVocabularyTestCommandsとLearningDashboardQueryとStreakQueryとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
         val registered = registeredQueryProbeSets.map { it.owner }
         assertEquals("登録された probe set の所有者", owners.sorted(), registered.sorted())
 

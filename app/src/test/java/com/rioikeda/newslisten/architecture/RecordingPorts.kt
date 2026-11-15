@@ -2,6 +2,13 @@
 
 package com.rioikeda.newslisten.architecture
 
+import com.rioikeda.newslisten.notification.app.DeviceTokenApi
+import com.rioikeda.newslisten.notification.app.NotificationPermission
+import com.rioikeda.newslisten.notification.app.PushTokenSource
+import com.rioikeda.newslisten.settings.app.SourcesApi
+import com.rioikeda.newslisten.settings.domain.FeaturedSiteEntry
+import com.rioikeda.newslisten.settings.domain.GenerationQuota
+import com.rioikeda.newslisten.settings.domain.RssSourceEntry
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.designsystem.FeedbackHaptic
@@ -317,6 +324,7 @@ object RecordingDefaults {
     val quizAnswerResponse: QuizAnswerResponse =
         QuizAnswerResponse(correctCount = 0, total = 0, correctRate = 0.0, results = emptyList())
     val rssSourcesResponse: RssSourcesResponse = RssSourcesResponse(sources = emptyList())
+    val rssSourceEntries: List<RssSourceEntry> = emptyList()
     val preferencesResponse: PreferencesResponse = PreferencesResponse(
         defaultDifficulty = Difficulty.DEFAULT.code,
         defaultPlaybackSpeed = 1.0,
@@ -348,6 +356,7 @@ object RecordingDefaults {
     const val INITIAL_HAPTICS_ENABLED: Boolean = true
     const val INITIAL_POSITION_SECONDS: Double = 0.0
     const val INITIAL_IS_ONLINE: Boolean = true
+    const val INITIAL_NOTIFICATION_GRANTED: Boolean = true
 }
 
 internal class ApiFake(recorder: EffectRecorder, scenario: ProbeScenario, port: String = "ApiClient") :
@@ -489,6 +498,72 @@ class RecordingFeedApi(
     override suspend fun dismiss(articleId: String) {
         core.write("dismiss")
     }
+}
+
+/** Sources・オンボーディングの port [SourcesApi] の記録 fake。読み 4 操作は列の読み、書込 4 操作は書込として記録する。 */
+class RecordingSourcesApi(
+    val recorder: EffectRecorder,
+    val scenario: ProbeScenario,
+) : SourcesApi {
+    private val core = ApiFake(recorder, scenario, port = "SourcesApi")
+
+    override suspend fun fetchSources(): List<RssSourceEntry> = core.read("fetchSources")
+
+    override suspend fun addSource(name: String, url: String): List<RssSourceEntry> {
+        core.write("addSource")
+        return RecordingDefaults.rssSourceEntries
+    }
+
+    override suspend fun updateSource(oldUrl: String, name: String, url: String): List<RssSourceEntry> {
+        core.write("updateSource")
+        return RecordingDefaults.rssSourceEntries
+    }
+
+    override suspend fun removeSource(url: String) = core.write("removeSource")
+
+    override suspend fun fetchFeaturedSites(): List<FeaturedSiteEntry> = core.read("fetchFeaturedSites")
+
+    override suspend fun fetchGenerationQuota(): GenerationQuota = core.read("fetchGenerationQuota")
+
+    override suspend fun fetchOnboardingStatus(): Boolean = core.read("fetchOnboardingStatus")
+
+    override suspend fun completeOnboarding() = core.write("completeOnboarding")
+}
+
+/** デバイス token の登録 port [DeviceTokenApi] の記録 fake。`register` は書込。 */
+class RecordingDeviceTokenApi(
+    val recorder: EffectRecorder,
+    val scenario: ProbeScenario,
+) : DeviceTokenApi {
+    private val core = ApiFake(recorder, scenario, port = "DeviceTokenApi")
+
+    override suspend fun register(token: String, platform: String) = core.write("register")
+}
+
+/** push token の取得 port [PushTokenSource] の記録 fake。`token` は列の読み。 */
+class RecordingPushTokenSource(
+    val recorder: EffectRecorder,
+    val scenario: ProbeScenario,
+) : PushTokenSource {
+    private val core = ApiFake(recorder, scenario, port = "PushTokenSource")
+
+    override suspend fun token(): String? = core.read("token")
+}
+
+internal class NotificationPermissionFake(recorder: EffectRecorder, scenario: ProbeScenario) :
+    RecordingFake("NotificationPermission", recorder, scenario) {
+    fun property(getter: String, default: Boolean): Boolean = initial(getter, default)
+}
+
+/** 通知権限の記録 fake。`isGranted` は property の読み（[RecordingNetworkMonitor] と同じ作り）。 */
+class RecordingNotificationPermission(
+    val recorder: EffectRecorder,
+    val scenario: ProbeScenario,
+) : NotificationPermission {
+    private val core = NotificationPermissionFake(recorder, scenario)
+
+    override val isGranted: Boolean
+        get() = core.property("getIsGranted", RecordingDefaults.INITIAL_NOTIFICATION_GRANTED)
 }
 
 /** 設定のサーバー往復 port [PreferencesApi] の記録 fake。列の読みは [ApiFake.read] と同じく先頭で注入された失敗を投げる。 */
@@ -929,6 +1004,10 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
     val learningApi: RecordingLearningApi = RecordingLearningApi(recorder, scenario)
     val vocabularyTestApi: RecordingVocabularyTestApi = RecordingVocabularyTestApi(recorder, scenario)
     val feedApi: RecordingFeedApi = RecordingFeedApi(recorder, scenario)
+    val sourcesApi: RecordingSourcesApi = RecordingSourcesApi(recorder, scenario)
+    val deviceTokenApi: RecordingDeviceTokenApi = RecordingDeviceTokenApi(recorder, scenario)
+    val pushTokenSource: RecordingPushTokenSource = RecordingPushTokenSource(recorder, scenario)
+    val notificationPermission: RecordingNotificationPermission = RecordingNotificationPermission(recorder, scenario)
     val preferencesApi: RecordingPreferencesApi = RecordingPreferencesApi(recorder, scenario)
     val preferencesStore: RecordingPreferencesStore = RecordingPreferencesStore(recorder, scenario)
     val sessionStore: RecordingSessionStore = RecordingSessionStore(recorder, scenario)
@@ -941,7 +1020,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
 
     /** この実行単位の記録 fake の全部。配線の検査が「記録 fake であること」を照合する。 */
     val fakes: List<Any> = listOf(
-        apiClient, podcastApi, authApi, accountApi, learningApi, vocabularyTestApi, feedApi, preferencesApi, preferencesStore, sessionStore, playerController,
+        apiClient, podcastApi, authApi, accountApi, learningApi, vocabularyTestApi, feedApi, sourcesApi, deviceTokenApi, pushTokenSource, notificationPermission, preferencesApi, preferencesStore, sessionStore, playerController,
         fileSystem, audioStore, networkMonitor, passkeyProvider, feedbackPlayer,
     )
 

@@ -5,7 +5,6 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -20,56 +19,54 @@ class FcmTokenRegistrarTest {
 
     /** テスト対象の生成を共通化する。dispatcher は runTest の testScheduler に紐付ける。 */
     private fun TestScope.newRegistrar(
-        apiClient: FakeNotificationApiClient = FakeNotificationApiClient(),
-        tokenProvider: suspend () -> String? = { "fcm-token" },
-        permissionChecker: () -> Boolean = { true },
+        deviceTokenApi: FakeDeviceTokenApi = FakeDeviceTokenApi(),
+        pushTokenSource: FakePushTokenSource = FakePushTokenSource(),
+        notificationPermission: FakeNotificationPermission = FakeNotificationPermission(),
     ): FcmTokenRegistrar =
-        FcmTokenRegistrar(apiClient, tokenProvider, permissionChecker, StandardTestDispatcher(testScheduler))
+        FcmTokenRegistrar(deviceTokenApi, pushTokenSource, notificationPermission, StandardTestDispatcher(testScheduler))
 
     // --- onAuthenticated ---
 
     @Test
     fun 許可済みで認証されたらトークンを取得し登録する() = runTest {
-        val apiClient = FakeNotificationApiClient()
-        val registrar = newRegistrar(apiClient = apiClient, tokenProvider = { "fcm-token-abc" })
+        val api = FakeDeviceTokenApi()
+        val registrar = newRegistrar(deviceTokenApi = api, pushTokenSource = FakePushTokenSource { "fcm-token-abc" })
 
         registrar.onAuthenticated()
 
-        assertEquals(listOf("fcm-token-abc" to "android"), apiClient.registerCalls)
+        assertEquals(listOf("fcm-token-abc" to "android"), api.registerCalls)
     }
 
     @Test
     fun 通知権限が未許可なら登録を試みない() = runTest {
-        val apiClient = FakeNotificationApiClient()
-        var tokenProviderCalled = false
+        val api = FakeDeviceTokenApi()
+        val source = FakePushTokenSource { "fcm-token-abc" }
         val registrar = newRegistrar(
-            apiClient = apiClient,
-            tokenProvider = { tokenProviderCalled = true; "fcm-token-abc" },
-            permissionChecker = { false },
+            deviceTokenApi = api,
+            pushTokenSource = source,
+            notificationPermission = FakeNotificationPermission(granted = false),
         )
 
         registrar.onAuthenticated()
 
-        assertFalse(tokenProviderCalled)
-        assertTrue(apiClient.registerCalls.isEmpty())
+        assertEquals(0, source.callCount)
+        assertTrue(api.registerCalls.isEmpty())
     }
 
     @Test
     fun トークン取得できなければ登録しない() = runTest {
-        val apiClient = FakeNotificationApiClient()
-        val registrar = newRegistrar(apiClient = apiClient, tokenProvider = { null })
+        val api = FakeDeviceTokenApi()
+        val registrar = newRegistrar(deviceTokenApi = api, pushTokenSource = FakePushTokenSource { null })
 
         registrar.onAuthenticated()
 
-        assertTrue(apiClient.registerCalls.isEmpty())
+        assertTrue(api.registerCalls.isEmpty())
     }
 
     @Test
     fun 登録失敗は握って例外を投げない() = runTest {
-        val apiClient = FakeNotificationApiClient(
-            onRegisterDeviceToken = { _, _ -> throw ApiException.HttpError(422) },
-        )
-        val registrar = newRegistrar(apiClient = apiClient)
+        val api = FakeDeviceTokenApi { _, _ -> throw ApiException.HttpError(422) }
+        val registrar = newRegistrar(deviceTokenApi = api)
 
         // 例外が伝播しなければ成功（backend 未対応の 404/422 等いずれも握って続行する仕様）。
         registrar.onAuthenticated()
@@ -77,7 +74,7 @@ class FcmTokenRegistrarTest {
 
     @Test
     fun トークン取得自体が例外を投げても握る() = runTest {
-        val registrar = newRegistrar(tokenProvider = { error("firebase unavailable") })
+        val registrar = newRegistrar(pushTokenSource = FakePushTokenSource { error("firebase unavailable") })
 
         registrar.onAuthenticated()
     }
@@ -87,65 +84,64 @@ class FcmTokenRegistrarTest {
     @Test
     fun `android-dec-01 ログアウト時はトークンを取得せずAPIも呼ばない`() = runTest {
         // verifies: android-dec-01
-        val apiClient = FakeNotificationApiClient()
-        var tokenProviderCalls = 0
-        val registrar = newRegistrar(apiClient = apiClient, tokenProvider = { tokenProviderCalls++; "fcm-token-abc" })
+        val api = FakeDeviceTokenApi()
+        val source = FakePushTokenSource { "fcm-token-abc" }
+        val registrar = newRegistrar(deviceTokenApi = api, pushTokenSource = source)
 
         registrar.onLogout()
 
-        assertEquals(0, tokenProviderCalls)
-        assertTrue(apiClient.unregisterCalls.isEmpty())
-        assertTrue(apiClient.registerCalls.isEmpty())
+        assertEquals(0, source.callCount)
+        assertTrue(api.registerCalls.isEmpty())
     }
 
     // --- onNewToken ---
 
     @Test
     fun 認証済みかつ許可済みならonNewTokenで再登録する() = runTest {
-        val apiClient = FakeNotificationApiClient()
-        val registrar = newRegistrar(apiClient = apiClient)
+        val api = FakeDeviceTokenApi()
+        val registrar = newRegistrar(deviceTokenApi = api)
         registrar.onAuthenticated()
 
         registrar.onNewToken("fcm-token-new")
 
         assertEquals(
             listOf("fcm-token" to "android", "fcm-token-new" to "android"),
-            apiClient.registerCalls,
+            api.registerCalls,
         )
     }
 
     @Test
     fun 未認証状態でのonNewTokenは登録しない() = runTest {
-        val apiClient = FakeNotificationApiClient()
-        val registrar = newRegistrar(apiClient = apiClient)
+        val api = FakeDeviceTokenApi()
+        val registrar = newRegistrar(deviceTokenApi = api)
 
         registrar.onNewToken("fcm-token-new")
 
-        assertTrue(apiClient.registerCalls.isEmpty())
+        assertTrue(api.registerCalls.isEmpty())
     }
 
     @Test
     fun ログアウト後のonNewTokenは登録しない() = runTest {
-        val apiClient = FakeNotificationApiClient()
-        val registrar = newRegistrar(apiClient = apiClient)
+        val api = FakeDeviceTokenApi()
+        val registrar = newRegistrar(deviceTokenApi = api)
         registrar.onAuthenticated()
         registrar.onLogout()
 
         registrar.onNewToken("fcm-token-new")
 
-        assertEquals(listOf("fcm-token" to "android"), apiClient.registerCalls)
+        assertEquals(listOf("fcm-token" to "android"), api.registerCalls)
     }
 
     @Test
     fun 認証済みでも通知権限が未許可ならonNewTokenは登録しない() = runTest {
-        val apiClient = FakeNotificationApiClient()
-        var permissionGranted = true
-        val registrar = newRegistrar(apiClient = apiClient, permissionChecker = { permissionGranted })
+        val api = FakeDeviceTokenApi()
+        val permission = FakeNotificationPermission(granted = true)
+        val registrar = newRegistrar(deviceTokenApi = api, notificationPermission = permission)
         registrar.onAuthenticated()
-        permissionGranted = false
+        permission.granted = false
 
         registrar.onNewToken("fcm-token-new")
 
-        assertEquals(listOf("fcm-token" to "android"), apiClient.registerCalls)
+        assertEquals(listOf("fcm-token" to "android"), api.registerCalls)
     }
 }

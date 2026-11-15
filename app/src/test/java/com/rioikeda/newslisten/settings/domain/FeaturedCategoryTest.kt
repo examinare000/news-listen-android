@@ -1,4 +1,4 @@
-package com.rioikeda.newslisten.model
+package com.rioikeda.newslisten.settings.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -39,11 +39,11 @@ class FeaturedCategoryTest {
     @Test
     fun groupByCategoryInOrderがサイトをカテゴリでグループ化する() {
         val sites = listOf(
-            FeaturedSite("site-1", "TechCrunch", "https://example.com/1", category = "tech"),
-            FeaturedSite("site-2", "BusinessWeek", "https://example.com/2", category = "business"),
-            FeaturedSite("site-3", "ESPN", "https://example.com/3", category = "sports"),
-            FeaturedSite("site-4", "Variety", "https://example.com/4", category = "entertainment"),
-            FeaturedSite("site-5", "ArtsNews", "https://example.com/5", category = "culture"),
+            FeaturedSiteEntry("site-1", "TechCrunch", "https://example.com/1", description = null, category = "tech"),
+            FeaturedSiteEntry("site-2", "BusinessWeek", "https://example.com/2", description = null, category = "business"),
+            FeaturedSiteEntry("site-3", "ESPN", "https://example.com/3", description = null, category = "sports"),
+            FeaturedSiteEntry("site-4", "Variety", "https://example.com/4", description = null, category = "entertainment"),
+            FeaturedSiteEntry("site-5", "ArtsNews", "https://example.com/5", description = null, category = "culture"),
         )
 
         val grouped = FeaturedCategory.groupByCategoryInOrder(sites)
@@ -63,7 +63,7 @@ class FeaturedCategoryTest {
     @Test
     fun groupByCategoryInOrderでnull_categoryはtechになる() {
         val sites = listOf(
-            FeaturedSite("site-1", "NHK", "https://example.com/nhk", category = null),
+            FeaturedSiteEntry("site-1", "NHK", "https://example.com/nhk", description = null, category = null),
         )
 
         val grouped = FeaturedCategory.groupByCategoryInOrder(sites)
@@ -75,9 +75,9 @@ class FeaturedCategoryTest {
     @Test
     fun groupByCategoryInOrderで複数サイトが同じカテゴリにグループ化される() {
         val sites = listOf(
-            FeaturedSite("site-1", "TechCrunch", "https://example.com/1", category = "tech"),
-            FeaturedSite("site-2", "The Verge", "https://example.com/2", category = "tech"),
-            FeaturedSite("site-3", "Hacker News", "https://example.com/3", category = "tech"),
+            FeaturedSiteEntry("site-1", "TechCrunch", "https://example.com/1", description = null, category = "tech"),
+            FeaturedSiteEntry("site-2", "The Verge", "https://example.com/2", description = null, category = "tech"),
+            FeaturedSiteEntry("site-3", "Hacker News", "https://example.com/3", description = null, category = "tech"),
         )
 
         val grouped = FeaturedCategory.groupByCategoryInOrder(sites)
@@ -91,9 +91,9 @@ class FeaturedCategoryTest {
     @Test
     fun groupByCategoryInOrderでサーバ返却順が維持される() {
         val sites = listOf(
-            FeaturedSite("site-1", "A", "https://example.com/a", category = "tech", order = 1),
-            FeaturedSite("site-2", "B", "https://example.com/b", category = "tech", order = 2),
-            FeaturedSite("site-3", "C", "https://example.com/c", category = "tech", order = 3),
+            FeaturedSiteEntry("site-1", "A", "https://example.com/a", description = null, category = "tech"),
+            FeaturedSiteEntry("site-2", "B", "https://example.com/b", description = null, category = "tech"),
+            FeaturedSiteEntry("site-3", "C", "https://example.com/c", description = null, category = "tech"),
         )
 
         val grouped = FeaturedCategory.groupByCategoryInOrder(sites)
@@ -106,7 +106,7 @@ class FeaturedCategoryTest {
     @Test
     fun groupByCategoryInOrderで空カテゴリは空の配列で返される() {
         val sites = listOf(
-            FeaturedSite("site-1", "TechCrunch", "https://example.com/1", category = "tech"),
+            FeaturedSiteEntry("site-1", "TechCrunch", "https://example.com/1", description = null, category = "tech"),
         )
 
         val grouped = FeaturedCategory.groupByCategoryInOrder(sites)
@@ -121,8 +121,8 @@ class FeaturedCategoryTest {
     @Test
     fun getDisplayOrderCategoriesが空でないカテゴリのみを返す() {
         val sites = listOf(
-            FeaturedSite("site-1", "TechCrunch", "https://example.com/1", category = "tech"),
-            FeaturedSite("site-2", "ESPN", "https://example.com/2", category = "sports"),
+            FeaturedSiteEntry("site-1", "TechCrunch", "https://example.com/1", description = null, category = "tech"),
+            FeaturedSiteEntry("site-2", "ESPN", "https://example.com/2", description = null, category = "sports"),
         )
 
         val grouped = FeaturedCategory.groupByCategoryInOrder(sites)

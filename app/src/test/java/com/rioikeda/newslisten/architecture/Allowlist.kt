@@ -22,29 +22,9 @@ object Allowlist {
         files.map { AllowEntry(ruleId, it, target, owner) }
 
     val entries: List<AllowEntry> =
-        // android-dep-02 (6)
-        rule(
-                "android-dep-02", "model", "android-slice-periphery-02",
-                "settings/SettingsViewModel.kt",
-                "settings/SettingsScreen.kt",
-                "onboarding/OnboardingViewModel.kt",
-                "onboarding/OnboardingScreen.kt",
-            ) +
-            rule("android-dep-02", "androidx", "android-slice-periphery-02", "model/FeaturedCategory.kt") +
-            rule("android-dep-02", "R", "android-slice-periphery-02", "model/FeaturedCategory.kt") +
-
-            // android-dep-03 (5): network 5
-            rule("android-dep-03", "network", "android-slice-periphery-02", "notification/FcmTokenRegistrar.kt") +
-            rule("android-dep-03", "network", "android-slice-closure-01", "podcast/OfflineLibrary.kt") +
+        // android-dep-03 (4): network 4
+        rule("android-dep-03", "network", "android-slice-closure-01", "podcast/OfflineLibrary.kt") +
             rule("android-dep-03", "network", "android-slice-closure-01", "podcast/app/PlaybackCoordinator.kt") +
             rule("android-dep-03", "network", "android-slice-closure-01", "catalog/app/EpisodeCatalog.kt") +
-            rule("android-dep-03", "network", "android-slice-closure-01", "auth/app/AuthSession.kt") +
-
-            // android-dep-04 (6)
-            rule("android-dep-04", "model", "android-slice-periphery-02", "onboarding/OnboardingScreen.kt", "settings/SettingsScreen.kt") +
-            rule("android-dep-04", "model", "android-slice-periphery-02", "onboarding/OnboardingViewModel.kt", "settings/SettingsViewModel.kt") +
-            rule("android-dep-04", "network", "android-slice-periphery-02", "onboarding/OnboardingViewModel.kt", "settings/SettingsViewModel.kt") +
-
-            // android-check-04 (1)
-            rule("android-check-04", "limit == 0", "android-slice-periphery-02", "settings/SettingsScreen.kt")
+            rule("android-dep-03", "network", "android-slice-closure-01", "auth/app/AuthSession.kt")
 }

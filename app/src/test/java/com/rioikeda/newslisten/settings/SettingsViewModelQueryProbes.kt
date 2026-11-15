@@ -6,15 +6,18 @@ import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.learning.probeStreakQuery
 import com.rioikeda.newslisten.preferences.probePreferencesSync
+import com.rioikeda.newslisten.settings.app.SourcesCommands
+import com.rioikeda.newslisten.settings.app.SourcesQueries
+import com.rioikeda.newslisten.settings.app.SourcesState
 
 /**
  * `SettingsViewModel` の query。`SettingsViewModel#getPreferencesSyncFailed` は、自分のグラフの `PreferencesSync` の状態を読むだけで書かない。
  * `loadListeningStreak` は、自分のグラフの `StreakQuery` の `refresh` を呼ぶ。 */
 internal val settingsViewModelQueryProbes: QueryProbeSet = run {
     val canned = mapOf(
-        "ApiClient#fetchSources" to ProbeData.repeated(ProbeData.sources),
-        "ApiClient#fetchFeaturedSites" to ProbeData.repeated(ProbeData.featuredSites),
-        "ApiClient#fetchGenerationQuota" to ProbeData.repeated(ProbeData.generationQuota),
+        "SourcesApi#fetchSources" to ProbeData.repeated(ProbeData.sources),
+        "SourcesApi#fetchFeaturedSites" to ProbeData.repeated(ProbeData.featuredSites),
+        "SourcesApi#fetchGenerationQuota" to ProbeData.repeated(ProbeData.generationQuota),
         "LearningApi#fetchStreak" to ProbeData.increasingStreaks(),
     )
     val warmUp: suspend (Any, com.rioikeda.newslisten.architecture.ProbeEnvironment) -> Unit = { owner, _ ->
@@ -35,11 +38,12 @@ internal val settingsViewModelQueryProbes: QueryProbeSet = run {
             CallSpec("SettingsViewModel#loadListeningStreak"),
         ),
     ) { env ->
+        val state = SourcesState(env.newDispatcher())
         SettingsViewModel(
-            apiClient = env.apiClient,
+            sourcesCommands = SourcesCommands(env.sourcesApi, state, env.hooks.read("SourcesCommands#isAdminProvider") { false }),
+            sourcesQueries = SourcesQueries(env.sourcesApi, state),
             preferencesSync = probePreferencesSync(env),
             dispatcher = env.newDispatcher(),
-            isAdminProvider = env.hooks.read("SettingsViewModel#isAdminProvider") { false },
             streakQuery = probeStreakQuery(env),
         )
     }

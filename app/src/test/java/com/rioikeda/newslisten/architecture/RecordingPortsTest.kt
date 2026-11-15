@@ -259,6 +259,74 @@ class RecordingPortsTest {
     }
 
     @Test
+    fun RecordingSourcesApiは書込4操作を書込とし読み4操作を列の読みとして返す() {
+        val env = ProbeEnvironment.create(
+            scenarioA(
+                canned = mapOf(
+                    "SourcesApi#fetchSources" to ProbeData.repeated(ProbeData.sources),
+                    "SourcesApi#fetchFeaturedSites" to ProbeData.repeated(ProbeData.featuredSites),
+                    "SourcesApi#fetchGenerationQuota" to ProbeData.repeated(ProbeData.generationQuota),
+                    "SourcesApi#fetchOnboardingStatus" to ProbeData.repeated(ProbeData.onboardingStatus),
+                ),
+            ),
+        )
+
+        runBlocking {
+            env.sourcesApi.addSource("n", "u")
+            env.sourcesApi.updateSource("o", "n", "u")
+            env.sourcesApi.removeSource("u")
+            env.sourcesApi.completeOnboarding()
+        }
+        val sources = runBlocking { env.sourcesApi.fetchSources() }
+        val featured = runBlocking { env.sourcesApi.fetchFeaturedSites() }
+        val quota = runBlocking { env.sourcesApi.fetchGenerationQuota() }
+        val onboarding = runBlocking { env.sourcesApi.fetchOnboardingStatus() }
+
+        assertEquals(
+            "書込は 4 件で、読みは積まない",
+            listOf("addSource", "updateSource", "removeSource", "completeOnboarding").map { "SourcesApi" to it },
+            env.recorder.writes.map { it.port to it.op },
+        )
+        assertEquals(ProbeData.sources, sources)
+        assertEquals(ProbeData.featuredSites, featured)
+        assertEquals(ProbeData.generationQuota, quota)
+        assertEquals(ProbeData.onboardingStatus, onboarding)
+        assertTrue("sourcesApi は記録 fake の一覧に登録されている", env.fakes.any { it === env.sourcesApi })
+    }
+
+    @Test
+    fun RecordingDeviceTokenApiはregisterを書込として記録する() {
+        val env = ProbeEnvironment.create(scenarioA())
+
+        runBlocking { env.deviceTokenApi.register("t", "android") }
+
+        assertEquals(listOf("DeviceTokenApi" to "register"), env.recorder.writes.map { it.port to it.op })
+        assertTrue("deviceTokenApi は記録 fake の一覧に登録されている", env.fakes.any { it === env.deviceTokenApi })
+    }
+
+    @Test
+    fun RecordingPushTokenSourceはtokenを列の読みとして返し書込を積まない() {
+        val env = ProbeEnvironment.create(scenarioA(canned = mapOf("PushTokenSource#token" to ProbeData.repeated("fcm-token"))))
+
+        val token = runBlocking { env.pushTokenSource.token() }
+
+        assertEquals("fcm-token", token)
+        assertTrue(env.recorder.writes.isEmpty())
+        assertTrue("pushTokenSource は記録 fake の一覧に登録されている", env.fakes.any { it === env.pushTokenSource })
+    }
+
+    @Test
+    fun RecordingNotificationPermissionはisGrantedをproperty読みとして初期値を返す() {
+        val granted = ProbeEnvironment.create(scenarioA())
+        val denied = ProbeEnvironment.create(scenarioA(initialProperties = mapOf("NotificationPermission#getIsGranted" to false)))
+
+        assertEquals(RecordingDefaults.INITIAL_NOTIFICATION_GRANTED, granted.notificationPermission.isGranted)
+        assertEquals(false, denied.notificationPermission.isGranted)
+        assertTrue(granted.recorder.writes.isEmpty())
+        assertTrue("notificationPermission は記録 fake の一覧に登録されている", granted.fakes.any { it === granted.notificationPermission })
+    }
+
+    @Test
     fun propertyの読みの初期値はscenarioが与えた値になる() {
         val scenario = scenarioA(initialProperties = mapOf("NetworkMonitoring#getIsOnline" to false))
         val env = ProbeEnvironment.create(scenario)

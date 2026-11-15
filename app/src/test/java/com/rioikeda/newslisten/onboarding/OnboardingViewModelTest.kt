@@ -1,159 +1,230 @@
 package com.rioikeda.newslisten.onboarding
 
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.model.FeaturedSite
-import com.rioikeda.newslisten.model.FeaturedSitesResponse
-import com.rioikeda.newslisten.model.OnboardingStatusResponse
-import com.rioikeda.newslisten.model.RssSourcesResponse
-import com.rioikeda.newslisten.network.ApiClient
+import com.rioikeda.newslisten.onboarding.app.OnboardingCommands
+import com.rioikeda.newslisten.settings.app.FakeSourcesApi
+import com.rioikeda.newslisten.settings.app.FeaturedSiteGroup
+import com.rioikeda.newslisten.settings.app.SourcesCommands
+import com.rioikeda.newslisten.settings.app.SourcesQueries
+import com.rioikeda.newslisten.settings.app.SourcesState
+import com.rioikeda.newslisten.settings.domain.FeaturedSiteEntry
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [OnboardingViewModel] の挙動検証。
+ * [OnboardingViewModel] の挙動検証。ViewModel は入口（[SourcesCommands]・[SourcesQueries]・[OnboardingCommands]）
+ * への中継と、読み込み中・失敗の文言・取得した一覧の持ち方だけを持つ（android-dec-09・android-dec-115）。
  *
  * 正本: ios/NewsListenApp/NewsListenApp/Onboarding/OnboardingSourcesViewModel.swift、
  * ios/NewsListenApp/NewsListenApp/AppState.swift:180-200（refreshOnboardingStatus/completeOnboarding）。
- * フェーズ13（issue #140 P13）。
  */
 class OnboardingViewModelTest {
 
-    private fun TestScope.newViewModel(apiClient: ApiClient = FakeApiClient()): OnboardingViewModel =
-        OnboardingViewModel(
-            apiClient = apiClient,
-            dispatcher = StandardTestDispatcher(testScheduler),
+    private class Harness(scheduler: TestCoroutineScheduler) {
+        val api = FakeSourcesApi()
+        val state = SourcesState(StandardTestDispatcher(scheduler))
+        val sourcesCommands = SourcesCommands(api, state, { false })
+        val sourcesQueries = SourcesQueries(api, state)
+        val onboardingCommands = OnboardingCommands(api, StandardTestDispatcher(scheduler))
+        val viewModel = OnboardingViewModel(
+            sourcesCommands = sourcesCommands,
+            sourcesQueries = sourcesQueries,
+            onboardingCommands = onboardingCommands,
+            dispatcher = StandardTestDispatcher(scheduler),
         )
+    }
 
-    private val site = FeaturedSite(id = "site-1", name = "NHK", url = "https://example.com/nhk.xml")
+    private val site = FeaturedSiteEntry(
+        id = "1",
+        name = "Site",
+        url = "https://site.example.com/rss",
+        description = null,
+        category = null,
+    )
+    private val otherSite = FeaturedSiteEntry(
+        id = "2",
+        name = "Other",
+        url = "https://other.example.com/rss",
+        description = null,
+        category = "business",
+    )
+    private val subscribeFailure = "購読に失敗しました。もう一度お試しください。"
 
     // --- load（おすすめサイト取得） ---
 
     @Test
     fun load成功でfeaturedSitesが更新される() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchFeaturedSites = { FeaturedSitesResponse(listOf(site)) }),
-        )
+        val h = Harness(testScheduler)
+        h.api.onFetchFeaturedSites = { listOf(site) }
 
-        viewModel.load()
+        h.viewModel.load()
 
-        assertEquals(listOf(site), viewModel.featuredSites.value)
-        assertNull(viewModel.loadError.value)
+        assertEquals(listOf(FeaturedSiteGroup("tech", listOf(site))), h.viewModel.featuredSites.value)
+        assertNull(h.viewModel.loadError.value)
     }
 
     @Test
     fun load失敗でloadErrorが設定される() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchFeaturedSites = { throw ApiException.HttpError(500) }),
+        val h = Harness(testScheduler)
+        h.api.onFetchFeaturedSites = { throw ApiException.HttpError(500) }
+
+        h.viewModel.load()
+
+        assertEquals("おすすめサイトの取得に失敗しました", h.viewModel.loadError.value)
+        assertFalse(h.viewModel.isLoading.value)
+    }
+
+    @Test
+    fun `android-dec-115 load失敗は前の一覧を保ちloadErrorを立てる`() = runTest {
+        val h = Harness(testScheduler)
+        val siteB = FeaturedSiteEntry("3", "SiteB", "https://b.example.com/rss", null, "sports")
+
+        h.api.onFetchFeaturedSites = { listOf(site) }
+        h.viewModel.load()
+        h.api.onFetchFeaturedSites = { throw ApiException.HttpError(500) }
+        h.viewModel.load()
+        assertEquals(listOf(FeaturedSiteGroup("tech", listOf(site))), h.viewModel.featuredSites.value)
+        assertTrue(h.viewModel.loadError.value != null)
+
+        h.api.onFetchFeaturedSites = { listOf(siteB) }
+        h.viewModel.load()
+        assertEquals(listOf(FeaturedSiteGroup("sports", listOf(siteB))), h.viewModel.featuredSites.value)
+        assertNull(h.viewModel.loadError.value)
+    }
+
+    @Test
+    fun `android-dec-115 loadFeaturedSitesはカテゴリの順の束を公開する`() = runTest {
+        val h = Harness(testScheduler)
+        h.api.onFetchFeaturedSites = { listOf(otherSite, site) }
+
+        h.viewModel.load()
+
+        assertEquals(
+            listOf(FeaturedSiteGroup("tech", listOf(site)), FeaturedSiteGroup("business", listOf(otherSite))),
+            h.viewModel.featuredSites.value,
         )
+    }
 
-        viewModel.load()
+    @Test
+    fun `android-dec-115 loadは取得の間だけisLoadingを立て開始時にloadErrorを消す`() = runTest {
+        val h = Harness(testScheduler)
+        h.api.onFetchFeaturedSites = { throw ApiException.HttpError(500) }
+        h.viewModel.load()
+        assertTrue(h.viewModel.loadError.value != null)
+        var loadingDuringFetch: Boolean? = null
+        var errorDuringFetch: String? = "unset"
+        h.api.onFetchFeaturedSites = {
+            loadingDuringFetch = h.viewModel.isLoading.value
+            errorDuringFetch = h.viewModel.loadError.value
+            listOf(site)
+        }
 
-        assertTrue(viewModel.featuredSites.value.isEmpty())
-        assertTrue(viewModel.loadError.value != null)
+        h.viewModel.load()
+
+        assertEquals(true, loadingDuringFetch)
+        assertNull(errorDuringFetch)
+        assertFalse(h.viewModel.isLoading.value)
     }
 
     // --- subscribe（購読） ---
 
     @Test
     fun subscribe成功でaddedIdsに追加される() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onCreateSource = { _, _ -> RssSourcesResponse(emptyList()) }),
-        )
+        val h = Harness(testScheduler)
 
-        viewModel.subscribe(site)
+        h.viewModel.subscribe(site)
 
-        assertEquals(setOf("site-1"), viewModel.addedIds.value)
-        assertNull(viewModel.subscribeError.value)
+        assertEquals(setOf("1"), h.viewModel.addedIds.value)
+        assertNull(h.viewModel.subscribeError.value)
     }
 
     @Test
     fun subscribeで409はaddedIds扱いになる() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onCreateSource = { _, _ -> throw ApiException.Conflict() }),
-        )
+        val h = Harness(testScheduler)
+        h.api.onAddSource = { _, _ -> throw ApiException.Conflict() }
 
-        viewModel.subscribe(site)
+        h.viewModel.subscribe(site)
 
-        assertEquals(setOf("site-1"), viewModel.addedIds.value)
-        assertNull(viewModel.subscribeError.value)
+        assertEquals(setOf("1"), h.viewModel.addedIds.value)
+        assertNull(h.viewModel.subscribeError.value)
     }
 
     @Test
     fun subscribeで409以外はsubscribeErrorが設定されaddedIdsに追加されない() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onCreateSource = { _, _ -> throw ApiException.HttpError(500) }),
-        )
+        val h = Harness(testScheduler)
+        h.api.onAddSource = { _, _ -> throw ApiException.HttpError(500) }
 
-        viewModel.subscribe(site)
+        h.viewModel.subscribe(site)
 
-        assertTrue(viewModel.addedIds.value.isEmpty())
-        assertTrue(viewModel.subscribeError.value != null)
-    }
-
-    // --- refreshOnboardingStatus（起動時の状態取得） ---
-
-    @Test
-    fun refreshOnboardingStatus成功でonboardingCompletedにサーバー値が反映される() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchOnboardingStatus = { OnboardingStatusResponse(onboardingCompleted = false) }),
-        )
-
-        viewModel.refreshOnboardingStatus()
-
-        assertEquals(false, viewModel.onboardingCompleted.value)
+        assertTrue(h.viewModel.addedIds.value.isEmpty())
+        assertEquals(subscribeFailure, h.viewModel.subscribeError.value)
     }
 
     @Test
-    fun refreshOnboardingStatus失敗時は行き止まり防止のためtrue扱いになる() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onFetchOnboardingStatus = { throw ApiException.HttpError(500) }),
-        )
+    fun `android-dec-115 subscribeの成功と409はそれまでのaddedIdsに足す`() = runTest {
+        val success = Harness(testScheduler)
+        success.viewModel.subscribe(site)
+        success.viewModel.subscribe(otherSite)
+        assertEquals(setOf("1", "2"), success.viewModel.addedIds.value)
 
-        viewModel.refreshOnboardingStatus()
-
-        assertEquals(true, viewModel.onboardingCompleted.value)
+        val conflict = Harness(testScheduler)
+        conflict.viewModel.subscribe(site)
+        conflict.api.onAddSource = { _, _ -> throw ApiException.Conflict() }
+        conflict.viewModel.subscribe(otherSite)
+        assertEquals(setOf("1", "2"), conflict.viewModel.addedIds.value)
     }
 
     @Test
-    fun 取得前のonboardingCompletedはnull() = runTest {
-        val viewModel = newViewModel()
+    fun `android-dec-115 subscribeの失敗はそれまでのaddedIdsを保つ`() = runTest {
+        val h = Harness(testScheduler)
+        h.viewModel.subscribe(site)
+        assertEquals(setOf("1"), h.viewModel.addedIds.value)
+        h.api.onAddSource = { _, _ -> throw ApiException.HttpError(500) }
 
-        assertNull(viewModel.onboardingCompleted.value)
-    }
+        h.viewModel.subscribe(otherSite)
 
-    // --- finish（完了/スキップ） ---
-
-    @Test
-    fun finish成功でcompleteOnboardingが呼ばれonboardingCompletedがtrueになる() = runTest {
-        var completeCalled = false
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(
-                onCompleteOnboarding = {
-                    completeCalled = true
-                    OnboardingStatusResponse(onboardingCompleted = true)
-                },
-            ),
-        )
-
-        viewModel.finish()
-
-        assertTrue(completeCalled)
-        assertEquals(true, viewModel.onboardingCompleted.value)
+        assertEquals(setOf("1"), h.viewModel.addedIds.value)
+        assertEquals(subscribeFailure, h.viewModel.subscribeError.value)
     }
 
     @Test
-    fun finishはcompleteOnboarding失敗でもベストエフォートでonboardingCompletedをtrueにする() = runTest {
-        val viewModel = newViewModel(
-            apiClient = FakeApiClient(onCompleteOnboarding = { throw ApiException.HttpError(500) }),
-        )
+    fun `android-dec-115 subscribeは送信の前にsubscribeErrorを消す`() = runTest {
+        val h = Harness(testScheduler)
+        h.api.onAddSource = { _, _ -> throw ApiException.HttpError(500) }
+        h.viewModel.subscribe(site)
+        assertTrue(h.viewModel.subscribeError.value != null)
+        var errorDuringSend: String? = "unset"
+        h.api.onAddSource = { _, _ ->
+            errorDuringSend = h.viewModel.subscribeError.value
+            emptyList()
+        }
 
-        viewModel.finish()
+        h.viewModel.subscribe(site)
 
-        assertEquals(true, viewModel.onboardingCompleted.value)
+        assertNull(errorDuringSend)
+    }
+
+    // --- 入口への受け渡しと中継 ---
+
+    @Test
+    fun `android-dec-115 onboardingCompletedは入口の同名と同一で入口の操作を中継する`() = runTest {
+        val h = Harness(testScheduler)
+        assertSame(h.onboardingCommands.onboardingCompleted, h.viewModel.onboardingCompleted)
+        assertNull(h.viewModel.onboardingCompleted.value)
+
+        h.api.onFetchOnboardingStatus = { false }
+        h.viewModel.refreshOnboardingStatus()
+        assertEquals(false, h.viewModel.onboardingCompleted.value)
+
+        h.viewModel.finish()
+        assertEquals(1, h.api.completeOnboardingCallCount)
+        assertEquals(true, h.viewModel.onboardingCompleted.value)
     }
 }
