@@ -2,7 +2,7 @@ package com.rioikeda.newslisten.architecture.fixture.container
 
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.SessionStore
+import com.rioikeda.newslisten.auth.app.SessionStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 

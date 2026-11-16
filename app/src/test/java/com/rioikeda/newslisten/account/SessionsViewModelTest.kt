@@ -3,6 +3,7 @@ package com.rioikeda.newslisten.account
 import com.rioikeda.newslisten.account.app.AccountCommands
 import com.rioikeda.newslisten.account.app.SessionQueries
 import com.rioikeda.newslisten.account.app.SessionRow
+import com.rioikeda.newslisten.account.ui.SessionsViewModel
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.RevokeSessionsResponse
 import com.rioikeda.newslisten.model.SessionResponse

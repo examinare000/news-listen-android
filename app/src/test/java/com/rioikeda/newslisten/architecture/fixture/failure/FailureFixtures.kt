@@ -1,7 +1,7 @@
 package com.rioikeda.newslisten.architecture.fixture.failure
 
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.preferences.app.PreferencesStore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob

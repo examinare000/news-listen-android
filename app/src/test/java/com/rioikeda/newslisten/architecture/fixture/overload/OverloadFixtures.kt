@@ -1,7 +1,7 @@
 package com.rioikeda.newslisten.architecture.fixture.overload
 
-import com.rioikeda.newslisten.network.SessionStore
-import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.auth.app.SessionStore
+import com.rioikeda.newslisten.preferences.app.PreferencesStore
 
 // 同じ名前で signature が 3 つ違う overload。`load()` は port を呼ばず、残りの 2 つは別々の port の書込を 1 回呼ぶ。
 class OverloadedLoader(

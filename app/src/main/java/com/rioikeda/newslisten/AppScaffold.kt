@@ -35,26 +35,26 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.rioikeda.newslisten.account.AccountViewModel
-import com.rioikeda.newslisten.account.SessionsViewModel
-import com.rioikeda.newslisten.auth.AuthState
-import com.rioikeda.newslisten.auth.AuthViewModel
-import com.rioikeda.newslisten.feed.FeedScreen
-import com.rioikeda.newslisten.feed.FeedViewModel
+import com.rioikeda.newslisten.account.ui.AccountViewModel
+import com.rioikeda.newslisten.account.ui.SessionsViewModel
+import com.rioikeda.newslisten.auth.domain.AuthState
+import com.rioikeda.newslisten.auth.ui.AuthViewModel
+import com.rioikeda.newslisten.feed.ui.FeedScreen
+import com.rioikeda.newslisten.feed.ui.FeedViewModel
 import com.rioikeda.newslisten.learning.app.LearningCommands
 import com.rioikeda.newslisten.learning.app.LearningFeedbackEvent
 import com.rioikeda.newslisten.learning.app.StreakQuery
 import com.rioikeda.newslisten.designsystem.DSFeedbackVocabulary
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.rememberDSFeedback
-import com.rioikeda.newslisten.learning.LearningScreen
-import com.rioikeda.newslisten.learning.LearningViewModel
-import com.rioikeda.newslisten.passkey.PasskeyCredentialsViewModel
-import com.rioikeda.newslisten.passkey.PasskeyRegistrationViewModel
-import com.rioikeda.newslisten.podcast.PodcastScreen
-import com.rioikeda.newslisten.podcast.PodcastViewModel
-import com.rioikeda.newslisten.settings.SettingsScreen
-import com.rioikeda.newslisten.settings.SettingsViewModel
+import com.rioikeda.newslisten.learning.ui.LearningScreen
+import com.rioikeda.newslisten.learning.ui.LearningViewModel
+import com.rioikeda.newslisten.passkey.ui.PasskeyCredentialsViewModel
+import com.rioikeda.newslisten.passkey.ui.PasskeyRegistrationViewModel
+import com.rioikeda.newslisten.podcast.ui.PodcastScreen
+import com.rioikeda.newslisten.podcast.ui.PodcastViewModel
+import com.rioikeda.newslisten.settings.ui.SettingsScreen
+import com.rioikeda.newslisten.settings.ui.SettingsViewModel
 
 /**
  * メインのアプリケーション スカフォルド。4 タブ（フィード / Podcast / 学習 / 設定）を Material3 NavigationBar で提供する。

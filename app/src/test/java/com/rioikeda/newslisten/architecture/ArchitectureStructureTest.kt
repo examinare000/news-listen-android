@@ -84,23 +84,45 @@ class ArchitectureStructureTest {
     // ---- android-check-01 対応表 ----
 
     @Test
-    fun android_check_01_対応表がmainの全ファイルと1対1で対応する() {
-        // verifies: CI-01, CI-02 / T-01
-        val actual = mainSources.map { it.path }
-        val mapped = LayerMap.rows.map { it.first }
+    fun android_check_01_mainの全ファイルがpackageの規則に当たりapp配下にViewModelが無い() {
+        // verifies: android-check-01 / android-dec-130, android-dec-131
+        val paths = mainSources.map { it.path }
+        assertTrue("main が空（vacuous pass）", paths.isNotEmpty())
 
-        assertEquals(
-            "対応表の key が重複している: ${mapped.groupBy { it }.filter { it.value.size > 1 }.keys}",
-            mapped.size,
-            mapped.toSet().size,
-        )
-        val missing = actual.toSet() - mapped.toSet()
-        val dangling = mapped.toSet() - actual.toSet()
-        val message = buildString {
-            if (missing.isNotEmpty()) appendLine("対応表に無いファイル: ${missing.sorted()}")
-            if (dangling.isNotEmpty()) appendLine("実在しない対応表の行: ${dangling.sorted()}")
-        }
-        assertTrue(message, missing.isEmpty() && dangling.isEmpty())
+        val violations = ArchitectureScanner.placementViolations(paths)
+
+        assertTrue("置き場の規則に反するファイル (${violations.size}):\n${violations.joinToString("\n")}", violations.isEmpty())
+    }
+
+    @Test
+    fun android_check_01_packageの宣言がpathと一致する() {
+        // verifies: android-check-01 / android-dec-131
+        assertTrue("main が空（vacuous pass）", mainSources.isNotEmpty())
+
+        val mismatches = ArchitectureScanner.packageMismatches(mainSources)
+
+        assertTrue("package が path と違うファイル (${mismatches.size}):\n${mismatches.joinToString("\n")}", mismatches.isEmpty())
+    }
+
+    @Test
+    fun android_check_01_appの種別表の行が実在しapp配下にある() {
+        // verifies: android-check-01 / android-dec-130
+        assertTrue("port の表が空（vacuous pass）", LayerMap.portFiles.isNotEmpty())
+        assertTrue("リードモデルの表が空（vacuous pass）", LayerMap.readModelFiles.isNotEmpty())
+        val actual = mainSources.map { it.path }.toSet()
+        val rows = LayerMap.portFiles + LayerMap.readModelFiles
+
+        val missing = rows - actual
+        val outsideApp = rows.filterNot { it.contains("/app/") }
+
+        assertTrue("実在しない種別表の行: ${missing.sorted()}", missing.isEmpty())
+        assertTrue("app/ の外の種別表の行: ${outsideApp.sorted()}", outsideApp.isEmpty())
+    }
+
+    @Test
+    fun android_check_01_許可リストが空である() {
+        // verifies: android-check-01 / android-dec-133
+        assertTrue("許可リストに行を足して通してはいけない: ${Allowlist.entries}", Allowlist.entries.isEmpty())
     }
 
     @Test
@@ -579,6 +601,130 @@ class ArchitectureStructureTest {
     }
 
     @Test
+    fun 走査器_置き場の規則に当たらないファイルとapp配下のViewModelとpathと違うpackageを拾う() {
+        // verifies: android-check-01 / android-dec-130, android-dec-131（反例が違反になり、通る例は返さない）
+        val stray = "zz/Stray.kt"
+        val appViewModel = "feed/app/StrayViewModel.kt"
+        val passing = listOf(
+            "feed/ui/FeedViewModel.kt", "feed/domain/Article.kt", "podcast/app/PlaybackCoordinator.kt",
+            "MainActivity.kt", "di/AppContainer.kt", "network/ApiClient.kt",
+        )
+
+        val placement = ArchitectureScanner.placementViolations(passing.take(3) + stray + passing.drop(3) + appViewModel)
+
+        assertEquals("反例の 2 つだけが違反: $placement", 2, placement.size)
+        val strayMessage = placement.single { it.contains(stray) }
+        val viewModelMessage = placement.single { it.contains(appViewModel) }
+        assertTrue("違反の種別が path を除いて区別できる: $placement", strayMessage.replace(stray, "") != viewModelMessage.replace(appViewModel, ""))
+        assertTrue("通る例を返さない: $placement", passing.none { path -> placement.any { it.contains(path) } })
+
+        val pkg = "com.rioikeda.newslisten"
+        val mismatches = ArchitectureScanner.packageMismatches(
+            listOf(
+                sourceOf("feed/domain/Article.kt", "package $pkg.feed.domain", "", "class Article"),
+                sourceOf("MainActivity.kt", "package $pkg", "", "class MainActivity"),
+                sourceOf("feed/app/Wrong.kt", "package $pkg.feed.domain", "", "class Wrong"),
+                sourceOf("feed/app/NoPackage.kt", "class NoPackage"),
+                sourceOf("feed/app/CommentOnly.kt", "// package $pkg.feed.app", "class CommentOnly"),
+            ),
+        )
+
+        assertEquals("違反は path と違う package・package 行なし・コメントだけの 3 件: $mismatches", 3, mismatches.size)
+        listOf("feed/app/Wrong.kt", "feed/app/NoPackage.kt", "feed/app/CommentOnly.kt").forEach { path ->
+            assertTrue("$path が違反に入る: $mismatches", mismatches.any { it.contains(path) })
+        }
+        val wrong = mismatches.single { it.contains("feed/app/Wrong.kt") }
+        assertTrue("実際の package を含む: $wrong", wrong.contains("$pkg.feed.domain"))
+        assertTrue("期待する package を含む: $wrong", wrong.contains("$pkg.feed.app"))
+        assertTrue("通る例（根の直下を含む）を返さない: $mismatches", mismatches.none { it.contains("Article.kt") || it.contains("MainActivity.kt") })
+
+        assertLayerOfFollowsRuleOrder()
+    }
+
+    /** 段 1〜6（入口・種別表・`AppScaffold.kt`・先頭の segment・2 番目の segment・当たらない）の各段の代表。 */
+    private fun assertLayerOfFollowsRuleOrder() {
+        val expected = mapOf(
+            "MainActivity.kt" to Layer.ENTRY,
+            "NewsListenApplication.kt" to Layer.ENTRY,
+            "playbackservice/PlaybackService.kt" to Layer.ENTRY,
+            "notification/FcmTokenService.kt" to Layer.ENTRY,
+            "AppScaffold.kt" to Layer.PRESENTATION,
+            "core/Anything.kt" to Layer.DOMAIN,
+            "network/ApiClient.kt" to Layer.ADAPTER,
+            "observability/CrashReporter.kt" to Layer.ADAPTER,
+            "model/UserResponse.kt" to Layer.ADAPTER,
+            "designsystem/Theme.kt" to Layer.PRESENTATION,
+            "di/AppContainer.kt" to Layer.COMPOSITION_ROOT,
+            "zz/domain/New.kt" to Layer.DOMAIN,
+            "zz/app/New.kt" to Layer.APPLICATION,
+            "zz/infra/New.kt" to Layer.ADAPTER,
+            "zz/ui/New.kt" to Layer.PRESENTATION,
+            "feed/ui/FeedViewModel.kt" to Layer.PRESENTATION,
+        )
+        val unmatched = listOf(
+            "zz/Stray.kt", "feed/FeedScreen.kt", "foo/MainActivity.kt", "foo/AppScaffold.kt", "domain/Top.kt", "zz/sub/domain/Deep.kt",
+        )
+        assertTrue("port の表が空（vacuous pass）", LayerMap.portFiles.isNotEmpty())
+        assertTrue("リードモデルの表が空（vacuous pass）", LayerMap.readModelFiles.isNotEmpty())
+
+        val wrong = expected.filter { (path, layer) -> LayerMap.layerOf(path) != layer }.keys +
+            LayerMap.portFiles.filter { LayerMap.layerOf(it) != Layer.PORT } +
+            LayerMap.readModelFiles.filter { LayerMap.layerOf(it) != Layer.READ_MODEL } +
+            unmatched.filter { LayerMap.layerOf(it) != null }
+
+        assertTrue("期待と違う層を返した path: ${wrong.sorted()}", wrong.isEmpty())
+    }
+
+    @Test
+    fun 走査器_許可リストが空でも各規則は合成のfixtureの違反を拾う() {
+        // verifies: android-check-01 / android-dec-133（空回りの防止。android-dep-06 は PE-3 と既存の fixture の検査が対照）
+        val pkg = { name: String -> "package com.rioikeda.newslisten.$name" }
+        val domain = sourceOf("x/domain/D.kt", pkg("x.domain"), "import android.os.Bundle", "class D")
+        val domainVar = sourceOf("x/domain/V.kt", pkg("x.domain"), "class V {", "    var count = 0", "}")
+        val domainData = sourceOf("x/domain/DC.kt", pkg("x.domain"), "data class Item(var name: String)")
+        val app = sourceOf("x/app/A.kt", pkg("x.app"), "import com.rioikeda.newslisten.network.Net", "class A")
+        val ui = sourceOf("x/ui/U.kt", pkg("x.ui"), "import com.rioikeda.newslisten.network.Net", "class U")
+        val infra = sourceOf("x/infra/I.kt", pkg("x.infra"), "import com.rioikeda.newslisten.x.app.A", "class I")
+        val model = sourceOf("model/M.kt", pkg("model"), "class M")
+        val leak = sourceOf("x/app/Leak.kt", pkg("x.app"), "import com.rioikeda.newslisten.model.M", "class Leak")
+        val port = sourceOf("x/app/P.kt", pkg("x.app"), "interface P {", "    fun load(): M", "}")
+        val rules = sourceOf("x/ui/R.kt", pkg("x.ui"), "val s = \"processing\"", "val c = e.code")
+        val domainTest = SourceFile("x/domain/DTest.kt", fixture(pkg("x.domain"), "import android.os.Bundle", "class DTest"))
+        val layers = mapOf(
+            domain.path to Layer.DOMAIN, domainVar.path to Layer.DOMAIN, domainData.path to Layer.DOMAIN,
+            app.path to Layer.APPLICATION, leak.path to Layer.APPLICATION, port.path to Layer.PORT,
+            ui.path to Layer.PRESENTATION, rules.path to Layer.PRESENTATION,
+            infra.path to Layer.ADAPTER, model.path to Layer.ADAPTER,
+        )
+        val production = listOf(domain, domainVar, domainData, app, ui, infra, model, leak, port, rules)
+
+        val found = (
+            ArchitectureScanner.dependencyHits(listOf(domain, app, ui, infra), layers) +
+                ArchitectureScanner.dataModelHits(listOf(model, leak, port), layers) +
+                ArchitectureScanner.publicSurfaceHits(listOf(domainVar, domainData), layers) +
+                ArchitectureScanner.ruleLocationHits(listOf(rules)) +
+                ArchitectureScanner.testDependencyHits(listOf(domainTest), layers)
+            ).map { it.key }.toSet()
+        val expected = setOf(
+            Triple("android-dep-01", "x/domain/D.kt", "android"),
+            Triple("android-dep-03", "x/app/A.kt", "network"),
+            Triple("android-dep-04", "x/ui/U.kt", "network"),
+            Triple("android-dep-05", "x/infra/I.kt", "layer:APPLICATION"),
+            Triple("android-dep-02", "x/app/Leak.kt", "model"),
+            Triple("android-check-02", "x/app/P.kt", "load"),
+            Triple("android-dep-07", "x/domain/V.kt", "公開の var"),
+            Triple("android-check-05", "x/domain/DC.kt", "data class Item.name"),
+            Triple("android-check-04", "x/ui/R.kt", "\"processing\""),
+            Triple("android-dep-09", "x/ui/R.kt", "e.code"),
+            Triple("android-check-08", "x/domain/DTest.kt", "android"),
+        )
+
+        val missing = expected - found
+        assertTrue("fixture の違反を拾えなかった規則: ${missing.map { it.first }.sorted()}（拾った組: $found）", missing.isEmpty())
+        assertTrue("fixture は main の path と衝突しない", production.none { it.path in LayerMap.byFile })
+    }
+
+    @Test
     fun 走査器_testのファイルの層を先頭の語の一致数で決める() {
         // verifies: §3.4 / T-17
         val domainMain = mapOf(
@@ -701,6 +847,35 @@ object ArchitectureScanner {
         }
 
         fun build(): List<Hit> = map.map { (key, lines) -> Hit(key.first, key.second, key.third, lines.distinct().sorted()) }
+    }
+
+    // ---- 置き場の規則（android-check-01・android-dec-130） ----
+
+    /** 規則に当たらない path と、`app/` 配下の ViewModel を、種別つきで入力の順に返す。 */
+    fun placementViolations(paths: List<String>): List<String> = paths.mapNotNull { path ->
+        when {
+            LayerMap.layerOf(path) == null -> "規則に当たらないファイル: $path"
+            path.contains("/app/") && path.endsWith("ViewModel.kt") -> "app/ 配下の ViewModel（ui/ に置く）: $path"
+            else -> null
+        }
+    }
+
+    private val packageLine = Regex("""^\s*package\s+([\w.]+)""")
+
+    /** コメントを除いたコードの行から、最初の `package` 宣言の名前を返す。無ければ `null`。 */
+    private fun packageNameOf(codes: List<String>): String? =
+        codes.firstNotNullOfOrNull { packageLine.find(it)?.groupValues?.get(1) }
+
+    /** `package` の宣言が path の directory と合わないファイルを、path・実際の名前・期待する名前つきで返す。 */
+    fun packageMismatches(sources: List<SourceFile>): List<String> = sources.mapNotNull { source ->
+        val directory = source.path.substringBeforeLast('/', "")
+        val expected = PROJECT.removeSuffix(".") + if (directory.isEmpty()) "" else "." + directory.replace('/', '.')
+        val actual = packageNameOf(lex(source.text).map { it.code })
+        when {
+            actual == null -> "${source.path}: package の宣言が無い（期待: $expected）"
+            actual != expected -> "${source.path}: package が path と違う（実際: $actual、期待: $expected）"
+            else -> null
+        }
     }
 
     // ---- 走査の根（CI-01） ----
@@ -927,11 +1102,10 @@ object ArchitectureScanner {
     )
 
     fun declarationIndex(sources: List<SourceFile>, layers: Map<String, Layer>): DeclarationIndex {
-        val packageLine = Regex("""^\s*package\s+([\w.]+)""")
         val byPackage = linkedMapOf<String, MutableList<TopLevelFile>>()
         for (source in sources) {
             val lines = structure(source.path, lex(source.text))
-            val packageName = lines.firstNotNullOfOrNull { packageLine.find(it.line.code)?.groupValues?.get(1) }
+            val packageName = packageNameOf(lines.map { it.line.code })
                 ?: error("${source.path}: package 行が無い")
             byPackage.getOrPut(packageName) { mutableListOf() } +=
                 TopLevelFile(source.path, layers[source.path], lines.filter { it.topLevel }.map { it.line.code })

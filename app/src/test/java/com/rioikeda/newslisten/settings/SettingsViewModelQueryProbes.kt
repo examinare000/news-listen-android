@@ -9,6 +9,7 @@ import com.rioikeda.newslisten.preferences.probePreferencesSync
 import com.rioikeda.newslisten.settings.app.SourcesCommands
 import com.rioikeda.newslisten.settings.app.SourcesQueries
 import com.rioikeda.newslisten.settings.app.SourcesState
+import com.rioikeda.newslisten.settings.ui.SettingsViewModel
 
 /**
  * `SettingsViewModel` の query。`SettingsViewModel#getPreferencesSyncFailed` は、自分のグラフの `PreferencesSync` の状態を読むだけで書かない。

@@ -6,6 +6,7 @@ import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.catalog.probeEpisodeCatalog
 import com.rioikeda.newslisten.learning.probeLearningCommands
+import com.rioikeda.newslisten.podcast.ui.PodcastViewModel
 
 /**
  * `PodcastViewModel` の query。warm-up で再生を始め、15 秒周期の位置同期（内部 scope の timer）を張った状態で観測する。

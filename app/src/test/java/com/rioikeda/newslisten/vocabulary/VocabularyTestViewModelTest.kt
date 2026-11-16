@@ -4,6 +4,7 @@ import com.rioikeda.newslisten.learning.app.FakeVocabularyTestApi
 import com.rioikeda.newslisten.learning.app.VocabularyTestCommands
 import com.rioikeda.newslisten.learning.app.vocabularyTestItem
 import com.rioikeda.newslisten.learning.domain.VocabularyTestPhase
+import com.rioikeda.newslisten.learning.ui.VocabularyTestViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher

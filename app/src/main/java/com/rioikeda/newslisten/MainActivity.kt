@@ -26,14 +26,14 @@ import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.rioikeda.newslisten.auth.AuthState
-import com.rioikeda.newslisten.auth.AuthViewModel
-import com.rioikeda.newslisten.auth.LoginScreen
+import com.rioikeda.newslisten.auth.domain.AuthState
+import com.rioikeda.newslisten.auth.ui.AuthViewModel
+import com.rioikeda.newslisten.auth.ui.LoginScreen
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.NewsListenTheme
-import com.rioikeda.newslisten.onboarding.OnboardingScreen
-import com.rioikeda.newslisten.passkey.CredentialManagerPasskeyProvider
-import com.rioikeda.newslisten.podcast.PodcastViewModel
+import com.rioikeda.newslisten.onboarding.ui.OnboardingScreen
+import com.rioikeda.newslisten.passkey.infra.CredentialManagerPasskeyProvider
+import com.rioikeda.newslisten.podcast.ui.PodcastViewModel
 
 /**
  * 単一 Activity エントリポイント。認証状態に基づいてコンテンツを切り分ける。

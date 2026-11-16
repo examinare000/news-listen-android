@@ -9,6 +9,7 @@ import com.rioikeda.newslisten.learning.app.RecordingPreferencesStore
 import com.rioikeda.newslisten.learning.app.VocabularyRecord
 import com.rioikeda.newslisten.learning.app.VocabularySummary
 import com.rioikeda.newslisten.learning.app.dashboardRecord
+import com.rioikeda.newslisten.learning.ui.LearningViewModel
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import com.rioikeda.newslisten.preferences.app.PreferencesApi
 import com.rioikeda.newslisten.preferences.app.PreferencesSync

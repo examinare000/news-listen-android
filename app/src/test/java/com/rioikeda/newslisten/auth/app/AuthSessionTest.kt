@@ -1,11 +1,10 @@
 package com.rioikeda.newslisten.auth.app
 
-import com.rioikeda.newslisten.auth.AuthState
-import com.rioikeda.newslisten.auth.CleanupIncomplete
-import com.rioikeda.newslisten.auth.CleanupStep
+import com.rioikeda.newslisten.auth.domain.AuthState
+import com.rioikeda.newslisten.auth.domain.CleanupIncomplete
+import com.rioikeda.newslisten.auth.domain.CleanupStep
 import com.rioikeda.newslisten.auth.FakeApiClient
-import com.rioikeda.newslisten.auth.Subject
-import com.rioikeda.newslisten.auth.SubjectCleanup
+import com.rioikeda.newslisten.auth.domain.Subject
 import com.rioikeda.newslisten.auth.domain.AccountUser
 import com.rioikeda.newslisten.auth.domain.LoginOutcome
 import com.rioikeda.newslisten.auth.domain.Role
@@ -19,7 +18,6 @@ import com.rioikeda.newslisten.model.UserResponse
 import com.rioikeda.newslisten.network.ApiClient
 import com.rioikeda.newslisten.network.AuthApiAdapter
 import com.rioikeda.newslisten.network.InMemorySessionStore
-import com.rioikeda.newslisten.network.SessionStore
 import com.rioikeda.newslisten.network.toAccountUser
 import com.rioikeda.newslisten.network.toIssuedSession
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore

@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.learning
 
 import com.rioikeda.newslisten.learning.app.WeeklyGoalProgress
+import com.rioikeda.newslisten.learning.ui.weeklyGoalProgressText
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

@@ -1,11 +1,12 @@
 package com.rioikeda.newslisten.account
 
+import com.rioikeda.newslisten.account.ui.AccountViewModel
 import com.rioikeda.newslisten.architecture.ProbeData
 import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.account.app.AccountCommands
-import com.rioikeda.newslisten.auth.AuthViewModel
+import com.rioikeda.newslisten.auth.ui.AuthViewModel
 import com.rioikeda.newslisten.auth.probeAuthSession
 
 /** `AccountViewModel` の query は state の getter だけ。`AuthSession` を 1 つ組み、`AuthViewModel` と `AccountCommands` の両方へ渡す。 */

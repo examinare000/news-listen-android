@@ -1,7 +1,7 @@
 package com.rioikeda.newslisten.architecture.fixture.violation
 
-import com.rioikeda.newslisten.network.SessionStore
-import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.auth.app.SessionStore
+import com.rioikeda.newslisten.preferences.app.PreferencesStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map

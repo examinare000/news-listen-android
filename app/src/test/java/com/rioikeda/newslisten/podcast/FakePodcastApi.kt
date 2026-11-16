@@ -1,7 +1,7 @@
 package com.rioikeda.newslisten.podcast
 
 import com.rioikeda.newslisten.catalog.domain.Episode
-import com.rioikeda.newslisten.network.PodcastApi
+import com.rioikeda.newslisten.podcast.app.PodcastApi
 import com.rioikeda.newslisten.podcast.domain.ServerPosition
 import java.time.Instant
 

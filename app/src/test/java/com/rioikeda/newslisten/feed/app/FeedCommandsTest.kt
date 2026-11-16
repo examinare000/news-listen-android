@@ -1,7 +1,6 @@
 package com.rioikeda.newslisten.feed.app
 
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.feed.BulkActionResult
 import com.rioikeda.newslisten.feed.domain.PendingCuration
 import java.io.IOException
 import kotlinx.coroutines.CoroutineStart

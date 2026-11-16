@@ -6,6 +6,7 @@ import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.auth.app.AuthSession
+import com.rioikeda.newslisten.auth.domain.Subject
 
 /**
  * AppContainer と同じ形で `AuthSession` を組む。後始末（`onSubjectLeave`）・保存済みトークンでの確立（`onSessionRestored`）・認証確立（`onAuthenticated`）・

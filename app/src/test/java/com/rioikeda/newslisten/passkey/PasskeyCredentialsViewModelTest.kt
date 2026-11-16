@@ -8,6 +8,7 @@ import com.rioikeda.newslisten.model.PasskeyCredential
 import com.rioikeda.newslisten.model.PasskeyCredentialsListResponse
 import com.rioikeda.newslisten.network.AccountApiAdapter
 import com.rioikeda.newslisten.passkey.app.PasskeyRow
+import com.rioikeda.newslisten.passkey.ui.PasskeyCredentialsViewModel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest

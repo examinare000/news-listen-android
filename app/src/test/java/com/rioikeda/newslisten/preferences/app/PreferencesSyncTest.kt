@@ -3,10 +3,9 @@ package com.rioikeda.newslisten.preferences.app
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.core.PlaybackSpeed
-import com.rioikeda.newslisten.preferences.ArticleOpenMode
+import com.rioikeda.newslisten.preferences.domain.ArticleOpenMode
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
-import com.rioikeda.newslisten.preferences.PreferencesStore
-import com.rioikeda.newslisten.preferences.TimeFormat
+import com.rioikeda.newslisten.preferences.domain.TimeFormat
 import com.rioikeda.newslisten.preferences.domain.PreferenceItem
 import com.rioikeda.newslisten.preferences.domain.PreferenceRejected
 import com.rioikeda.newslisten.preferences.domain.PreferenceSyncResult

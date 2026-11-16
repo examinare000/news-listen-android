@@ -2,7 +2,7 @@ package com.rioikeda.newslisten.account.app
 
 import com.rioikeda.newslisten.account.FakeApiClient
 import com.rioikeda.newslisten.account.testAuthSession
-import com.rioikeda.newslisten.auth.AuthState
+import com.rioikeda.newslisten.auth.domain.AuthState
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.RevokeSessionsResponse
 import com.rioikeda.newslisten.model.UserResponse

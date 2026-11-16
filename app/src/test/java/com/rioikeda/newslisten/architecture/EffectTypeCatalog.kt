@@ -45,6 +45,8 @@ data class EffectTypeCatalog(
 ) {
     companion object {
         private const val NETWORK = "com.rioikeda.newslisten.network"
+        private const val PODCAST_APP = "com.rioikeda.newslisten.podcast.app"
+        private const val AUTH_APP = "com.rioikeda.newslisten.auth.app"
 
         val production: EffectTypeCatalog = EffectTypeCatalog(
             ports = listOf(
@@ -69,7 +71,7 @@ data class EffectTypeCatalog(
                 ),
                 PortRow(
                     port = "PodcastApi",
-                    interfaces = setOf("$NETWORK.PodcastApi"),
+                    interfaces = setOf("$PODCAST_APP.PodcastApi"),
                     writes = setOf("updatePlaybackPosition", "markCompleted"),
                     sequenceReads = setOf("fetchPodcasts", "fetchPodcast", "downloadAudio"),
                     propertyReads = emptySet(),
@@ -149,7 +151,7 @@ data class EffectTypeCatalog(
                 ),
                 PortRow(
                     port = "PreferencesStore",
-                    interfaces = setOf("com.rioikeda.newslisten.preferences.PreferencesStore"),
+                    interfaces = setOf("com.rioikeda.newslisten.preferences.app.PreferencesStore"),
                     writes = setOf(
                         "setDefaultDifficulty", "setDefaultPlaybackSpeed", "setArticleOpenMode", "setTimeFormat",
                         "setSfxEnabled", "setHapticsEnabled", "setWeeklyGoalEpisodes", "markAchievementsSeen",
@@ -163,14 +165,14 @@ data class EffectTypeCatalog(
                 ),
                 PortRow(
                     port = "SessionStore",
-                    interfaces = setOf("$NETWORK.SessionStore"),
+                    interfaces = setOf("$AUTH_APP.SessionStore"),
                     writes = setOf("save", "clear"),
                     sequenceReads = setOf("load"),
                     propertyReads = emptySet(),
                 ),
                 PortRow(
                     port = "PlayerController",
-                    interfaces = setOf("com.rioikeda.newslisten.podcast.PlayerController"),
+                    interfaces = setOf("com.rioikeda.newslisten.podcast.app.PlayerController"),
                     writes = setOf("prepare", "play", "pause", "seekTo", "setSpeed", "stop"),
                     sequenceReads = emptySet(),
                     propertyReads = setOf(
@@ -200,14 +202,14 @@ data class EffectTypeCatalog(
                 ),
                 PortRow(
                     port = "NetworkMonitoring",
-                    interfaces = setOf("$NETWORK.NetworkMonitoring"),
+                    interfaces = setOf("$PODCAST_APP.NetworkMonitoring"),
                     writes = setOf("start", "stop"),
                     sequenceReads = emptySet(),
                     propertyReads = setOf("isOnline"),
                 ),
                 PortRow(
                     port = "PasskeyProvider",
-                    interfaces = setOf("com.rioikeda.newslisten.passkey.PasskeyProvider"),
+                    interfaces = setOf("com.rioikeda.newslisten.passkey.app.PasskeyProvider"),
                     writes = setOf("createCredential", "getCredential"),
                     sequenceReads = emptySet(),
                     propertyReads = emptySet(),

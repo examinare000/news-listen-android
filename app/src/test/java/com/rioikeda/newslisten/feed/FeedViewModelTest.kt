@@ -3,6 +3,7 @@ package com.rioikeda.newslisten.feed
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.core.PlaybackSpeed
+import com.rioikeda.newslisten.feed.app.BulkActionResult
 import com.rioikeda.newslisten.feed.app.FakeFeedApi
 import com.rioikeda.newslisten.feed.app.FeedCommands
 import com.rioikeda.newslisten.feed.app.FeedNotice
@@ -10,8 +11,9 @@ import com.rioikeda.newslisten.feed.app.FeedQueries
 import com.rioikeda.newslisten.feed.app.FeedState
 import com.rioikeda.newslisten.feed.app.feedArticle
 import com.rioikeda.newslisten.feed.app.feedRow
-import com.rioikeda.newslisten.preferences.ArticleOpenMode
-import com.rioikeda.newslisten.preferences.TimeFormat
+import com.rioikeda.newslisten.feed.ui.FeedViewModel
+import com.rioikeda.newslisten.preferences.domain.ArticleOpenMode
+import com.rioikeda.newslisten.preferences.domain.TimeFormat
 import com.rioikeda.newslisten.preferences.app.PreferencesView
 import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import java.io.IOException

@@ -5,6 +5,7 @@ import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.learning.probeVocabularyTestCommands
+import com.rioikeda.newslisten.learning.ui.VocabularyTestViewModel
 
 /**
  * `VocabularyTestViewModel` の query は画面の状態の getter だけ。warm-up で単語テストを開始し、自己評価を進めた状態を観測する。

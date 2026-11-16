@@ -4,6 +4,7 @@ import com.rioikeda.newslisten.architecture.ProbeData
 import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
+import com.rioikeda.newslisten.learning.ui.LearningViewModel
 
 /**
  * `LearningViewModel` の query は state の getter だけ。warm-up で `load()` を済ませ、既読の保存（command）が

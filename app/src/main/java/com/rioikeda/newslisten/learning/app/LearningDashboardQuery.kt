@@ -3,7 +3,7 @@ package com.rioikeda.newslisten.learning.app
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.learning.domain.Achievement
 import com.rioikeda.newslisten.learning.domain.MonthlyActivity
-import com.rioikeda.newslisten.preferences.PreferencesStore
+import com.rioikeda.newslisten.preferences.app.PreferencesStore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

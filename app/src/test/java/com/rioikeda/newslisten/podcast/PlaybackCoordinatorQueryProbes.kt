@@ -7,6 +7,7 @@ import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.catalog.probeEpisodeCatalog
 import com.rioikeda.newslisten.learning.probeStreakQuery
+import com.rioikeda.newslisten.podcast.app.OfflineLibrary
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
 import com.rioikeda.newslisten.podcast.app.PositionCommands
 import com.rioikeda.newslisten.podcast.app.PositionQueries

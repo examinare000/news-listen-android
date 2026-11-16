@@ -2,6 +2,7 @@ package com.rioikeda.newslisten.podcast
 
 import com.rioikeda.newslisten.designsystem.DSFeedbackVocabulary
 import com.rioikeda.newslisten.learning.domain.QuizGrade
+import com.rioikeda.newslisten.learning.ui.quizFeedbackVocabulary
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

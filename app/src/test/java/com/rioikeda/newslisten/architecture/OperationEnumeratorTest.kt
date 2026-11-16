@@ -27,7 +27,7 @@ class OperationEnumeratorTest {
         val emptyFiles = population.classesByFile.filterValues { it.isEmpty() }.keys
         assertTrue("class を持たない母集団ファイル: $emptyFiles", emptyFiles.isEmpty())
 
-        val vocabulary = population.classesByFile["vocabulary/VocabularyTestViewModel.kt"].orEmpty().map { it.simpleName }
+        val vocabulary = population.classesByFile["learning/ui/VocabularyTestViewModel.kt"].orEmpty().map { it.simpleName }
         assertTrue("VocabularyTestViewModel.kt に VocabularyTestViewModel が無い: $vocabulary", "VocabularyTestViewModel" in vocabulary)
         val commands = population.classesByFile["learning/app/VocabularyTestCommands.kt"].orEmpty().map { it.simpleName }
         assertTrue("VocabularyTestCommands.kt に VocabularyTestCommands が無い: $commands", "VocabularyTestCommands" in commands)
@@ -50,7 +50,7 @@ class OperationEnumeratorTest {
 
         assertTrue(
             "PodcastScreen.kt の facade が母集団に無い（Composable を除く前の母集団が空）",
-            population.classesByFile["podcast/PodcastScreen.kt"].orEmpty().any { it.simpleName == "PodcastScreenKt" },
+            population.classesByFile["podcast/ui/PodcastScreen.kt"].orEmpty().any { it.simpleName == "PodcastScreenKt" },
         )
         val composables = population.operations.filter { op ->
             op.parameterTypes.any { it.typeName == "androidx.compose.runtime.Composer" }

@@ -6,6 +6,7 @@ import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.feed.app.FeedCommands
 import com.rioikeda.newslisten.feed.app.FeedQueries
 import com.rioikeda.newslisten.feed.app.FeedState
+import com.rioikeda.newslisten.feed.ui.FeedViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
