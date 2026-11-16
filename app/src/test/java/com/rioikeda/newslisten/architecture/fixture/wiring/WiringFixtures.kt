@@ -2,7 +2,7 @@ package com.rioikeda.newslisten.architecture.fixture.wiring
 
 import android.content.Context
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.network.SessionStore
+import com.rioikeda.newslisten.auth.app.SessionStore
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineDispatcher

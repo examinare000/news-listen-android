@@ -9,23 +9,12 @@ data class AllowEntry(val rule: String, val file: String, val target: String, va
 }
 
 /**
- * 今の違反の固定（Spec §8.4 android-slice-skeleton-01。order §3.1 の 115 組）。以後の slice は、違反を消したら組を消す。
+ * 今の違反の固定。空（android-dec-133）。以後の違反は 0 から増やせない。
  * 走査の出力から生成しない。差が出たら、走査と仕様のどちらが誤りかを先に決める。
- * android-slice-skeleton-03 で、`*ViewModel` の presentation 化（android-dec-09）に合わせて 24 組を消し 43 組を足した。
  *
- * 持ち主の導出規則: その組を成す行をすべて消す slice のうち、§8.1 の順で最も後のもの。
  * android-check-08 のファイルは test の根からの相対 path。
  */
 object Allowlist {
 
-    private fun rule(ruleId: String, target: String, owner: String, vararg files: String) =
-        files.map { AllowEntry(ruleId, it, target, owner) }
-
-    val entries: List<AllowEntry> =
-        // android-dep-03 (5): network 5
-        rule("android-dep-03", "network", "android-slice-closure-01", "podcast/OfflineLibrary.kt") +
-            rule("android-dep-03", "network", "android-slice-closure-01", "podcast/app/PlaybackCoordinator.kt") +
-            rule("android-dep-03", "network", "android-slice-closure-01", "catalog/app/EpisodeCatalog.kt") +
-            rule("android-dep-03", "network", "android-slice-closure-01", "auth/app/AuthSession.kt") +
-            rule("android-dep-03", "network", "android-slice-closure-01", "podcast/app/PositionCommands.kt")
+    val entries: List<AllowEntry> = emptyList()
 }

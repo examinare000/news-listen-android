@@ -1,7 +1,7 @@
 package com.rioikeda.newslisten.architecture.fixture.classification
 
 import android.content.Context
-import com.rioikeda.newslisten.network.SessionStore
+import com.rioikeda.newslisten.auth.app.SessionStore
 
 /** port の field を持つので効果を持ちうる型。その getter を STRUCTURAL にしてはならない。 */
 class PortHolder(private val sessions: SessionStore) {

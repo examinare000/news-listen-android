@@ -10,6 +10,9 @@ import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.auth.domain.IssuedSession
 import com.rioikeda.newslisten.auth.probeAuthSession
 import com.rioikeda.newslisten.passkey.app.PasskeyCommands
+import com.rioikeda.newslisten.passkey.ui.PasskeyCredentialsViewModel
+import com.rioikeda.newslisten.passkey.ui.PasskeyLoginViewModel
+import com.rioikeda.newslisten.passkey.ui.PasskeyRegistrationViewModel
 
 /** hook 2 つ（登録後・ログイン成功後）を、実行単位の工場の WRITE の関数で渡して `PasskeyCommands` を組む。 */
 private fun probePasskeyCommands(env: ProbeEnvironment): PasskeyCommands = PasskeyCommands(

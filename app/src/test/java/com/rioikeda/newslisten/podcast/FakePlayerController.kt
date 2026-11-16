@@ -1,5 +1,8 @@
 package com.rioikeda.newslisten.podcast
 
+import com.rioikeda.newslisten.podcast.app.PlayerController
+import com.rioikeda.newslisten.podcast.domain.PlaybackMetadata
+import com.rioikeda.newslisten.podcast.domain.PlaybackState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -7,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
  * [PlayerController] のテスト専用フェイク。
  *
  * 呼び出し履歴を記録しつつ、テストから状態（state/positionSeconds/durationSeconds）を
- * 手動遷移できるようにする。[com.rioikeda.newslisten.podcast.ExoPlayerController]（実機）に
+ * 手動遷移できるようにする。[com.rioikeda.newslisten.podcast.infra.ExoPlayerController]（実機）に
  * 先行して [PodcastViewModel] の TDD を進めるためのテストダブル。
  *
  * WHY release() 後の使用を例外にする: 実機の ExoPlayer.release() は「以後再利用不可」契約を

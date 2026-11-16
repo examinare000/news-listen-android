@@ -234,7 +234,7 @@ object CatalogVerifier {
 
     /** main の最上位の型の名前（package を除く）。余分な hook の行が、実在しない型を指すかの判定に使う。 */
     private val mainTopLevelTypes: Set<String> by lazy {
-        val root = com.rioikeda.newslisten.feed.FeedViewModel::class.java.protectionDomain!!.codeSource!!.location
+        val root = com.rioikeda.newslisten.feed.ui.FeedViewModel::class.java.protectionDomain!!.codeSource!!.location
         ClassFileIndex.topLevelClasses(root, PROJECT_PACKAGE).map { it.binaryName.substringAfterLast('.') }.toSet()
     }
 

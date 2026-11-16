@@ -8,12 +8,12 @@ import com.rioikeda.newslisten.learning.app.StreakQuery
 import com.rioikeda.newslisten.learning.app.StreakRecord
 import com.rioikeda.newslisten.model.PreferencesResponse
 import com.rioikeda.newslisten.network.ApiClient
-import com.rioikeda.newslisten.podcast.PlaybackConstants
-import com.rioikeda.newslisten.preferences.ArticleOpenMode
+import com.rioikeda.newslisten.podcast.domain.PlaybackConstants
+import com.rioikeda.newslisten.preferences.domain.ArticleOpenMode
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import com.rioikeda.newslisten.network.PreferencesApiAdapter
-import com.rioikeda.newslisten.preferences.PreferencesStore
-import com.rioikeda.newslisten.preferences.TimeFormat
+import com.rioikeda.newslisten.preferences.app.PreferencesStore
+import com.rioikeda.newslisten.preferences.domain.TimeFormat
 import com.rioikeda.newslisten.preferences.app.PreferencesSync
 import com.rioikeda.newslisten.preferences.app.PreferencesView
 import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
@@ -27,6 +27,8 @@ import com.rioikeda.newslisten.settings.app.techCrunch
 import com.rioikeda.newslisten.settings.domain.FeaturedSiteEntry
 import com.rioikeda.newslisten.settings.domain.GenerationQuota
 import com.rioikeda.newslisten.settings.domain.RssSourceEntry
+import com.rioikeda.newslisten.settings.ui.SelectionAfterSave
+import com.rioikeda.newslisten.settings.ui.SettingsViewModel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.StandardTestDispatcher

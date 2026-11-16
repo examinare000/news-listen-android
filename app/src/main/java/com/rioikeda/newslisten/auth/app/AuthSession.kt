@@ -1,11 +1,10 @@
 package com.rioikeda.newslisten.auth.app
 
-import com.rioikeda.newslisten.auth.AuthState
-import com.rioikeda.newslisten.auth.Subject
+import com.rioikeda.newslisten.auth.domain.AuthState
+import com.rioikeda.newslisten.auth.domain.Subject
 import com.rioikeda.newslisten.auth.domain.IssuedSession
 import com.rioikeda.newslisten.auth.domain.LoginOutcome
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.network.SessionStore
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -338,7 +337,7 @@ class AuthSession(
      *
      * [login] のトークン保存以降の処理（sessionStore.save → authState 遷移 → onAuthenticated）と
      * 同じ手順を踏む。パスキー認証セレモニー自体（options 取得・Credential Manager 呼び出し・
-     * verify）は [com.rioikeda.newslisten.passkey.PasskeyLoginViewModel] の責務であり、
+     * verify）は [com.rioikeda.newslisten.passkey.ui.PasskeyLoginViewModel] の責務であり、
      * ここでは verify 成功後の [IssuedSession] を受け取ってセッション確立のみを行う
      * （auth 層がセッションの正本という既存の責務分担を維持するため、passkey 層から
      * sessionStore/authState を直接操作させない設計）。[login] と違って `catch` せず、確立の後の hook の例外は呼び手へ伝わる。

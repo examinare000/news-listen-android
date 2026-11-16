@@ -1,6 +1,6 @@
 package com.rioikeda.newslisten.architecture.fixture.catalognested
 
-import com.rioikeda.newslisten.network.SessionStore
+import com.rioikeda.newslisten.auth.app.SessionStore
 
 // port の field を持つ private な入れ子の class。外側の型は、その class を field に持つので効果を持ちうる型になる。
 class NestedPortOuter {

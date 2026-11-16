@@ -6,10 +6,9 @@ import com.rioikeda.newslisten.network.StubNetworkMonitor
 import com.rioikeda.newslisten.podcast.FakeEpisodeLookup
 import com.rioikeda.newslisten.podcast.FakePlayerController
 import com.rioikeda.newslisten.podcast.FakePodcastApiClient
-import com.rioikeda.newslisten.podcast.OfflineLibrary
-import com.rioikeda.newslisten.podcast.PlaybackFailureReason
-import com.rioikeda.newslisten.podcast.PlaybackSession
-import com.rioikeda.newslisten.podcast.PlaybackState
+import com.rioikeda.newslisten.podcast.domain.PlaybackFailureReason
+import com.rioikeda.newslisten.podcast.domain.PlaybackSession
+import com.rioikeda.newslisten.podcast.domain.PlaybackState
 import com.rioikeda.newslisten.podcast.domain.PositionRecord
 import com.rioikeda.newslisten.podcast.domain.ResumeChoice
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore

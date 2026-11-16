@@ -4,6 +4,7 @@ import com.rioikeda.newslisten.architecture.ProbeData
 import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
+import com.rioikeda.newslisten.auth.ui.AuthViewModel
 
 /** AppContainer と同じ形で `AuthViewModel` を組む。認証状態の持ち主 `AuthSession` は [probeAuthSession] で組む。`AccountViewModel` の probe も、自分のグラフの中にこれを組む。 */
 internal fun probeAuthViewModel(env: ProbeEnvironment): AuthViewModel = AuthViewModel(authSession = probeAuthSession(env))

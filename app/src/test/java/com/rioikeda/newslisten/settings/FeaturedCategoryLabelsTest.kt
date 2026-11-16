@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.settings
 
 import com.rioikeda.newslisten.R
+import com.rioikeda.newslisten.settings.ui.featuredCategoryLabel
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

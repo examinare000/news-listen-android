@@ -2,7 +2,6 @@ package com.rioikeda.newslisten.podcast.app
 
 import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.network.PodcastApi
 import com.rioikeda.newslisten.podcast.domain.PositionRecord
 import com.rioikeda.newslisten.podcast.domain.ServerPosition
 import java.io.IOException

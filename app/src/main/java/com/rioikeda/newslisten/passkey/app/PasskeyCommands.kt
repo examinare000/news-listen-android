@@ -3,9 +3,6 @@ package com.rioikeda.newslisten.passkey.app
 import com.rioikeda.newslisten.account.app.AccountApi
 import com.rioikeda.newslisten.auth.domain.IssuedSession
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.passkey.PasskeyCancellationException
-import com.rioikeda.newslisten.passkey.PasskeyProvider
-import com.rioikeda.newslisten.passkey.PasskeyProviderException
 
 /**
  * パスキーの登録・ログインの手順（options → Credential Manager → verify → hook）。

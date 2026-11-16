@@ -1,7 +1,6 @@
 package com.rioikeda.newslisten.passkey.app
 
 import com.rioikeda.newslisten.core.ApiException
-import com.rioikeda.newslisten.passkey.PasskeyProviderException
 
 /** パスキー登録の結果。文言への写しは presentation が持つ。 */
 sealed interface PasskeyRegisterOutcome {

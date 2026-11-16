@@ -6,6 +6,7 @@ import com.rioikeda.newslisten.architecture.ProbeEnvironment
 import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.onboarding.app.OnboardingCommands
+import com.rioikeda.newslisten.onboarding.ui.OnboardingViewModel
 import com.rioikeda.newslisten.settings.app.SourcesCommands
 import com.rioikeda.newslisten.settings.app.SourcesQueries
 import com.rioikeda.newslisten.settings.app.SourcesState

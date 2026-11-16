@@ -18,7 +18,7 @@ import com.rioikeda.newslisten.architecture.fixture.wiring.PublicCallbackOwner
 import com.rioikeda.newslisten.architecture.fixture.wiring.ReadonlyCallbackOwner
 import com.rioikeda.newslisten.architecture.fixture.wiring.ScopeOwner
 import com.rioikeda.newslisten.model.FeedResponse
-import com.rioikeda.newslisten.network.SessionStore
+import com.rioikeda.newslisten.auth.app.SessionStore
 import kotlin.coroutines.Continuation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi

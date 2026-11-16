@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.feed
 
-import com.rioikeda.newslisten.preferences.TimeFormat
+import com.rioikeda.newslisten.feed.ui.ArticleDateFormatter
+import com.rioikeda.newslisten.preferences.domain.TimeFormat
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.Instant

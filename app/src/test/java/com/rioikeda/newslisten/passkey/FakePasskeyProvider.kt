@@ -1,5 +1,7 @@
 package com.rioikeda.newslisten.passkey
 
+import com.rioikeda.newslisten.passkey.app.PasskeyProvider
+
 /**
  * Passkey ViewModel 群のテスト専用フェイク。
  *

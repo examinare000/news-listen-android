@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.feed
 
 import com.rioikeda.newslisten.feed.domain.PendingCuration
+import com.rioikeda.newslisten.feed.ui.pendingActionMessage
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

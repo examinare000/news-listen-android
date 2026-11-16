@@ -1,6 +1,6 @@
 package com.rioikeda.newslisten.learning.domain
 
-import com.rioikeda.newslisten.learning.AchievementCatalog
+import com.rioikeda.newslisten.learning.ui.AchievementCatalog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

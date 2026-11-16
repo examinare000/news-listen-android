@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.feed
 
-import com.rioikeda.newslisten.preferences.ArticleOpenMode
+import com.rioikeda.newslisten.feed.ui.ArticleOpener
+import com.rioikeda.newslisten.preferences.domain.ArticleOpenMode
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

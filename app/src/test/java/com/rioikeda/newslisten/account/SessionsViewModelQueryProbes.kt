@@ -2,6 +2,7 @@ package com.rioikeda.newslisten.account
 
 import com.rioikeda.newslisten.account.app.AccountCommands
 import com.rioikeda.newslisten.account.app.SessionQueries
+import com.rioikeda.newslisten.account.ui.SessionsViewModel
 import com.rioikeda.newslisten.architecture.CallSpec
 import com.rioikeda.newslisten.architecture.ProbeData
 import com.rioikeda.newslisten.architecture.ProbeEnvironment

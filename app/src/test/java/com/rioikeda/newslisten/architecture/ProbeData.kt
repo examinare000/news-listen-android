@@ -9,8 +9,8 @@ import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.core.PlaybackSpeed
 import com.rioikeda.newslisten.feed.domain.Article
-import com.rioikeda.newslisten.preferences.ArticleOpenMode
-import com.rioikeda.newslisten.preferences.TimeFormat
+import com.rioikeda.newslisten.preferences.domain.ArticleOpenMode
+import com.rioikeda.newslisten.preferences.domain.TimeFormat
 import com.rioikeda.newslisten.preferences.app.PreferencesView
 import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import com.rioikeda.newslisten.settings.domain.FeaturedSiteEntry

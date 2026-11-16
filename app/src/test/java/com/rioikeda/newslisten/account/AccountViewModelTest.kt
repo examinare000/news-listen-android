@@ -1,7 +1,8 @@
 package com.rioikeda.newslisten.account
 
 import com.rioikeda.newslisten.account.app.AccountCommands
-import com.rioikeda.newslisten.auth.AuthViewModel
+import com.rioikeda.newslisten.account.ui.AccountViewModel
+import com.rioikeda.newslisten.auth.ui.AuthViewModel
 import com.rioikeda.newslisten.auth.app.AuthSession
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.PreferencesResponse
@@ -110,7 +111,7 @@ class AccountViewModelTest {
 
         viewModel.saveProfile()
 
-        assertEquals(updatedUser.toAccountUser(), (authViewModel.authState.value as com.rioikeda.newslisten.auth.AuthState.Authenticated).user)
+        assertEquals(updatedUser.toAccountUser(), (authViewModel.authState.value as com.rioikeda.newslisten.auth.domain.AuthState.Authenticated).user)
         assertEquals("表示名を更新しました", viewModel.profileMessage.value)
     }
 

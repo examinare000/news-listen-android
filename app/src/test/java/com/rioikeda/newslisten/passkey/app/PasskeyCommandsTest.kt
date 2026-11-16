@@ -9,9 +9,6 @@ import com.rioikeda.newslisten.network.AccountApiAdapter
 import com.rioikeda.newslisten.network.toIssuedSession
 import com.rioikeda.newslisten.passkey.FakeApiClient
 import com.rioikeda.newslisten.passkey.FakePasskeyProvider
-import com.rioikeda.newslisten.passkey.PasskeyCancellationException
-import com.rioikeda.newslisten.passkey.PasskeyProvider
-import com.rioikeda.newslisten.passkey.PasskeyProviderException
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.jsonPrimitive

@@ -2,6 +2,7 @@ package com.rioikeda.newslisten.onboarding
 
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.onboarding.app.OnboardingCommands
+import com.rioikeda.newslisten.onboarding.ui.OnboardingViewModel
 import com.rioikeda.newslisten.settings.app.FakeSourcesApi
 import com.rioikeda.newslisten.settings.app.FeaturedSiteGroup
 import com.rioikeda.newslisten.settings.app.SourcesCommands

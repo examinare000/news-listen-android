@@ -2,6 +2,8 @@ package com.rioikeda.newslisten.preferences
 
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.core.PlaybackSpeed
+import com.rioikeda.newslisten.preferences.domain.ArticleOpenMode
+import com.rioikeda.newslisten.preferences.domain.TimeFormat
 import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals

@@ -3,7 +3,11 @@ package com.rioikeda.newslisten.passkey
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.PasskeyOptionsResponse
 import com.rioikeda.newslisten.network.AccountApiAdapter
+import com.rioikeda.newslisten.passkey.app.PasskeyCancellationException
 import com.rioikeda.newslisten.passkey.app.PasskeyCommands
+import com.rioikeda.newslisten.passkey.app.PasskeyProvider
+import com.rioikeda.newslisten.passkey.app.PasskeyProviderException
+import com.rioikeda.newslisten.passkey.ui.PasskeyRegistrationViewModel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest

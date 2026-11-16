@@ -7,6 +7,7 @@ import com.rioikeda.newslisten.architecture.QueryProbeSet
 import com.rioikeda.newslisten.architecture.queryProbeSet
 import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.catalog.probeEpisodeCatalog
+import com.rioikeda.newslisten.podcast.app.OfflineLibrary
 
 /**
  * AppContainer の主構築子と同じ形（音声の保存庫の port・取得 port・現在の主体を読む関数・dispatcher）で `OfflineLibrary` を組む。
