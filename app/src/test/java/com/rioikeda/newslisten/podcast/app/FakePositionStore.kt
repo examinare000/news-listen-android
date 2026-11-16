@@ -41,6 +41,9 @@ class FakePositionStore : PositionStore {
     /** 次の [write] だけ [IOException] を投げる。 */
     var failNextWrite: Boolean = false
 
+    /** 次の [read] だけ [IOException] を投げる。 */
+    var failNextRead: Boolean = false
+
     /** 非 null の間、[write] はこの完了を待ってから書く（書込の進行中を作る）。 */
     var writeGate: CompletableDeferred<Unit>? = null
 
@@ -61,6 +64,10 @@ class FakePositionStore : PositionStore {
 
     override suspend fun read(subjectId: String, episodeId: String): PositionRecord? {
         readCalls++
+        if (failNextRead) {
+            failNextRead = false
+            throw IOException("read failed")
+        }
         readGate?.await()
         return records[subjectId to episodeId]
     }

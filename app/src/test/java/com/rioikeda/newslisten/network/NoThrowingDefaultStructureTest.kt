@@ -412,4 +412,107 @@ class NoThrowingDefaultStructureTest {
         assertFalse(positionStoreWiringViolations(correct.replace("PositionQueries(playbackPositionStore)", "PositionQueries(other)")).isEmpty())
         assertFalse(positionStoreWiringViolations(correct.replace("PodcastApiAdapter(apiClient), playbackPositionStore", "PodcastApiAdapter(apiClient), other")).isEmpty())
     }
+
+    private fun String.hasFunDeclarationOf(name: String): Boolean = Regex("""\bfun\s+(\w+\.)?$name\(""").containsMatchIn(this)
+
+    /**
+     * 再開の確認を作る入口の違反を返す（コメント行は除く）:
+     * (1) 確認の値の生成（`class ResumePrompt(` の宣言を除く）が `PlaybackCoordinator.kt` の 1 か所だけか、
+     * (2) `togglePlayPause(` の呼出（宣言を除く）が `PodcastViewModel.kt`・`AudioPlayerSection.kt` だけか、
+     * (3) MediaSession（`PlaybackService.kt`）と player の実装（`ExoPlayerController.kt`）が確認を知らないか。
+     */
+    private fun resumePromptEntryViolations(sources: Map<String, String>): List<String> {
+        val code = sources.mapValues { it.value.withoutCommentLines() }
+        val violations = mutableListOf<String>()
+        val creations = code
+            .mapValues { (_, text) -> Regex("""\bResumePrompt\(""").findAll(text.replace("class ResumePrompt(", "")).count() }
+            .filterValues { it > 0 }
+        if (creations.values.sum() != 1 || creations.keys.single().endsWith("podcast/app/PlaybackCoordinator.kt").not()) {
+            violations += "確認の値の生成が PlaybackCoordinator.kt の 1 か所でない: $creations"
+        }
+        code.filter { (_, text) -> text.lines().any { it.contains("togglePlayPause(") && !it.hasFunDeclarationOf("togglePlayPause") } }.keys
+            .filterNot { it.endsWith("/PodcastViewModel.kt") || it.endsWith("/AudioPlayerSection.kt") }
+            .forEach { violations += "$it が togglePlayPause( を呼ぶ" }
+        for ((path, text) in code) {
+            if (!path.endsWith("/PlaybackService.kt") && !path.endsWith("/ExoPlayerController.kt")) continue
+            for (word in listOf("PlaybackCoordinator", "resumePrompt", "ResumePrompt", "togglePlayPause")) {
+                if (text.contains(word)) violations += "$path が $word を知っている"
+            }
+        }
+        return violations
+    }
+
+    @Test
+    fun `android-possync-50 shared-sync-11 確認を作る入口はtogglePlayPauseだけ`() {
+        val root = resolveMainSourceRoot()
+        val sources = root.walkTopDown().filter { it.isFile && it.extension == "kt" }.associate { it.path to it.readText() }
+
+        for (name in listOf("PlaybackCoordinator.kt", "PodcastViewModel.kt", "AudioPlayerSection.kt", "PlaybackService.kt", "ExoPlayerController.kt")) {
+            assertTrue("$name が走査ルートに無い（vacuous pass ガード）", sources.keys.any { it.endsWith("/$name") })
+        }
+        assertTrue("確認を作る入口が togglePlayPause だけでない: ${resumePromptEntryViolations(sources)}", resumePromptEntryViolations(sources).isEmpty())
+    }
+
+    @Test
+    fun `android-possync-50 shared-sync-11 確認の入口の検査は反例の文字列を落とし正しい形を通す`() {
+        val ok = mapOf(
+            "app/src/main/java/x/podcast/app/PlaybackCoordinator.kt" to "_resumePrompt.value = ResumePrompt(id, a, b)\noverride suspend fun togglePlayPause() {}",
+            "app/src/main/java/x/podcast/app/PlaybackReadModels.kt" to "data class ResumePrompt(val episodeId: String)",
+            "app/src/main/java/x/podcast/PodcastViewModel.kt" to "suspend fun togglePlayPause() = coordinator.togglePlayPause()",
+            "app/src/main/java/x/podcast/AudioPlayerSection.kt" to "scope.launch { viewModel.togglePlayPause() }",
+            "app/src/main/java/x/playbackservice/PlaybackService.kt" to "class PlaybackService",
+            "app/src/main/java/x/podcast/ExoPlayerController.kt" to "class ExoPlayerController",
+        )
+        assertTrue(resumePromptEntryViolations(ok).isEmpty())
+        assertTrue(
+            "コメントの言及は違反にしない",
+            resumePromptEntryViolations(ok + ("app/src/main/java/x/playbackservice/PlaybackService.kt" to "// PlaybackCoordinator を知らない\nclass PlaybackService")).isEmpty(),
+        )
+
+        val service = "app/src/main/java/x/playbackservice/PlaybackService.kt"
+        assertFalse("MediaSession が Coordinator の togglePlayPause を呼ぶ", resumePromptEntryViolations(ok + (service to "coordinator.togglePlayPause()")).isEmpty())
+        assertFalse("MediaSession が確認の語を知る", resumePromptEntryViolations(ok + (service to "val p = resumePrompt")).isEmpty())
+        assertFalse(
+            "画面と中継以外が togglePlayPause( を呼ぶ",
+            resumePromptEntryViolations(ok + ("app/src/main/java/x/Other.kt" to "coordinator.togglePlayPause()")).isEmpty(),
+        )
+        assertFalse(
+            "確認の生成が 2 か所",
+            resumePromptEntryViolations(ok + ("app/src/main/java/x/podcast/AudioPlayerSection.kt" to "val p = ResumePrompt(\"p1\", 1.0, 2.0)")).isEmpty(),
+        )
+        assertFalse(
+            "確認の生成が 0 か所",
+            resumePromptEntryViolations(ok + ("app/src/main/java/x/podcast/app/PlaybackCoordinator.kt" to "override suspend fun togglePlayPause() {}")).isEmpty(),
+        )
+    }
+
+    /** `PlaybackCoordinator.kt` の `positionCommands.record(` の呼出が 1 か所で、その直前の関数宣言が `recordPosition` かの違反を返す（コメント行は除く）。 */
+    private fun recordPositionViolations(coordinatorSource: String): List<String> {
+        val lines = coordinatorSource.withoutCommentLines().lines()
+        val calls = lines.indices.filter { lines[it].contains("positionCommands.record(") }
+        if (calls.size != 1) return listOf("positionCommands.record( の呼出が 1 か所でない（実際: ${calls.size} か所）")
+        val owner = lines.subList(0, calls.single()).lastOrNull { Regex("""\bfun\s+\w+\(""").containsMatchIn(it) }
+            ?.let { Regex("""\bfun\s+(\w+)\(""").find(it)?.groupValues?.get(1) }
+        return if (owner == "recordPosition") emptyList() else listOf("positionCommands.record( が recordPosition の外（$owner）にある")
+    }
+
+    @Test
+    fun `android-possync-56 shared-sync-13 印の更新はrecordPositionだけを通る`() {
+        val root = resolveMainSourceRoot()
+        val file = root.walkTopDown().firstOrNull { it.name == "PlaybackCoordinator.kt" }
+            ?: error("走査ルート $root に PlaybackCoordinator.kt が見つからない（vacuous pass ガード）")
+
+        assertTrue("印の更新が recordPosition だけを通らない: ${recordPositionViolations(file.readText())}", recordPositionViolations(file.readText()).isEmpty())
+    }
+
+    @Test
+    fun `android-possync-56 shared-sync-13 印の更新の検査は2か所と0か所と別の関数を落とし正しい形を通す`() {
+        val ok = "private suspend fun recordPosition(subject: String?, id: String, s: Double) {\n    val at = positionCommands.record(subject, id, s)\n}"
+        assertTrue(recordPositionViolations(ok).isEmpty())
+        assertTrue("コメントの言及は呼出ではない", recordPositionViolations("// positionCommands.record( は recordPosition だけ\n$ok").isEmpty())
+
+        assertFalse("2 か所", recordPositionViolations("$ok\nprivate fun other() {\n    positionCommands.record(a, b, c)\n}").isEmpty())
+        assertFalse("0 か所", recordPositionViolations("private suspend fun recordPosition() {}").isEmpty())
+        assertFalse("別の関数の中", recordPositionViolations("private fun other() {\n    positionCommands.record(a, b, c)\n}").isEmpty())
+    }
 }

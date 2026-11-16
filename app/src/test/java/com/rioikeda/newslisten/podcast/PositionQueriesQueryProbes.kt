@@ -44,6 +44,7 @@ internal val positionQueriesQueryProbes: QueryProbeSet = run {
         ),
         calls = listOf(
             CallSpec("PositionQueries#resumeCandidate") { listOf("u1", ProbeData.podcast) },
+            CallSpec("PositionQueries#latestRecord") { listOf("u1", ProbeData.podcast.id) },
         ),
     ) { env ->
         val commands = PositionCommands(

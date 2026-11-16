@@ -104,6 +104,52 @@ class PositionQueriesTest {
     }
 
     @Test
+    fun `android-possync-23 shared-sync-10 latestRecordは主体とepisodeの端末の記録をそのまま返す`() = runTest {
+        store.seed(deviceRecord(40.0, t2))
+
+        assertEquals(deviceRecord(40.0, t2), queries.latestRecord("u1", "p1"))
+        assertEquals("別の episode の記録は無い", null, queries.latestRecord("u1", "p2"))
+        assertNothingWrittenOrSent()
+    }
+
+    @Test
+    fun `android-possync-23 shared-sync-10 latestRecordは主体がnullなら読まずにnullを返す`() = runTest {
+        store.seed(deviceRecord(40.0, t2))
+        assertEquals("Given: 読みは 0 回", 0, store.readCalls)
+
+        assertEquals(null, queries.latestRecord(null, "p1"))
+
+        assertEquals("端末の記録を読んでいない", 0, store.readCalls)
+    }
+
+    @Test
+    fun `android-possync-23 shared-sync-10 latestRecordは読みのIOExceptionをnullに倒す`() = runTest {
+        store.seed(deviceRecord(40.0, t2))
+        store.failNextRead = true
+
+        assertEquals("例外を出さず null", null, queries.latestRecord("u1", "p1"))
+
+        assertEquals("読みは 1 回試みた", 1, store.readCalls)
+        // 正方向の対照: 失敗の印は 1 回で消え、次の読みは記録を返す。
+        assertEquals(deviceRecord(40.0, t2), queries.latestRecord("u1", "p1"))
+    }
+
+    @Test
+    fun `android-possync-23 shared-sync-10 latestRecordは書かず送らない`() = runTest {
+        store.seed(deviceRecord(40.0, t2))
+        assertTrue("Given: 書込・送信の記録は空", store.writes.isEmpty() && api.updatePlaybackPositionCalls.isEmpty())
+
+        queries.latestRecord("u1", "p1")
+
+        assertNothingWrittenOrSent()
+        // 正方向の対照: 同じ store と api で record を呼ぶと、書込と PATCH が 1 件ずつ起きる。
+        commandsFor("u1").record("u1", "p1", 12.5)
+        advanceUntilIdle()
+        assertEquals(1, store.writes.size)
+        assertEquals(listOf("p1" to 12.5), api.updatePlaybackPositionCalls)
+    }
+
+    @Test
     fun `android-possync-23 主体がnullなら端末の記録を読まずサーバーの値を候補にする`() = runTest {
         store.seed(deviceRecord(40.0, t2))
         assertEquals("Given: 読みは 0 回", 0, store.readCalls)

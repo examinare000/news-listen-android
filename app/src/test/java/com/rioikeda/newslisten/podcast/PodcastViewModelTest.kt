@@ -16,8 +16,13 @@ import com.rioikeda.newslisten.network.StubNetworkMonitor
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
 import com.rioikeda.newslisten.podcast.app.newPositionWiring
 import com.rioikeda.newslisten.podcast.app.PlaybackNotice
+import com.rioikeda.newslisten.podcast.app.ResumePrompt
+import com.rioikeda.newslisten.podcast.app.FakePositionStore
+import com.rioikeda.newslisten.podcast.domain.PositionRecord
+import com.rioikeda.newslisten.podcast.domain.ResumeChoice
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
+import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -31,6 +36,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -680,5 +686,94 @@ class PodcastViewModelTest {
 
         assertEquals(listOf(emptySet(), setOf("a"), setOf("b")), recorded.distinct())
         viewModel.stopForSubjectLeave()
+    }
+
+    // --- 再開の確認（shared-sync-10〜12）---
+
+    /** 再開の確認の中継を見るための組立。既存の [newViewModel] は [com.rioikeda.newslisten.podcast.app.PositionWiring] を捨てるので、Coordinator と store も返す。 */
+    private class ResumeWiring(val viewModel: PodcastViewModel, val coordinator: PlaybackCoordinator, val store: FakePositionStore)
+
+    private fun TestScope.newResumeWiring(apiClient: FakePodcastApiClient, playerController: FakePlayerController): ResumeWiring {
+        val currentSubject: () -> String? = { "u1" }
+        val offlineLibrary = OfflineLibrary(AudioCacheManager(FakeFileSystem(), baseDir = "/cache"), apiClient, lookup, currentSubject, StandardTestDispatcher(testScheduler))
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val position = newPositionWiring(apiClient, currentSubject, dispatcher)
+        val coordinator = PlaybackCoordinator(
+            podcastApi = apiClient,
+            playerController = playerController,
+            offlineLibrary = offlineLibrary,
+            networkMonitor = StubNetworkMonitor(initialIsOnline = true),
+            preferencesStore = InMemoryPreferencesStore(),
+            streakQuery = null,
+            dispatcher = dispatcher,
+            currentSubject = currentSubject,
+            episodeLookup = lookup,
+            positionCommands = position.commands,
+            positionQueries = position.queries,
+        )
+        val viewModel = PodcastViewModel(
+            learningCommands = learningCommands(),
+            coordinator = coordinator,
+            catalog = EpisodeCatalog(apiClient, dispatcher) { offlineLibrary.syncDownloadedState(it) },
+            offlineLibrary = offlineLibrary,
+            dispatcher = dispatcher,
+        )
+        return ResumeWiring(viewModel, coordinator, position.store)
+    }
+
+    /** p1（600 秒）を位置 30 秒で一時停止させ、別の端末の記録（位置 90 秒・10 秒後の時刻）を置く。確認はまだ出していない。 */
+    private suspend fun TestScope.givenPausedWithOtherDeviceRecord(player: FakePlayerController): ResumeWiring {
+        val p1 = podcast("p1", durationSeconds = 600)
+        val apiClient = FakePodcastApiClient(
+            onFetchPodcast = { p1 },
+            onUpdatePlaybackPosition = { _, _ -> p1 },
+        )
+        val wiring = newResumeWiring(apiClient, player)
+        wiring.viewModel.playNow(p1)
+        emit(player, PlaybackState.Playing(0.0, 600.0))
+        player.setPosition(30.0)
+        emit(player, PlaybackState.Paused(30.0, 600.0))
+        wiring.store.seed(PositionRecord("u1", "p1", 90.0, Instant.parse("2026-11-16T00:00:10Z"), unsent = false))
+        return wiring
+    }
+
+    @Test
+    fun `android-possync-40 shared-sync-10 ViewModelのresumePromptはCoordinatorの同じinstance`() = runTest {
+        val wiring = newResumeWiring(FakePodcastApiClient(), FakePlayerController())
+
+        assertSame(wiring.coordinator.resumePrompt, wiring.viewModel.resumePrompt)
+    }
+
+    @Test
+    fun `android-possync-40 shared-sync-10 ViewModelのtogglePlayPauseは確認を出す入力で確認を出す`() = runTest {
+        val player = FakePlayerController()
+        val wiring = givenPausedWithOtherDeviceRecord(player)
+        val playsBefore = player.playCallCount
+
+        wiring.viewModel.togglePlayPause()
+
+        assertEquals(ResumePrompt("p1", 30.0, 90.0), wiring.viewModel.resumePrompt.value)
+        assertEquals("再生していない", playsBefore, player.playCallCount)
+    }
+
+    @Test
+    fun `android-possync-46 shared-sync-12 ViewModelのchoosePositionとdismissResumePromptはCoordinatorへ中継する`() = runTest {
+        val player = FakePlayerController()
+        val wiring = givenPausedWithOtherDeviceRecord(player)
+        wiring.viewModel.togglePlayPause()
+        assertEquals(ResumePrompt("p1", 30.0, 90.0), wiring.viewModel.resumePrompt.value)
+
+        wiring.viewModel.dismissResumePrompt()
+
+        assertNull(wiring.coordinator.resumePrompt.value)
+        assertTrue("閉じても seek しない", player.seekCalls.isEmpty())
+
+        wiring.viewModel.togglePlayPause()
+        assertEquals(ResumePrompt("p1", 30.0, 90.0), wiring.viewModel.resumePrompt.value)
+
+        wiring.viewModel.choosePosition(ResumeChoice.OtherDevice)
+
+        assertNull(wiring.coordinator.resumePrompt.value)
+        assertEquals(listOf(90.0), player.seekCalls)
     }
 }
