@@ -7,6 +7,8 @@ import com.rioikeda.newslisten.podcast.app.NowPlaying
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
 import com.rioikeda.newslisten.podcast.app.PlaybackNotice
 import com.rioikeda.newslisten.podcast.app.QueueView
+import com.rioikeda.newslisten.podcast.app.ResumePrompt
+import com.rioikeda.newslisten.podcast.domain.ResumeChoice
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
@@ -93,6 +95,9 @@ class PodcastViewModel(
     /** ダウンロード済み（キャッシュ済み）Podcast ID の集合。実体は [OfflineLibrary]。 */
     val downloadedIds: StateFlow<Set<String>> = coordinator.downloadedIds
 
+    /** [PlaybackCoordinator.resumePrompt] の中継。再開の確認が出ていなければ null。 */
+    val resumePrompt: StateFlow<ResumePrompt?> = coordinator.resumePrompt
+
     /** 読んだ時点で [read] を計算する [StateFlow]。[collect] は最初の値と、変わった値を出す。メンバー関数にして台帳の列挙に出さない。 */
     @OptIn(ExperimentalForInheritanceCoroutinesApi::class)
     private fun <T> derived(flow: Flow<T>, read: () -> T): StateFlow<T> = object : StateFlow<T> {
@@ -163,8 +168,14 @@ class PodcastViewModel(
     /** 待機列の中で 1 つ後ろへ動かす。 */
     suspend fun moveDown(episodeId: String): Unit = coordinator.moveDown(episodeId)
 
-    /** 再生中なら一時停止し、停止中なら再生を再開する。 */
-    fun togglePlayPause() = coordinator.togglePlayPause()
+    /** 再生中なら一時停止し、停止中なら再生を再開する（別の端末の位置が離れているときは確認を出す）。 */
+    suspend fun togglePlayPause(): Unit = coordinator.togglePlayPause()
+
+    /** 再開の確認で選ばれた位置から再生する。 */
+    suspend fun choosePosition(choice: ResumeChoice): Unit = coordinator.choosePosition(choice)
+
+    /** 再開の確認を閉じる（再生しない）。 */
+    fun dismissResumePrompt() = coordinator.dismissResumePrompt()
 
     /** [PlaybackConstants.SKIP_BACKWARD_SECONDS] 秒戻る。 */
     fun skipBackward() = coordinator.skipBackward()

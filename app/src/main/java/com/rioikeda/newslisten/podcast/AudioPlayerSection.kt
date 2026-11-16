@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -49,6 +50,7 @@ import com.rioikeda.newslisten.catalog.domain.EpisodeTranscriptSegment
 import com.rioikeda.newslisten.learning.app.LearningCommands
 import com.rioikeda.newslisten.learning.domain.VocabularyKey
 import com.rioikeda.newslisten.podcast.app.NowPlaying
+import com.rioikeda.newslisten.podcast.domain.ResumeChoice
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
@@ -69,6 +71,7 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, learningCommands: LearningCo
     val currentTime by viewModel.positionSeconds.collectAsState()
     val duration by viewModel.durationSeconds.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
+    val resumePrompt by viewModel.resumePrompt.collectAsState()
     val registeredVocabularyKeys by learningCommands.registeredVocabularyKeys.collectAsState()
     val savingVocabularyKeys by learningCommands.savingVocabularyKeys.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -230,7 +233,7 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, learningCommands: LearningCo
 
                 // 再生|一時停止ボタン（大）
                 Button(
-                    onClick = { viewModel.togglePlayPause() },
+                    onClick = { coroutineScope.launch { viewModel.togglePlayPause() } },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.Transparent,
                         contentColor = MaterialTheme.colorScheme.primary
@@ -288,6 +291,33 @@ fun AudioPlayerSection(viewModel: PodcastViewModel, learningCommands: LearningCo
                 modifier = Modifier.fillMaxWidth()
             )
         }
+    }
+
+    // 再開の確認。規則（15 秒・新旧）は持たず、値があれば出して選択を返すだけ。外側のタップ・戻るは閉じるだけ。
+    resumePrompt?.let { prompt ->
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissResumePrompt() },
+            title = { Text(stringResource(R.string.resume_prompt_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.resume_prompt_message,
+                        formatTime(prompt.otherDeviceSeconds),
+                        formatTime(prompt.thisDeviceSeconds),
+                    ),
+                )
+            },
+            confirmButton = {
+                Button(onClick = { coroutineScope.launch { viewModel.choosePosition(ResumeChoice.OtherDevice) } }) {
+                    Text(stringResource(R.string.resume_prompt_other_device))
+                }
+            },
+            dismissButton = {
+                Button(onClick = { coroutineScope.launch { viewModel.choosePosition(ResumeChoice.ThisDevice) } }) {
+                    Text(stringResource(R.string.resume_prompt_this_device))
+                }
+            },
+        )
     }
 }
 

@@ -17,9 +17,12 @@ import com.rioikeda.newslisten.podcast.PlaybackState
 import com.rioikeda.newslisten.podcast.PlayerController
 import com.rioikeda.newslisten.podcast.SessionEpisodeRef
 import com.rioikeda.newslisten.podcast.SessionErrorReason
+import com.rioikeda.newslisten.podcast.domain.PositionRules
+import com.rioikeda.newslisten.podcast.domain.ResumeChoice
 import com.rioikeda.newslisten.podcast.domain.ServerPosition
 import com.rioikeda.newslisten.podcast.toPlaybackMetadata
 import com.rioikeda.newslisten.preferences.PreferencesStore
+import java.time.Instant
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalForInheritanceCoroutinesApi
@@ -60,7 +63,17 @@ interface PlaybackCommands {
     /** 待機列の中で 1 つ後ろへ動かす。末尾と待機列に無い id では何もしない。 */
     suspend fun moveDown(episodeId: String)
 
-    fun togglePlayPause()
+    /**
+     * 再生中なら一時停止し、そうでなければ再生を再開する。一時停止中の再開で、別の端末の新しい位置が離れているときは、
+     * 再生せずに [PlaybackQueries.resumePrompt] を出す（画面の再生ボタンだけ。shared-sync-10・11）。
+     */
+    suspend fun togglePlayPause()
+
+    /** 再開の確認で選ばれた位置から再生する。確認が無いときは何もしない。 */
+    suspend fun choosePosition(choice: ResumeChoice)
+
+    /** 再開の確認を閉じる。再生も位置の変更もしない。 */
+    fun dismissResumePrompt()
 
     fun skipBackward()
 
@@ -99,6 +112,9 @@ interface PlaybackQueries {
     val downloadingIds: StateFlow<Set<String>>
 
     val downloadedIds: StateFlow<Set<String>>
+
+    /** 再開の確認。出ていないときは null。 */
+    val resumePrompt: StateFlow<ResumePrompt?>
 }
 
 /**
@@ -184,6 +200,14 @@ class PlaybackCoordinator(
     override val downloadingIds: StateFlow<Set<String>> = offlineLibrary.downloadingIds
 
     override val downloadedIds: StateFlow<Set<String>> = offlineLibrary.downloadedIds
+
+    private val _resumePrompt = MutableStateFlow<ResumePrompt?>(null)
+
+    override val resumePrompt: StateFlow<ResumePrompt?> = _resumePrompt.asStateFlow()
+
+    // episode ごとの、この端末の最後の記録の時刻。再開の確認で「別の端末の記録の方が新しいか」を比べる印。
+    // 記録の応答が遅れて返っても戻らないよう、新しいときだけ更新する。メモリだけで持ち、離脱で空にする（再起動の後は尋ねない）。
+    private val localRecordedAtByEpisode = mutableMapOf<String, Instant>()
 
     private val _queue = MutableStateFlow(PlaybackQueue<Episode>())
 
@@ -284,6 +308,8 @@ class PlaybackCoordinator(
 
     private suspend fun startManually(episode: Episode) {
         userStartGeneration++
+        // 要求の時点で消す: 取得を待つ間に、消えるはずの確認から選ばれて player を動かさないため（android-dec-128）。
+        _resumePrompt.value = null
         startEpisode(episode, StartTrigger.MANUAL, leaveGeneration, userStartGeneration)
     }
 
@@ -434,6 +460,9 @@ class PlaybackCoordinator(
 
     /** [session] を置き、[nowPlaying] を派生させる（これを書く唯一の場所）。 */
     private fun applySession(next: PlaybackSession) {
+        // 確認は、その episode が Active のままのときだけ有効。それ以外へ変わったら消す。
+        val prompt = _resumePrompt.value
+        if (prompt != null && !(next is PlaybackSession.Active && next.episode.id == prompt.episodeId)) _resumePrompt.value = null
         _session.value = next
         val shown = when (next) {
             is PlaybackSession.Starting -> next.episode
@@ -462,13 +491,17 @@ class PlaybackCoordinator(
     /** player の事象を [session]・位置同期・完聴の処理へ写す（android-deriv-15）。表に無い組合せは無視する。 */
     private fun handlePlayerState(state: PlaybackState) {
         when (state) {
-            is PlaybackState.Playing -> when (val current = _session.value) {
-                is PlaybackSession.Starting -> {
-                    applySession(current.playerStarted())
-                    startPositionSync(current.episode.id)
+            is PlaybackState.Playing -> {
+                // 再生が始まったら確認は意味を失う。どの入口から始まっても消す（shared-sync-15）。
+                _resumePrompt.value = null
+                when (val current = _session.value) {
+                    is PlaybackSession.Starting -> {
+                        applySession(current.playerStarted())
+                        startPositionSync(current.episode.id)
+                    }
+                    is PlaybackSession.Active -> startPositionSync(current.episode.id)
+                    else -> Unit
                 }
-                is PlaybackSession.Active -> startPositionSync(current.episode.id)
-                else -> Unit
             }
             is PlaybackState.Paused -> when (val current = _session.value) {
                 is PlaybackSession.Starting -> applySession(current.playerStarted())
@@ -476,7 +509,7 @@ class PlaybackCoordinator(
                     stopPositionSync()
                     if (lastPlayerState is PlaybackState.Playing) {
                         val subject = sessionSubject
-                        scope.launch { positionCommands.record(subject, current.episode.id, state.position) }
+                        scope.launch { recordPosition(subject, current.episode.id, state.position) }
                     }
                 }
                 else -> Unit
@@ -511,6 +544,7 @@ class PlaybackCoordinator(
         if (_session.value !is PlaybackSession.Errored) return@withContext
         val current = _queue.value.current ?: return@withContext
         userStartGeneration++
+        _resumePrompt.value = null
         startEpisode(current, StartTrigger.RETRY, leaveGeneration, userStartGeneration)
     }
 
@@ -560,7 +594,7 @@ class PlaybackCoordinator(
                 // 完聴記録は best-effort。失敗しても次の段を止めない。
             }
         }
-        if (totalSeconds != null) positionCommands.record(subject, podcastId, totalSeconds)
+        if (totalSeconds != null) recordPosition(subject, podcastId, totalSeconds)
         streakQuery?.refresh()
     }
 
@@ -631,13 +665,67 @@ class PlaybackCoordinator(
         if (from in 0 until upNext.size - 1) _queue.value = _queue.value.moveUpNext(from, from + 2)
     }
 
-    /** 再生中なら一時停止し、停止中なら再生を再開する。 */
-    override fun togglePlayPause() {
+    /**
+     * 再生中なら一時停止し、停止中なら再生を再開する。
+     *
+     * 確認を考えるのは、session が Active・player が Paused・開始の処理中でないときだけ。そのとき端末の記録を読み、
+     * [PositionRules.needsResumeConfirmation] が真なら再生せずに確認を置く。画面の再生ボタンだけがこの入口で、
+     * MediaSession からの再生は player へ直接届くので確認を作らない（shared-sync-11）。
+     *
+     * [playMutex] は取らない: 取ると、遅い取得の後ろで再生ボタンが待たされる。読みの前に捕まえた値のどれかが
+     * 読みの後で変わっていたら、確認も再生もせずに捨てる（android-dec-127）。
+     */
+    override suspend fun togglePlayPause(): Unit = withContext(dispatcher) {
         if (isPlaying.value) {
             playerController.pause()
+            return@withContext
+        }
+        val session = _session.value
+        if (session !is PlaybackSession.Active || playerController.state.value !is PlaybackState.Paused || playMutex.isLocked) {
+            playerController.play()
+            return@withContext
+        }
+        val episodeId = session.episode.id
+        val localSeconds = playerController.positionSeconds.value
+        val leave = leaveGeneration
+        val userStart = userStartGeneration
+        val serial = startSerial
+        val latest = positionQueries.latestRecord(sessionSubject, episodeId)
+        val current = _session.value
+        val unchanged = leave == leaveGeneration && userStart == userStartGeneration && serial == startSerial &&
+            current is PlaybackSession.Active && current.episode.id == episodeId &&
+            playerController.positionSeconds.value == localSeconds && playerController.state.value is PlaybackState.Paused
+        if (!unchanged) return@withContext
+        if (latest != null && PositionRules.needsResumeConfirmation(localRecordedAtByEpisode[episodeId], latest, localSeconds)) {
+            _resumePrompt.value = ResumePrompt(episodeId, localSeconds, latest.seconds)
         } else {
             playerController.play()
         }
+    }
+
+    /**
+     * 確認で選ばれた位置から再生する。確認を先に消すので、連打や消えた確認からの選択は何もしない。
+     * [ResumeChoice.OtherDevice] は再開位置の窓（末尾 2 秒は先頭から）を通して seek する。[ResumeChoice.ThisDevice] は
+     * seek せず、再生を始めてから今の位置を今の時刻で記録して送る（記録が再生を待たせない）。
+     */
+    override suspend fun choosePosition(choice: ResumeChoice): Unit = withContext(dispatcher) {
+        val prompt = _resumePrompt.value ?: return@withContext
+        _resumePrompt.value = null
+        val active = _session.value as? PlaybackSession.Active ?: return@withContext
+        when (choice) {
+            ResumeChoice.OtherDevice -> {
+                playerController.seekTo(resolveResumePosition(prompt.otherDeviceSeconds, active.episode.durationSeconds))
+                playerController.play()
+            }
+            ResumeChoice.ThisDevice -> {
+                playerController.play()
+                recordPosition(sessionSubject, prompt.episodeId, playerController.positionSeconds.value)
+            }
+        }
+    }
+
+    override fun dismissResumePrompt() {
+        _resumePrompt.value = null
     }
 
     /** [PlaybackConstants.SKIP_BACKWARD_SECONDS] 秒戻る。下限 0 でクランプする。 */
@@ -673,6 +761,8 @@ class PlaybackCoordinator(
      */
     override suspend fun stopForSubjectLeave(): Unit = withContext(dispatcher) {
         leaveGeneration++
+        _resumePrompt.value = null
+        localRecordedAtByEpisode.clear()
         stopPositionSync()
         playerController.stop()
         applySession(_session.value.stop())
@@ -697,7 +787,7 @@ class PlaybackCoordinator(
     private suspend fun settlePlayback() {
         val current = _session.value
         if (current is PlaybackSession.NothingPlaying) return
-        if (current is PlaybackSession.Active) positionCommands.record(sessionSubject, current.episode.id, playerController.positionSeconds.value)
+        if (current is PlaybackSession.Active) recordPosition(sessionSubject, current.episode.id, playerController.positionSeconds.value)
         stopPositionSync()
         playerController.stop()
     }
@@ -712,7 +802,7 @@ class PlaybackCoordinator(
         syncJob = scope.launch {
             while (isActive) {
                 delay(POSITION_SYNC_INTERVAL_MS)
-                positionCommands.record(subject, podcastId, playerController.positionSeconds.value)
+                recordPosition(subject, podcastId, playerController.positionSeconds.value)
             }
         }
     }
@@ -720,6 +810,12 @@ class PlaybackCoordinator(
     private fun stopPositionSync() {
         syncJob?.cancel()
         syncJob = null
+    }
+
+    /** 位置の記録の唯一の入口。記録した時刻を、その episode の印へ新しいときだけ反映する。 */
+    private suspend fun recordPosition(subject: String?, episodeId: String, seconds: Double) {
+        val recordedAt = positionCommands.record(subject, episodeId, seconds)
+        if (PositionRules.isNewer(recordedAt, localRecordedAtByEpisode[episodeId])) localRecordedAtByEpisode[episodeId] = recordedAt
     }
 
     private companion object {

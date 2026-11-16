@@ -50,6 +50,10 @@
     <string name="podcast_downloaded">ダウンロード済み</string>
 
     <!-- プレイヤー -->
+    <string name="resume_prompt_title">どちらの位置から続けますか</string>
+    <string name="resume_prompt_message">別の端末: %1$s ／ この端末: %2$s</string>
+    <string name="resume_prompt_other_device">別の端末の位置から</string>
+    <string name="resume_prompt_this_device">この端末の位置から</string>
     <string name="player_now_playing">再生中</string>
     <string name="player_transcript">トランスクリプト</string>
     <string name="player_transcript_expand">トランスクリプトを開く</string>

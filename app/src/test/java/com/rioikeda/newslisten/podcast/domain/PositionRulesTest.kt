@@ -61,6 +61,25 @@ class PositionRulesTest {
     }
 
     @Test
+    fun `android-possync-41 shared-sync-10 needsResumeConfirmationの表（新旧と15秒の境界）`() {
+        assertTrue("差 60・サーバーが新しい", PositionRules.needsResumeConfirmation(t1, device(90.0, t2), 30.0))
+        assertTrue("差がちょうど 15 秒は確認する", PositionRules.needsResumeConfirmation(t1, device(45.0, t2), 30.0))
+        assertFalse("差 14.999 秒は確認しない", PositionRules.needsResumeConfirmation(t1, device(44.999, t2), 30.0))
+        assertFalse("同じ時刻は新しくない", PositionRules.needsResumeConfirmation(t1, device(90.0, t1), 30.0))
+        assertFalse("サーバーが古い", PositionRules.needsResumeConfirmation(t2, device(90.0, t1), 30.0))
+        assertTrue("この端末の記録が無く、サーバーの値がある", PositionRules.needsResumeConfirmation(null, device(90.0, t1), 30.0))
+        assertFalse("サーバーの値が無い", PositionRules.needsResumeConfirmation(t1, null, 30.0))
+        assertTrue("サーバーの位置が手前でも差が 25 秒", PositionRules.needsResumeConfirmation(t1, device(5.0, t2), 30.0))
+        // 正方向の対照: 1 行目と同じ入力で、端末の記録の時刻だけをサーバーと同じにすると偽へ変わる。
+        assertFalse(PositionRules.needsResumeConfirmation(t2, device(90.0, t2), 30.0))
+    }
+
+    @Test
+    fun `android-possync-41 shared-sync-12 ResumeChoiceは別の端末とこの端末の2値を持つ`() {
+        assertEquals(listOf(ResumeChoice.OtherDevice, ResumeChoice.ThisDevice), ResumeChoice.entries.toList())
+    }
+
+    @Test
     fun `PositionRecordは有限で0以上の位置とミリ秒に切り捨て済みの時刻だけを受ける`() {
         assertEquals(0.0, device(0.0, t1).seconds, 0.0)
         assertThrows(IllegalArgumentException::class.java) { device(-0.1, t1) }

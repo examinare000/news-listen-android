@@ -59,3 +59,13 @@ class QueueView(
 
     override fun toString(): String = "QueueView(nowPlaying=$nowPlaying, upNext=$upNext, upNextCount=$upNextCount)"
 }
+
+/**
+ * 再開の確認の読み取り用の値。画面は、この値があれば 2 つの位置（秒）を出して選ばせるだけで、規則は持たない。
+ * 文言は持たない（`strings.xml`）。
+ */
+data class ResumePrompt(
+    val episodeId: String,
+    val thisDeviceSeconds: Double,
+    val otherDeviceSeconds: Double,
+)
