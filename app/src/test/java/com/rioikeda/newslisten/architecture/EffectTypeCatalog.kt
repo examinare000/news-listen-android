@@ -185,6 +185,13 @@ data class EffectTypeCatalog(
                     propertyReads = emptySet(),
                 ),
                 PortRow(
+                    port = "PositionStore",
+                    interfaces = setOf("com.rioikeda.newslisten.podcast.app.PositionStore"),
+                    writes = setOf("write", "markSent", "adoptIfNewer", "removeSubject", "reclaim"),
+                    sequenceReads = setOf("read", "unsent"),
+                    propertyReads = emptySet(),
+                ),
+                PortRow(
                     port = "FileSystem",
                     interfaces = setOf("$NETWORK.FileSystem"),
                     writes = setOf("write", "delete", "deleteRecursively", "ensureDirectory"),
@@ -230,6 +237,7 @@ data class EffectTypeCatalog(
                 HookRow("SourcesCommands#isAdminProvider", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("PlaybackCoordinator#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("OfflineLibrary#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
+                HookRow("PositionCommands#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("PreferencesSync#currentSubject", HookKind.READ, HookShape.NO_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("AuthSession#onSubjectResolved", HookKind.WRITE, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),
                 HookRow("VocabularyTestCommands#shuffle", HookKind.READ, HookShape.ONE_ARG, HookWiring.CONSTRUCTOR),

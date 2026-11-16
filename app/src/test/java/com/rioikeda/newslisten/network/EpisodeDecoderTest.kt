@@ -101,6 +101,31 @@ class EpisodeDecoderTest {
     // ---- type / status / errorMessage ----
 
     @Test
+    fun `android-possync-62 shared-sync-09 playback_position_recorded_atはoffsetと桁数を読みミリ秒に切り捨て読めない値はnullにする`() {
+        val expected = java.time.Instant.parse("2026-11-16T01:02:03.456Z")
+        val cases = mapOf<String?, java.time.Instant?>(
+            "2026-11-16T01:02:03.456000Z" to expected,
+            "2026-11-16T10:02:03+09:00" to java.time.Instant.parse("2026-11-16T01:02:03Z"),
+            "2026-11-16T01:02:03.456789Z" to expected,
+            "2026-11-16T01:02:03.456789123Z" to expected,
+            "2026-11-16T01:02:03.456+00:00" to expected,
+            null to null,
+            "broken" to null,
+            "" to null,
+        )
+        for ((raw, want) in cases) {
+            val episode = EpisodeDecoder.decode(dto().copy(playbackPositionRecordedAt = raw))
+
+            assertEquals("playback_position_recorded_at=$raw", want, episode.resumeRecordedAt)
+        }
+    }
+
+    @Test
+    fun `android-possync-62 shared-sync-09 playback_position_recorded_atが欠落したDTOのresumeRecordedAtはnull`() {
+        assertNull(EpisodeDecoder.decode(dto()).resumeRecordedAt)
+    }
+
+    @Test
     fun `android-dec-17 typeはdigestだけがDigestで未知の値はSingle`() {
         // verifies: CI-D2 / T-D2
         assertEquals(EpisodeKind.Single, EpisodeDecoder.decode(dto(type = "single")).kind)

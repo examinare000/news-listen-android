@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.catalog.domain
 
 import com.rioikeda.newslisten.core.QueueItem
+import java.time.Instant
 import java.util.Collections
 
 enum class EpisodeKind { Single, Digest }
@@ -58,6 +59,9 @@ sealed class Episode private constructor() : QueueItem {
     abstract val durationSeconds: Int
     abstract val createdAt: String
     abstract val resumeHintSeconds: Double
+
+    /** [resumeHintSeconds] をサーバーが記録した時刻。`null` は時刻の無い値で、比べるときは最も古い。 */
+    abstract val resumeRecordedAt: Instant?
     abstract val articleIds: List<String>
 
     /** `null` は「未提供」で、空 list と区別する（ADR-059）。 */
@@ -92,6 +96,7 @@ sealed class Episode private constructor() : QueueItem {
         override val sourceKind: EpisodeSourceKind,
         override val sourceArticles: List<EpisodeSourceArticle>,
         val audioUrl: String,
+        override val resumeRecordedAt: Instant?,
     ) : Episode() {
         companion object {
             internal fun create(
@@ -110,12 +115,13 @@ sealed class Episode private constructor() : QueueItem {
                 sourceKind: EpisodeSourceKind,
                 sourceArticles: List<EpisodeSourceArticle>,
                 audioUrl: String,
+                resumeRecordedAt: Instant? = null,
             ): Playable {
                 require(audioUrl.isNotEmpty()) { "Playable には空でない音声 URL が要る" }
                 return Playable(
                     id, kind, title, japaneseIntroText, difficultyCode, durationSeconds, createdAt,
                     resumeHintSeconds, articleIds.frozen(), transcript?.frozen(), glossary?.frozen(),
-                    quiz?.frozenQuiz(), sourceKind, sourceArticles.frozen(), audioUrl,
+                    quiz?.frozenQuiz(), sourceKind, sourceArticles.frozen(), audioUrl, resumeRecordedAt,
                 )
             }
         }
@@ -137,6 +143,7 @@ sealed class Episode private constructor() : QueueItem {
         override val quiz: List<EpisodeQuizQuestion>?,
         override val sourceKind: EpisodeSourceKind,
         override val sourceArticles: List<EpisodeSourceArticle>,
+        override val resumeRecordedAt: Instant?,
     ) : Episode() {
         companion object {
             internal fun create(
@@ -154,10 +161,11 @@ sealed class Episode private constructor() : QueueItem {
                 quiz: List<EpisodeQuizQuestion>?,
                 sourceKind: EpisodeSourceKind,
                 sourceArticles: List<EpisodeSourceArticle>,
+                resumeRecordedAt: Instant? = null,
             ): Generating = Generating(
                 id, kind, title, japaneseIntroText, difficultyCode, durationSeconds, createdAt,
                 resumeHintSeconds, articleIds.frozen(), transcript?.frozen(), glossary?.frozen(),
-                quiz?.frozenQuiz(), sourceKind, sourceArticles.frozen(),
+                quiz?.frozenQuiz(), sourceKind, sourceArticles.frozen(), resumeRecordedAt,
             )
         }
     }
@@ -180,6 +188,7 @@ sealed class Episode private constructor() : QueueItem {
         override val sourceArticles: List<EpisodeSourceArticle>,
         /** 失敗の識別子。`null` は識別子なし（`""` は識別子あり: shared-session-08）。 */
         val errorMessage: String?,
+        override val resumeRecordedAt: Instant?,
     ) : Episode() {
         companion object {
             internal fun create(
@@ -198,10 +207,11 @@ sealed class Episode private constructor() : QueueItem {
                 sourceKind: EpisodeSourceKind,
                 sourceArticles: List<EpisodeSourceArticle>,
                 errorMessage: String?,
+                resumeRecordedAt: Instant? = null,
             ): Failed = Failed(
                 id, kind, title, japaneseIntroText, difficultyCode, durationSeconds, createdAt,
                 resumeHintSeconds, articleIds.frozen(), transcript?.frozen(), glossary?.frozen(),
-                quiz?.frozenQuiz(), sourceKind, sourceArticles.frozen(), errorMessage,
+                quiz?.frozenQuiz(), sourceKind, sourceArticles.frozen(), errorMessage, resumeRecordedAt,
             )
         }
     }
@@ -229,18 +239,19 @@ sealed class Episode private constructor() : QueueItem {
             quiz: List<EpisodeQuizQuestion>?,
             sourceKind: EpisodeSourceKind,
             sourceArticles: List<EpisodeSourceArticle>,
+            resumeRecordedAt: Instant? = null,
         ): Episode = when {
             status == EpisodeStatus.Processing -> Generating.create(
                 id, kind, title, japaneseIntroText, difficultyCode, durationSeconds, createdAt,
-                resumeHintSeconds, articleIds, transcript, glossary, quiz, sourceKind, sourceArticles,
+                resumeHintSeconds, articleIds, transcript, glossary, quiz, sourceKind, sourceArticles, resumeRecordedAt = resumeRecordedAt,
             )
             status == EpisodeStatus.Completed && audioUrl.isNotEmpty() && errorMessage == null -> Playable.create(
                 id, kind, title, japaneseIntroText, difficultyCode, durationSeconds, createdAt,
-                resumeHintSeconds, articleIds, transcript, glossary, quiz, sourceKind, sourceArticles, audioUrl,
+                resumeHintSeconds, articleIds, transcript, glossary, quiz, sourceKind, sourceArticles, audioUrl, resumeRecordedAt,
             )
             else -> Failed.create(
                 id, kind, title, japaneseIntroText, difficultyCode, durationSeconds, createdAt,
-                resumeHintSeconds, articleIds, transcript, glossary, quiz, sourceKind, sourceArticles, errorMessage,
+                resumeHintSeconds, articleIds, transcript, glossary, quiz, sourceKind, sourceArticles, errorMessage, resumeRecordedAt,
             )
         }
     }

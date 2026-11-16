@@ -1,6 +1,8 @@
 package com.rioikeda.newslisten.network
 
 import com.rioikeda.newslisten.catalog.domain.Episode
+import com.rioikeda.newslisten.podcast.domain.ServerPosition
+import java.time.Instant
 
 /**
  * [ApiClient] を包み、Podcast 応答を [EpisodeDecoder] 経由の [Episode] で返す。
@@ -14,8 +16,10 @@ internal class PodcastApiAdapter(private val apiClient: ApiClient) : PodcastApi 
     override suspend fun fetchPodcast(id: String): Episode =
         EpisodeDecoder.decode(apiClient.fetchPodcast(id))
 
-    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): Episode =
-        EpisodeDecoder.decode(apiClient.updatePlaybackPosition(id, positionSeconds))
+    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double, recordedAt: Instant): ServerPosition {
+        val response = apiClient.updatePlaybackPosition(id, positionSeconds, recordedAt)
+        return ServerPosition(response.playbackPositionSeconds, EpisodeDecoder.parseRecordedAt(response.playbackPositionRecordedAt))
+    }
 
     override suspend fun markCompleted(id: String) {
         apiClient.markCompleted(id)

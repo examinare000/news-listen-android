@@ -294,6 +294,41 @@ class EpisodeTest {
     }
 
     @Test
+    fun `android-possync-62 shared-sync-09 resumeRecordedAtは3つのvariantすべてが入力どおり保持し既定はnull`() {
+        val recordedAt = java.time.Instant.parse("2026-11-16T01:02:03.456Z")
+        fun build(status: EpisodeStatus, audioUrl: String, errorMessage: String?, at: java.time.Instant?): Episode = Episode.create(
+            id = "ep-1",
+            kind = EpisodeKind.Single,
+            status = status,
+            audioUrl = audioUrl,
+            errorMessage = errorMessage,
+            title = "題名",
+            japaneseIntroText = "イントロ",
+            difficultyCode = "toeic_600",
+            durationSeconds = 120,
+            createdAt = "2026-07-01T09:00:00+00:00",
+            resumeHintSeconds = 0.0,
+            articleIds = listOf("a1"),
+            transcript = null,
+            glossary = null,
+            quiz = null,
+            sourceKind = EpisodeSourceKind.Unknown,
+            sourceArticles = emptyList(),
+            resumeRecordedAt = at,
+        )
+
+        for ((label, status, audio, error) in listOf(
+            listOf("Playable", EpisodeStatus.Completed, url, null),
+            listOf("Generating", EpisodeStatus.Processing, "", null),
+            listOf("Failed", EpisodeStatus.Failed, "", "boom"),
+        )) {
+            assertEquals("$label 保持", recordedAt, build(status as EpisodeStatus, audio as String, error as String?, recordedAt).resumeRecordedAt)
+            assertNull("$label null は null", build(status, audio, error, null).resumeRecordedAt)
+        }
+        assertNull("既定は null（引数を渡さない）", create(EpisodeStatus.Completed).resumeRecordedAt)
+    }
+
+    @Test
     fun `android-rule-catalog-01 内容のlistのnullはnullのまま空listは空listのまま`() {
         // verifies: CI-E4 / T-E12
         val unprovided = create(EpisodeStatus.Completed)

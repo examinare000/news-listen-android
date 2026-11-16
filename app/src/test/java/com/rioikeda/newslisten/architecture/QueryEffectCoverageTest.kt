@@ -26,6 +26,7 @@ import com.rioikeda.newslisten.passkey.passkeyCredentialsViewModelQueryProbes
 import com.rioikeda.newslisten.passkey.passkeyLoginViewModelQueryProbes
 import com.rioikeda.newslisten.passkey.passkeyRegistrationViewModelQueryProbes
 import com.rioikeda.newslisten.podcast.offlineLibraryQueryProbes
+import com.rioikeda.newslisten.podcast.positionQueriesQueryProbes
 import com.rioikeda.newslisten.podcast.playbackCoordinatorQueryProbes
 import com.rioikeda.newslisten.podcast.podcastViewModelQueryProbes
 import com.rioikeda.newslisten.settings.settingsViewModelQueryProbes
@@ -68,6 +69,7 @@ internal val registeredQueryProbeSets: List<QueryProbeSet> = listOf(
     learningDashboardQueryQueryProbes,
     streakQueryQueryProbes,
     offlineLibraryQueryProbes,
+    positionQueriesQueryProbes,
     subjectCleanupQueryProbes,
     playbackCoordinatorQueryProbes,
     episodeCatalogQueryProbes,
@@ -205,6 +207,7 @@ class QueryEffectCoverageTest {
             "FeedViewModel", "LearningViewModel", "VocabularyTestViewModel", "SettingsViewModel", "OnboardingViewModel",
             "LearningDashboardQuery", "StreakQuery", "OfflineLibrary", "SubjectCleanup", "PlaybackCoordinator", "EpisodeCatalog",
             "PreferencesSync", "LearningCommands", "VocabularyTestCommands", "FeedQueries", "SourcesQueries", "OnboardingCommands",
+            "PositionQueries",
         )
 
         /** 登録 list の各 probe set を、本番の母集団・台帳・分類表で 1 回ずつ run した結果。 */
@@ -223,7 +226,7 @@ class QueryEffectCoverageTest {
     // ---- 本番の probe の網羅と配線 ----
 
     @Test(timeout = 600_000)
-    fun 登録listは12のViewModelとFeedQueriesとSourcesQueriesとOnboardingCommandsとLearningCommandsとVocabularyTestCommandsとLearningDashboardQueryとStreakQueryとOfflineLibraryとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
+    fun 登録listは12のViewModelとFeedQueriesとSourcesQueriesとOnboardingCommandsとLearningCommandsとVocabularyTestCommandsとLearningDashboardQueryとStreakQueryとOfflineLibraryとPositionQueriesとSubjectCleanupとPlaybackCoordinatorとEpisodeCatalogを網羅し配線の違反なしで実行できる() {
         val registered = registeredQueryProbeSets.map { it.owner }
         assertEquals("登録された probe set の所有者", owners.sorted(), registered.sorted())
 

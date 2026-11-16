@@ -10,6 +10,7 @@ import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
+import com.rioikeda.newslisten.podcast.app.newPositionWiring
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -51,6 +52,7 @@ class PodcastViewModelPortTest {
             StandardTestDispatcher(testScheduler),
         )
         val dispatcher = StandardTestDispatcher(testScheduler)
+        val position = newPositionWiring(podcastApi, { null }, dispatcher)
         val viewModel = PodcastViewModel(
             learningCommands = testLearningCommands(FakeLearningApi(), backgroundScope, dispatcher),
             coordinator = PlaybackCoordinator(
@@ -63,6 +65,8 @@ class PodcastViewModelPortTest {
                 dispatcher = dispatcher,
                 currentSubject = { null },
                 episodeLookup = FakeEpisodeLookup(),
+                positionCommands = position.commands,
+                positionQueries = position.queries,
             ),
             catalog = EpisodeCatalog(podcastApi, dispatcher) { offlineLibrary.syncDownloadedState(it) },
             offlineLibrary = offlineLibrary,

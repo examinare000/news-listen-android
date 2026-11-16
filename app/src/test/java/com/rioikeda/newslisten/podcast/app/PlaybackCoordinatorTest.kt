@@ -111,8 +111,12 @@ class PlaybackCoordinatorTest {
         streakQuery: StreakQuery? = null,
         preferencesStore: PreferencesStore = InMemoryPreferencesStore(),
         currentSubject: () -> String? = { "u1" },
-    ): PlaybackCoordinator =
-        PlaybackCoordinator(
+        // 位置の記録は Coordinator と同じ主体を使う。呼出回数を数える本だけ、数えない別の lambda を渡す。
+        positionSubject: () -> String? = currentSubject,
+    ): PlaybackCoordinator {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val position = newPositionWiring(apiClient, positionSubject, dispatcher)
+        return PlaybackCoordinator(
             podcastApi = apiClient,
             playerController = playerController,
             offlineLibrary = OfflineLibrary(cacheManager, apiClient, lookup, currentSubject, StandardTestDispatcher(testScheduler)),
@@ -120,9 +124,12 @@ class PlaybackCoordinatorTest {
             networkMonitor = networkMonitor,
             preferencesStore = preferencesStore,
             streakQuery = streakQuery,
-            dispatcher = StandardTestDispatcher(testScheduler),
+            dispatcher = dispatcher,
             currentSubject = currentSubject,
+            positionCommands = position.commands,
+            positionQueries = position.queries,
         )
+    }
 
     /** shared-session-04（shared-inv-01）: 再生中のものとキューの現在位置が食い違わない。公開操作の後に毎回確かめる。 */
     private fun assertSharedInv01(coordinator: PlaybackCoordinator) {
@@ -1687,7 +1694,7 @@ class PlaybackCoordinatorTest {
         val (pA, pB) = listOf("pA", "pB").map { podcast(id = it) }
         var subjectCalls = 0
         val player = FakePlayerController()
-        val coordinator = newCoordinator(queueApiClient(pA, pB), player, currentSubject = { subjectCalls++; "user-1" })
+        val coordinator = newCoordinator(queueApiClient(pA, pB), player, currentSubject = { subjectCalls++; "user-1" }, positionSubject = { "user-1" })
 
         coordinator.playNow(pA)
         emit(player, PlaybackState.Failed(PlaybackFailureReason.Network))

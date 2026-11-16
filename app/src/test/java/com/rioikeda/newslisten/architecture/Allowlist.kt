@@ -22,9 +22,10 @@ object Allowlist {
         files.map { AllowEntry(ruleId, it, target, owner) }
 
     val entries: List<AllowEntry> =
-        // android-dep-03 (4): network 4
+        // android-dep-03 (5): network 5
         rule("android-dep-03", "network", "android-slice-closure-01", "podcast/OfflineLibrary.kt") +
             rule("android-dep-03", "network", "android-slice-closure-01", "podcast/app/PlaybackCoordinator.kt") +
             rule("android-dep-03", "network", "android-slice-closure-01", "catalog/app/EpisodeCatalog.kt") +
-            rule("android-dep-03", "network", "android-slice-closure-01", "auth/app/AuthSession.kt")
+            rule("android-dep-03", "network", "android-slice-closure-01", "auth/app/AuthSession.kt") +
+            rule("android-dep-03", "network", "android-slice-closure-01", "podcast/app/PositionCommands.kt")
 }

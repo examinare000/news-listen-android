@@ -25,6 +25,7 @@ data class PodcastResponse(
     val status: String,
     @SerialName("error_message") val errorMessage: String? = null,
     @SerialName("playback_position_seconds") val playbackPositionSeconds: Double = 0.0,
+    @SerialName("playback_position_recorded_at") val playbackPositionRecordedAt: String? = null,
     val title: String = "",
     val segments: List<TranscriptSegment>? = null,
     val vocabulary: List<VocabularyEntry>? = null,

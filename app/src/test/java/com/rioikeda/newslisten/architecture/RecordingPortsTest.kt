@@ -5,6 +5,7 @@ package com.rioikeda.newslisten.architecture
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.FeedResponse
 import com.rioikeda.newslisten.model.StarRequest
+import com.rioikeda.newslisten.podcast.domain.PositionRecord
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceTimeBy
@@ -168,7 +169,7 @@ class RecordingPortsTest {
         val saved = mutableListOf<Boolean>()
         val deleted = mutableListOf<Boolean>()
         val credentials = mutableListOf<String>()
-        repeat(2) { runBlocking { updated += env.apiClient.updatePlaybackPosition("p", 1.0) } }
+        repeat(2) { runBlocking { updated += env.apiClient.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH) } }
         repeat(2) { runBlocking { starred += env.apiClient.starArticle("a", StarRequest()) } }
         repeat(2) { runBlocking { completed += env.apiClient.markCompleted("p") } }
         repeat(2) { saved += env.sessionStore.save("t") }
@@ -324,6 +325,36 @@ class RecordingPortsTest {
         assertEquals(false, denied.notificationPermission.isGranted)
         assertTrue(granted.recorder.writes.isEmpty())
         assertTrue("notificationPermission は記録 fake の一覧に登録されている", granted.fakes.any { it === granted.notificationPermission })
+    }
+
+    @Test
+    fun RecordingPositionStoreは5操作を書込としreadとunsentを列の読みとして返す() {
+        val record = PositionRecord("u1", "p1", 1.0, java.time.Instant.EPOCH, unsent = true)
+        val env = ProbeEnvironment.create(
+            scenarioA(
+                canned = mapOf(
+                    "PositionStore#read" to ProbeData.repeated<PositionRecord?>(record),
+                    "PositionStore#unsent" to ProbeData.repeated(listOf(record)),
+                ),
+            ),
+        )
+
+        runBlocking {
+            assertEquals(record, env.positionStore.read("u1", "p1"))
+            assertEquals(listOf(record), env.positionStore.unsent("u1"))
+            assertTrue("列の読みは書込事象を積まない", env.recorder.writes.isEmpty())
+            env.positionStore.write(record)
+            env.positionStore.markSent("u1", "p1", java.time.Instant.EPOCH)
+            env.positionStore.adoptIfNewer("u1", "p1", com.rioikeda.newslisten.podcast.domain.ServerPosition(1.0, null))
+            env.positionStore.removeSubject("u1")
+            env.positionStore.reclaim("u1")
+        }
+
+        assertEquals(
+            listOf("write", "markSent", "adoptIfNewer", "removeSubject", "reclaim"),
+            env.recorder.writes.filter { it.port == "PositionStore" }.map { it.op },
+        )
+        assertTrue("positionStore は記録 fake の一覧に登録されている", env.fakes.any { it === env.positionStore })
     }
 
     @Test

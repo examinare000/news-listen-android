@@ -14,19 +14,20 @@ class PlaybackPositionRequestDecodingTest {
 
     @Test
     fun positionSecondsがsnake_caseでエンコードされる() {
-        val request = PlaybackPositionRequest(positionSeconds = 12.5)
+        val request = PlaybackPositionRequest(positionSeconds = 12.5, recordedAt = "2026-11-16T01:02:03.456Z")
 
         val encoded = NewsListenJson.encodeToString(PlaybackPositionRequest.serializer(), request)
 
-        assertEquals("""{"position_seconds":12.5}""", encoded)
+        assertEquals("""{"position_seconds":12.5,"recorded_at":"2026-11-16T01:02:03.456Z"}""", encoded)
     }
 
     @Test
     fun position_secondsのJSONからデコードできる() {
-        val json = """{"position_seconds": 30.0}"""
+        val json = """{"position_seconds": 30.0, "recorded_at": "2026-11-16T01:02:03.456Z"}"""
 
         val request = NewsListenJson.decodeFromString(PlaybackPositionRequest.serializer(), json)
 
         assertEquals(30.0, request.positionSeconds, 0.0001)
+        assertEquals("2026-11-16T01:02:03.456Z", request.recordedAt)
     }
 }

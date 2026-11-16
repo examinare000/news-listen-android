@@ -14,6 +14,7 @@ import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
 import com.rioikeda.newslisten.podcast.app.NowPlaying
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
+import com.rioikeda.newslisten.podcast.app.newPositionWiring
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -76,6 +77,7 @@ class NowPlayingEncapsulationTest {
             StandardTestDispatcher(testScheduler),
         )
         val dispatcher = StandardTestDispatcher(testScheduler)
+        val position = newPositionWiring(apiClient, { null }, dispatcher)
         val coordinator = PlaybackCoordinator(
             podcastApi = apiClient,
             playerController = FakePlayerController(),
@@ -86,6 +88,8 @@ class NowPlayingEncapsulationTest {
             dispatcher = dispatcher,
             currentSubject = { null },
             episodeLookup = lookup,
+            positionCommands = position.commands,
+            positionQueries = position.queries,
         )
         val viewModel = PodcastViewModel(
             learningCommands = testLearningCommands(FakeLearningApi(), backgroundScope, dispatcher),

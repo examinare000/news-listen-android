@@ -17,6 +17,7 @@ import com.rioikeda.newslisten.podcast.PlaybackState
 import com.rioikeda.newslisten.podcast.PlayerController
 import com.rioikeda.newslisten.podcast.SessionEpisodeRef
 import com.rioikeda.newslisten.podcast.SessionErrorReason
+import com.rioikeda.newslisten.podcast.domain.ServerPosition
 import com.rioikeda.newslisten.podcast.toPlaybackMetadata
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import kotlinx.coroutines.CoroutineDispatcher
@@ -122,6 +123,8 @@ class PlaybackCoordinator(
     private val dispatcher: CoroutineDispatcher,
     private val currentSubject: () -> String?,
     private val episodeLookup: EpisodeLookup,
+    private val positionCommands: PositionCommands,
+    private val positionQueries: PositionQueries,
 ) : PlaybackCommands, PlaybackQueries {
     // 位置同期タイマー（15秒毎）を動かすための内部スコープ。suspend 関数の呼び出しを跨いで生存する必要があるため、
     // Coordinator 自身が Dispatcher から生成して保持する（呼び出し元の寿命に委ねると、返った時点でキャンセルされる）。
@@ -193,6 +196,22 @@ class PlaybackCoordinator(
     // WHY 全プロパティの宣言の後: 購読は dispatcher 上で非同期に動き始めるため、構築の途中で未初期化の値を読ませない。
     init {
         scope.launch { playerController.state.collect { handlePlayerState(it) } }
+        scope.launch { observeConnectionRestored() }
+    }
+
+    /**
+     * 接続が false → true に変わったときだけ、現在の主体の未送信を再送する（最初の値と true の連続では起こさない）。
+     * 再送は待たない: 待つと、その間に起きた false → true を StateFlow の conflation で失う。重なりは [positionCommands] が直列にする。
+     */
+    private suspend fun observeConnectionRestored() {
+        var previous: Boolean? = null
+        networkMonitor.isOnline.collect { online ->
+            if (previous == false && online) {
+                val subject = currentSubject()
+                scope.launch { positionCommands.resendUnsent(subject) }
+            }
+            previous = online
+        }
     }
 
     /**
@@ -273,14 +292,16 @@ class PlaybackCoordinator(
      * player の書込が交互になる）。主体は要求の冒頭で 1 回だけ捕捉する。
      *
      * [generation] は呼出側が要求の冒頭（[playMutex] を待つ前）で読んだ [leaveGeneration]。中断点のうち、
-     * [playMutex] を取った直後・取得の後・[settlePlayback] の後の 3 箇所で比べ、離脱を挟んでいたら何も書かずに捨てる。
-     * 再開位置の読みと player の開始は中断点ではないので、比較点にしない。
+     * [playMutex] を取った直後・取得の後・[settlePlayback] の後・再開位置の候補の読みの後の 4 箇所で比べ、
+     * 離脱を挟んでいたら何も書かずに捨てる。NETWORK 経路の取り込みも中断点で、取得の後の比較より前に入る。
+     * player の開始は中断点ではないので、比較点にしない。
      *
      * [userGeneration] は呼出側が同じ位置で読んだ [userStartGeneration]。自動の前進だけが、[playMutex] を取った直後・
      * 取得の後（取り直した値の判定の前）・取得の失敗の後（失敗を出す前）で比べ、待つ間に利用者の開始が来ていたら、
-     * キュー・session・player・[notice] のどれも書かずに捨てる。[settlePlayback] の後には置かない:
+     * キュー・session・player・[notice] のどれも書かずに捨てる。[settlePlayback] の直後には置かない:
      * 自動の前進のキューの書込と player の停止はそれより前に済み、中断するのは Active のときだけで、
-     * 自動の前進の時点の session は Completed か離脱後の NothingPlaying だから。
+     * 自動の前進の時点の session は Completed か離脱後の NothingPlaying だから。ただし再開位置の候補の読みの後は
+     * 中断点なので比べ、捨てるときはキューの現在を完聴した episode に戻す（待機列に残す）。
      */
     private suspend fun startEpisode(episode: Episode, trigger: StartTrigger, generation: Long, userGeneration: Long) {
         val subject = currentSubject()
@@ -324,6 +345,9 @@ class PlaybackCoordinator(
                         rejectStart(episode, trigger, SessionErrorReason.FetchFailed, fetchNotice)
                         return@withLock
                     }
+                    // 取り込みは中断点なので、取得の後の比較より前に置く（比較から下のキューの書込までに中断点を作らない）。
+                    // 捨てられる開始でも、見つかった値の記録は害にならない。
+                    positionCommands.adoptServerValue(subject, fresh.id, ServerPosition(fresh.resumeHintSeconds, fresh.resumeRecordedAt))
                     if (generation != leaveGeneration) return@withLock
                     if (supersededByUser()) return@withLock
                     if (fresh !is Episode.Playable) {
@@ -340,6 +364,7 @@ class PlaybackCoordinator(
             }
 
             // キューの書込は取得の後・settlePlayback の前（手動も前進も同じ位置）。前進は取得を待つ間、完聴した episode を現在に保つ。
+            val completedId = _queue.value.current?.id
             when (trigger) {
                 StartTrigger.MANUAL -> {
                     val (jumped, found) = _queue.value.jump(episode.id)
@@ -351,7 +376,17 @@ class PlaybackCoordinator(
             // 前の再生の最終同期・タイマー停止・stop は、切り替えが確定した後で行う（NETWORK は取得の間、前の音声を鳴らし続ける）。
             settlePlayback()
             if (generation != leaveGeneration) return@withLock
-            val resume = resolveResumePosition(playable.resumeHintSeconds, playable.durationSeconds)
+            val candidate = positionQueries.resumeCandidate(subject, playable)
+            if (generation != leaveGeneration) return@withLock
+            if (supersededByUser()) {
+                // 自動の前進が書いたキューの現在を、完聴した episode に戻す。待つ間の利用者のキューの操作は消さない。
+                if (completedId != null) {
+                    val (restored, found) = _queue.value.jump(completedId)
+                    if (found) _queue.value = restored
+                }
+                return@withLock
+            }
+            val resume = resolveResumePosition(candidate, playable.durationSeconds)
             val speed = preferencesStore.defaultPlaybackSpeed.value.multiplier
             applySession(beginSession(playable, resume, speed, trigger))
             startSerial++
@@ -440,7 +475,8 @@ class PlaybackCoordinator(
                 is PlaybackSession.Active -> {
                     stopPositionSync()
                     if (lastPlayerState is PlaybackState.Playing) {
-                        scope.launch { syncPosition(current.episode.id, state.position) }
+                        val subject = sessionSubject
+                        scope.launch { positionCommands.record(subject, current.episode.id, state.position) }
                     }
                 }
                 else -> Unit
@@ -497,12 +533,13 @@ class PlaybackCoordinator(
         val playInProgress = playMutex.isLocked
         val generation = leaveGeneration
         val userGeneration = userStartGeneration
+        val subject = sessionSubject
         val record = completionRecordedSerial != startSerial
         if (record) completionRecordedSerial = startSerial
         stopPositionSync()
 
         if (playInProgress) {
-            if (record) scope.launch { sendCompletion(episode.id, record = true, totalSeconds = null) }
+            if (record) scope.launch { sendCompletion(subject, episode.id, record = true, totalSeconds = null) }
             return
         }
         if (_session.value is PlaybackSession.Starting) applySession(_session.value.playerStarted())
@@ -510,12 +547,12 @@ class PlaybackCoordinator(
         val totalSeconds = endedDuration?.takeIf { it > 0 }
             ?: episode.durationSeconds.toDouble().takeIf { it > 0 }
             ?: position.takeIf { it > 0 }
-        scope.launch { sendCompletion(episode.id, record, totalSeconds) }
+        scope.launch { sendCompletion(subject, episode.id, record, totalSeconds) }
         scope.launch { advanceAfterCompletion(generation, userGeneration) }
     }
 
     /** 完聴の送信の直列。各段は best-effort で、失敗しても次の段へ進む（前進はこの完了を待たない。shared-dec-15）。 */
-    private suspend fun sendCompletion(podcastId: String, record: Boolean, totalSeconds: Double?) {
+    private suspend fun sendCompletion(subject: String?, podcastId: String, record: Boolean, totalSeconds: Double?) {
         if (record) {
             try {
                 podcastApi.markCompleted(podcastId)
@@ -523,7 +560,7 @@ class PlaybackCoordinator(
                 // 完聴記録は best-effort。失敗しても次の段を止めない。
             }
         }
-        if (totalSeconds != null) syncPosition(podcastId, totalSeconds)
+        if (totalSeconds != null) positionCommands.record(subject, podcastId, totalSeconds)
         streakQuery?.refresh()
     }
 
@@ -660,7 +697,7 @@ class PlaybackCoordinator(
     private suspend fun settlePlayback() {
         val current = _session.value
         if (current is PlaybackSession.NothingPlaying) return
-        if (current is PlaybackSession.Active) syncPosition(current.episode.id, playerController.positionSeconds.value)
+        if (current is PlaybackSession.Active) positionCommands.record(sessionSubject, current.episode.id, playerController.positionSeconds.value)
         stopPositionSync()
         playerController.stop()
     }
@@ -671,10 +708,11 @@ class PlaybackCoordinator(
      */
     private fun startPositionSync(podcastId: String) {
         stopPositionSync()
+        val subject = sessionSubject
         syncJob = scope.launch {
             while (isActive) {
                 delay(POSITION_SYNC_INTERVAL_MS)
-                syncPosition(podcastId, playerController.positionSeconds.value)
+                positionCommands.record(subject, podcastId, playerController.positionSeconds.value)
             }
         }
     }
@@ -682,15 +720,6 @@ class PlaybackCoordinator(
     private fun stopPositionSync() {
         syncJob?.cancel()
         syncJob = null
-    }
-
-    /** 位置をサーバーへ同期する。失敗時はサイレント（iOS syncPlaybackPositionIfNeeded 同様）。 */
-    private suspend fun syncPosition(podcastId: String, positionSeconds: Double) {
-        try {
-            podcastApi.updatePlaybackPosition(podcastId, positionSeconds)
-        } catch (e: ApiException) {
-            // ネットワーク一時的な失敗等をログしない（iOS 同様のベストエフォート）。
-        }
     }
 
     private companion object {

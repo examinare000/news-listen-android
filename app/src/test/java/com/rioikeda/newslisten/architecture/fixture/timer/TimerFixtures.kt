@@ -17,7 +17,7 @@ class PeriodicWriter(private val api: ApiClient, dispatcher: CoroutineDispatcher
         job = scope.launch {
             while (true) {
                 delay(15_000)
-                api.updatePlaybackPosition("p", 1.0)
+                api.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH)
             }
         }
     }
@@ -33,7 +33,7 @@ class DelayedWriter(private val api: ApiClient, dispatcher: CoroutineDispatcher)
     fun fire() {
         scope.launch {
             delay(800)
-            api.updatePlaybackPosition("p", 1.0)
+            api.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH)
         }
     }
 }

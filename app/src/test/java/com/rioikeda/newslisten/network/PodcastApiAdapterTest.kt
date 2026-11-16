@@ -4,7 +4,9 @@ import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.core.ApiException
 import com.rioikeda.newslisten.model.PodcastListResponse
 import com.rioikeda.newslisten.model.PodcastResponse
+import com.rioikeda.newslisten.podcast.domain.ServerPosition
 import java.io.IOException
+import java.time.Instant
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -14,7 +16,12 @@ import org.junit.Test
 /** `PodcastApiAdapter` は `ApiClient` の 5 操作へ 1 対 1 で委譲し、Podcast 応答だけ decoder を通して `Episode` で返す。 */
 class PodcastApiAdapterTest {
 
-    private fun dto(id: String, status: String = "completed", playbackPositionSeconds: Double = 0.0) = PodcastResponse(
+    private fun dto(
+        id: String,
+        status: String = "completed",
+        playbackPositionSeconds: Double = 0.0,
+        playbackPositionRecordedAt: String? = null,
+    ) = PodcastResponse(
         id = id,
         type = "single",
         articleIds = listOf("a1"),
@@ -24,6 +31,7 @@ class PodcastApiAdapterTest {
         durationSeconds = 120,
         status = status,
         playbackPositionSeconds = playbackPositionSeconds,
+        playbackPositionRecordedAt = playbackPositionRecordedAt,
         title = "題名 $id",
         createdAt = "2026-07-01T09:00:00+00:00",
     )
@@ -37,6 +45,7 @@ class PodcastApiAdapterTest {
 
         val fetchedIds = mutableListOf<String>()
         val updates = mutableListOf<Pair<String, Double>>()
+        val updateRecordedAts = mutableListOf<Instant>()
         val completedIds = mutableListOf<String>()
         val downloadedUrls = mutableListOf<String>()
         var fetchPodcastsCalls = 0
@@ -52,8 +61,9 @@ class PodcastApiAdapterTest {
             return checkNotNull(fetchPodcastResponse)
         }
 
-        override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse {
+        override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double, recordedAt: Instant): PodcastResponse {
             updates.add(id to positionSeconds)
+            updateRecordedAts.add(recordedAt)
             return checkNotNull(updateResponse)
         }
 
@@ -104,15 +114,38 @@ class PodcastApiAdapterTest {
     }
 
     @Test
-    fun `updatePlaybackPositionは同じ引数でApiClientを呼び返ったDTOをdecodeしたEpisodeを返す`() = runTest {
+    fun `updatePlaybackPositionは同じ引数でApiClientを呼び応答の位置と時刻をServerPositionで返す`() = runTest {
         // verifies: CI-A3 / T-A3
-        client.updateResponse = dto("p1", playbackPositionSeconds = 13.75)
+        client.updateResponse = dto("p1", playbackPositionSeconds = 13.75, playbackPositionRecordedAt = "2026-11-16T01:02:03.456000Z")
+        val sent = Instant.parse("2026-11-16T01:02:03.456Z")
 
-        val episode = adapter.updatePlaybackPosition("p1", 12.5)
+        val server = adapter.updatePlaybackPosition("p1", 12.5, sent)
 
         assertEquals(listOf("p1" to 12.5), client.updates)
-        assertEquals("p1", episode.id)
-        assertEquals("返った DTO の位置が resumeHintSeconds になる", 13.75, episode.resumeHintSeconds, 0.0)
+        assertEquals(listOf(sent), client.updateRecordedAts)
+        assertEquals(ServerPosition(13.75, sent), server)
+    }
+
+    @Test
+    fun `android-possync-62 shared-sync-09 応答の時刻はoffsetと桁数を読みミリ秒に切り捨て読めない値はnull`() = runTest {
+        val sent = Instant.parse("2026-11-16T01:02:03.456Z")
+        val expected = Instant.parse("2026-11-16T01:02:03.456Z")
+        val cases = mapOf<String?, Instant?>(
+            "2026-11-16T01:02:03.456000Z" to expected,
+            "2026-11-16T10:02:03.456+09:00" to expected,
+            "2026-11-16T01:02:03.456789Z" to expected,
+            "2026-11-16T01:02:03.456789123Z" to expected,
+            "2026-11-16T01:02:03.456+00:00" to expected,
+            null to null,
+            "not-a-time" to null,
+        )
+        for ((raw, want) in cases) {
+            client.updateResponse = dto("p1", playbackPositionSeconds = 1.0, playbackPositionRecordedAt = raw)
+
+            val server = adapter.updatePlaybackPosition("p1", 1.0, sent)
+
+            assertEquals("recorded_at=$raw", want, server.recordedAt)
+        }
     }
 
     @Test

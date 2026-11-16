@@ -11,5 +11,6 @@ object SliceIds {
         "android-slice-playback-02", "android-slice-episode-01", "android-slice-episode-02", "android-slice-playback-03", "android-slice-playback-04", "android-slice-playback-05", "android-slice-ci-01", "android-slice-departure-01", "android-slice-departure-02",
         "android-slice-playapp-01", "android-slice-playapp-02", "android-slice-playapp-03", "android-slice-failure-01", "android-slice-prefs-01", "android-slice-prefs-02", "android-slice-account-01", "android-slice-account-02",
         "android-slice-learning-01", "android-slice-learning-02", "android-slice-learning-03", "android-slice-periphery-01", "android-slice-periphery-02", "android-slice-closure-01",
+        "android-slice-possync-01",
     )
 }

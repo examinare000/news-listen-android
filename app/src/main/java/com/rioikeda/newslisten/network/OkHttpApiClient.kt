@@ -53,6 +53,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
+import java.time.Instant
 
 private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
@@ -118,11 +119,11 @@ class OkHttpApiClient(
     override suspend fun fetchPodcast(id: String): PodcastResponse =
         execute(buildRequest(ApiEndpoint.Podcast(id)), PodcastResponse.serializer())
 
-    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse =
+    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double, recordedAt: Instant): PodcastResponse =
         execute(
             buildRequest(
                 ApiEndpoint.UpdatePlaybackPosition(id),
-                body = PlaybackPositionRequest(positionSeconds),
+                body = PlaybackPositionRequest(positionSeconds, EpisodeDecoder.formatRecordedAt(recordedAt)),
                 bodySerializer = PlaybackPositionRequest.serializer(),
             ),
             PodcastResponse.serializer(),

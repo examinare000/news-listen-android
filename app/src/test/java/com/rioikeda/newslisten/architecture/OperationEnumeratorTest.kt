@@ -33,6 +33,10 @@ class OperationEnumeratorTest {
         assertTrue("VocabularyTestCommands.kt に VocabularyTestCommands が無い: $commands", "VocabularyTestCommands" in commands)
         val feedCommands = population.classesByFile["feed/app/FeedCommands.kt"].orEmpty().map { it.simpleName }
         assertTrue("FeedCommands.kt に FeedCommands が無い: $feedCommands", "FeedCommands" in feedCommands)
+        val positionCommands = population.classesByFile["podcast/app/PositionCommands.kt"].orEmpty().map { it.simpleName }
+        assertTrue("PositionCommands.kt に PositionCommands が無い: $positionCommands", "PositionCommands" in positionCommands)
+        val positionQueries = population.classesByFile["podcast/app/PositionQueries.kt"].orEmpty().map { it.simpleName }
+        assertTrue("PositionQueries.kt に PositionQueries が無い: $positionQueries", "PositionQueries" in positionQueries)
 
         val ids = population.operations.map { it.id }.toSet()
         listOf("PodcastViewModel#fetchPodcasts", "FeedViewModel#getArticles", "StreakQuery#refresh").forEach {

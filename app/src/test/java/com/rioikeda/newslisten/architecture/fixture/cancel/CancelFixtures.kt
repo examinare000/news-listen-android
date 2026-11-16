@@ -22,14 +22,14 @@ class CancelTimerAndWrite(private val api: ApiClient, dispatcher: CoroutineDispa
 
     suspend fun takeOver() {
         job?.cancel()
-        api.updatePlaybackPosition("p", 1.0)
-        api.updatePlaybackPosition("p", 1.0)
+        api.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH)
+        api.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH)
     }
 
     private fun timer(): Job = scope.launch {
         while (true) {
             delay(15_000)
-            api.updatePlaybackPosition("p", 1.0)
+            api.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH)
         }
     }
 }
@@ -51,7 +51,7 @@ class RestartTimerInPhase(private val api: ApiClient, dispatcher: CoroutineDispa
     private fun timer(): Job = scope.launch {
         while (true) {
             delay(15_000)
-            api.updatePlaybackPosition("p", 1.0)
+            api.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH)
         }
     }
 }
@@ -66,7 +66,7 @@ class SuppressTimerAndWriteNow(private val api: ApiClient, dispatcher: Coroutine
         job = scope.launch {
             while (true) {
                 delay(15_000)
-                if (enabled) api.updatePlaybackPosition("p", 1.0)
+                if (enabled) api.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH)
             }
         }
     }
@@ -74,8 +74,8 @@ class SuppressTimerAndWriteNow(private val api: ApiClient, dispatcher: Coroutine
     fun pause() {
         enabled = false
         scope.launch {
-            api.updatePlaybackPosition("p", 1.0)
-            api.updatePlaybackPosition("p", 1.0)
+            api.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH)
+            api.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH)
         }
     }
 }

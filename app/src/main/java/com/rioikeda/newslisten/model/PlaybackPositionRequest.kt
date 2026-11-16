@@ -12,4 +12,6 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class PlaybackPositionRequest(
     @SerialName("position_seconds") val positionSeconds: Double,
+    /** 記録時刻。UTC・小数 3 桁固定・`Z`（`ISO_INSTANT` は桁数が変わるので使わない。shared-dec-35）。 */
+    @SerialName("recorded_at") val recordedAt: String,
 )

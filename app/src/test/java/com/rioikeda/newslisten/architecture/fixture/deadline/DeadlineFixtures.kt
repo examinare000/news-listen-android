@@ -25,7 +25,7 @@ class PeriodicWriterWithStateGetter(private val api: ApiClient, dispatcher: Coro
         job = scope.launch {
             while (true) {
                 delay(15_000)
-                api.updatePlaybackPosition("p", 1.0)
+                api.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH)
             }
         }
     }
@@ -35,12 +35,12 @@ class PeriodicWriterWithStateGetter(private val api: ApiClient, dispatcher: Coro
 class DelayedFlowOwner(private val api: ApiClient) {
     fun early(): Flow<Int> = flowOf(1).onStart {
         delay(59_000)
-        api.updatePlaybackPosition("p", 1.0)
+        api.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH)
     }
 
     fun late(): Flow<Int> = flowOf(1).onStart {
         delay(61_000)
-        api.updatePlaybackPosition("p", 1.0)
+        api.updatePlaybackPosition("p", 1.0, java.time.Instant.EPOCH)
     }
 }
 

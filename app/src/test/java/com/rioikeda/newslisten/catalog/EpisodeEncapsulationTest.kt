@@ -105,6 +105,33 @@ class EpisodeEncapsulationTest {
     }
 
     @Test
+    fun `android-possync-62 shared-sync-09 Playableの工場はresumeRecordedAtを保持し省略するとnull`() {
+        val at = java.time.Instant.parse("2026-11-16T01:02:03.456Z")
+        fun build(resumeRecordedAt: java.time.Instant?) = Episode.Playable.create(
+            id = "ep-1",
+            kind = EpisodeKind.Single,
+            title = "題名",
+            japaneseIntroText = "イントロ",
+            difficultyCode = "toeic_600",
+            durationSeconds = 120,
+            createdAt = "2026-07-01T09:00:00+00:00",
+            resumeHintSeconds = 3.5,
+            articleIds = listOf("a1"),
+            transcript = null,
+            glossary = null,
+            quiz = null,
+            sourceKind = EpisodeSourceKind.User,
+            sourceArticles = emptyList(),
+            audioUrl = url,
+            resumeRecordedAt = resumeRecordedAt,
+        )
+
+        assertEquals(at, build(at).resumeRecordedAt)
+        assertEquals(null, build(null).resumeRecordedAt)
+        assertEquals("引数を省略した工場の既定は null", null, playable(url).resumeRecordedAt)
+    }
+
+    @Test
     fun `android-check-05 負の対照 音声URLが空の入力はPlayableにならない`() {
         // verifies: CI-E6, CI-E1 / T-S4
         assertThrows(IllegalArgumentException::class.java) { playable("") }

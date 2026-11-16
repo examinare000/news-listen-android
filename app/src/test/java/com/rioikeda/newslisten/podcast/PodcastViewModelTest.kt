@@ -14,6 +14,7 @@ import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.network.StubNetworkMonitor
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
+import com.rioikeda.newslisten.podcast.app.newPositionWiring
 import com.rioikeda.newslisten.podcast.app.PlaybackNotice
 import com.rioikeda.newslisten.preferences.InMemoryPreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
@@ -111,6 +112,7 @@ class PodcastViewModelTest {
         val offlineLibrary = OfflineLibrary(cacheManager, apiClient, lookup, currentSubject, StandardTestDispatcher(testScheduler))
         // 現行は 1 つの dispatcher が再生と一覧の両方を直列化する。Coordinator と ViewModel で同じ値を共有して範囲を保つ。
         val dispatcher = StandardTestDispatcher(testScheduler)
+        val position = newPositionWiring(apiClient, currentSubject, dispatcher)
         return PodcastViewModel(
             learningCommands = learningCommands,
             coordinator = PlaybackCoordinator(
@@ -123,6 +125,8 @@ class PodcastViewModelTest {
                 dispatcher = dispatcher,
                 currentSubject = currentSubject,
                 episodeLookup = lookup,
+                positionCommands = position.commands,
+                positionQueries = position.queries,
             ),
             catalog = EpisodeCatalog(apiClient, dispatcher) { offlineLibrary.syncDownloadedState(it) },
             offlineLibrary = offlineLibrary,
@@ -359,6 +363,7 @@ class PodcastViewModelTest {
         val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
         val offlineLibrary = OfflineLibrary(cacheManager, apiClient, lookup, { "u1" }, StandardTestDispatcher(testScheduler))
         val dispatcher = StandardTestDispatcher(testScheduler)
+        val position = newPositionWiring(apiClient, { "u1" }, dispatcher)
         val viewModel = PodcastViewModel(
             learningCommands = learningCommands(),
             coordinator = PlaybackCoordinator(
@@ -371,6 +376,8 @@ class PodcastViewModelTest {
                 dispatcher = dispatcher,
                 currentSubject = { "u1" },
                 episodeLookup = lookup,
+                positionCommands = position.commands,
+                positionQueries = position.queries,
             ),
             catalog = EpisodeCatalog(apiClient, dispatcher) { offlineLibrary.syncDownloadedState(it) },
             offlineLibrary = offlineLibrary,
@@ -537,6 +544,7 @@ class PodcastViewModelTest {
         val cacheManager = AudioCacheManager(FakeFileSystem(), baseDir = "/cache")
         val offlineLibrary = OfflineLibrary(cacheManager, apiClient, lookup, { "u1" }, StandardTestDispatcher(testScheduler))
         val dispatcher = StandardTestDispatcher(testScheduler)
+        val position = newPositionWiring(apiClient, { "u1" }, dispatcher)
         val coordinator = PlaybackCoordinator(
             podcastApi = apiClient,
             playerController = FakePlayerController(),
@@ -547,6 +555,8 @@ class PodcastViewModelTest {
             dispatcher = dispatcher,
             currentSubject = { "u1" },
             episodeLookup = lookup,
+            positionCommands = position.commands,
+            positionQueries = position.queries,
         )
         val catalog = EpisodeCatalog(apiClient, dispatcher) { offlineLibrary.syncDownloadedState(it) }
         val learning = learningCommands(failingSave())

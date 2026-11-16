@@ -1,6 +1,7 @@
 package com.rioikeda.newslisten.network
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -281,5 +282,134 @@ class NoThrowingDefaultStructureTest {
         )
         assertFalse(sourcesStateWiringViolations(correct.replace("SourcesQueries(sourcesApi, sourcesState)", "SourcesQueries(sourcesApi, other)")).isEmpty())
         assertFalse(sourcesStateWiringViolations(correct.replace("SourcesCommands(sourcesApi, sourcesState,", "SourcesCommands(sourcesApi, other,")).isEmpty())
+    }
+
+    private fun String.withoutCommentLines(): String = lines()
+        .filterNot { it.trimStart().let { line -> line.startsWith("//") || line.startsWith("*") || line.startsWith("/*") } }
+        .joinToString("\n")
+
+    /** 宣言（`PodcastApi.kt`・`ApiClient.kt`）と実装（`PodcastApiAdapter.kt`・`OkHttpApiClient.kt`）を除いた、位置の書込の呼出の持ち主。 */
+    private val positionWriteDeclarationFiles = setOf("PodcastApi.kt", "ApiClient.kt", "PodcastApiAdapter.kt", "OkHttpApiClient.kt")
+
+    /** [sources]（パス → ソース）のうち、`updatePlaybackPosition(` を呼ぶ `PositionCommands.kt` 以外のファイルを返す。 */
+    private fun positionWriteViolations(sources: Map<String, String>): List<String> {
+        val callers = sources
+            .filterKeys { path -> positionWriteDeclarationFiles.none { path.endsWith("/$it") || path == it } }
+            .filter { (_, code) -> Regex("""\bupdatePlaybackPosition\(""").containsMatchIn(code.withoutCommentLines()) }
+            .keys
+        return callers.filterNot { it.endsWith("podcast/app/PositionCommands.kt") }
+    }
+
+    @Test
+    fun `android-possync-06 位置の書込は全部PositionCommands_recordを通る`() {
+        val root = resolveMainSourceRoot()
+        val sources = root.walkTopDown().filter { it.isFile && it.extension == "kt" }.associate { it.path to it.readText() }
+
+        assertTrue("位置の書込の呼出が PositionCommands.kt 以外にある: ${positionWriteViolations(sources)}", positionWriteViolations(sources).isEmpty())
+        assertTrue(
+            "PositionCommands.kt が updatePlaybackPosition( を呼んでいない（vacuous pass ガード）",
+            sources.filterKeys { it.endsWith("podcast/app/PositionCommands.kt") }.values.any { Regex("""\bupdatePlaybackPosition\(""").containsMatchIn(it) },
+        )
+    }
+
+    @Test
+    fun `android-possync-06 位置の書込の検査はPlaybackCoordinatorに呼出を足した文字列を落とし正しい形を通す`() {
+        val ok = mapOf(
+            "app/src/main/java/x/podcast/app/PositionCommands.kt" to "podcastApi.updatePlaybackPosition(id, s, at)",
+            "app/src/main/java/x/network/PodcastApi.kt" to "suspend fun updatePlaybackPosition(id: String, s: Double, at: Instant): ServerPosition",
+        )
+        assertTrue(positionWriteViolations(ok).isEmpty())
+
+        val bad = ok + ("app/src/main/java/x/podcast/app/PlaybackCoordinator.kt" to "podcastApi.updatePlaybackPosition(id, s, at)")
+        assertEquals(listOf("app/src/main/java/x/podcast/app/PlaybackCoordinator.kt"), positionWriteViolations(bad))
+        assertTrue("コメントの言及は呼出ではない", positionWriteViolations(ok + ("a/Doc.kt" to "// updatePlaybackPosition( は PositionCommands だけ")).isEmpty())
+    }
+
+    private fun lambdaBodyOf(code: String, name: String): String? =
+        Regex("""\b$name\s*=\s*\{([^}]*)\}""").find(code)?.groupValues?.get(1)
+
+    /** order の「一覧の取得の後・主体の確定・後始末」の 3 つの結線（`AppContainer` の source の文字列）の欠けを返す。 */
+    private fun positionWiringViolations(code: String): List<String> {
+        val violations = mutableListOf<String>()
+        if (lambdaBodyOf(code, "afterRefresh")?.contains("adoptEpisodes(") != true) violations += "afterRefresh の lambda が adoptEpisodes( を呼ばない"
+        if (lambdaBodyOf(code, "onSubjectResolved")?.contains("positionCommands.onSubjectResolved(") != true) {
+            violations += "onSubjectResolved の lambda が positionCommands.onSubjectResolved( を呼ばない"
+        }
+        val step = code.indexOf("CleanupStep(\"position_records\")")
+        val audio = code.indexOf("CleanupStep(\"audio_cache\")")
+        if (step < 0) violations += "subjectCleanup に CleanupStep(\"position_records\") が無い"
+        if (step >= 0 && audio >= 0 && step < audio) violations += "position_records が audio_cache の前にある"
+        return violations
+    }
+
+    @Test
+    fun `android-possync-20 shared-sync-07 AppContainerの一覧の取得の後の結線がadoptEpisodesを呼ぶ`() {
+        val root = resolveMainSourceRoot()
+        val file = root.walkTopDown().firstOrNull { it.name == "AppContainer.kt" }
+            ?: error("走査ルート $root に AppContainer.kt が見つからない")
+        val code = file.readText().withoutCommentLines()
+
+        assertTrue("AppContainer の位置の結線が足りない: ${positionWiringViolations(code)}", positionWiringViolations(code).isEmpty())
+    }
+
+    @Test
+    fun `android-possync-20 shared-sync-07 位置の結線の検査は正しい形を通しどれか1つを外した文字列を落とす`() {
+        val correct = """
+            afterRefresh = { offlineLibrary.syncDownloadedState(it); positionCommands.adoptEpisodes(authSession.currentSubjectId(), it) },
+            onSubjectResolved = { s -> offlineLibrary.reclaim(s?.userId); positionCommands.onSubjectResolved(s?.userId) },
+            CleanupStep("audio_cache") { s -> s.userId?.let { offlineLibrary.removeSubject(it) } },
+            CleanupStep("position_records") { s -> s.userId?.let { positionCommands.discardSubject(it) } },
+        """.trimIndent()
+        assertTrue(positionWiringViolations(correct).isEmpty())
+
+        assertFalse(positionWiringViolations(correct.replace("positionCommands.adoptEpisodes", "other.run")).isEmpty())
+        assertFalse(positionWiringViolations(correct.replace("positionCommands.onSubjectResolved(s?.userId)", "Unit")).isEmpty())
+        assertFalse(positionWiringViolations(correct.replace("CleanupStep(\"position_records\")", "CleanupStep(\"other\")")).isEmpty())
+    }
+
+    /** `DataStorePositionStore(`・`PositionCommands(`・`PositionQueries(` の構築が 1 回ずつで、同じ store の値を両方へ渡しているかの違反を返す。 */
+    private fun positionStoreWiringViolations(code: String): List<String> {
+        val violations = mutableListOf<String>()
+        for (type in listOf("DataStorePositionStore", "PositionCommands", "PositionQueries")) {
+            val count = Regex("""\b$type\(""").findAll(code).count()
+            if (count != 1) violations += "$type( の構築が 1 回でない（実際: $count 回）"
+        }
+        val storeVal = Regex("""\bval\s+(\w+)\s*(?::\s*\w+)?\s*(?:=|by\s+lazy\s*\{)\s*DataStorePositionStore\(""")
+            .find(code)?.groupValues?.get(1)
+        val commandsStore = Regex("""\bPositionCommands\(\s*[^,]+,\s*(\w+)\s*,""").find(code)?.groupValues?.get(1)
+        val queriesStore = Regex("""\bPositionQueries\(\s*(\w+)\s*\)""").find(code)?.groupValues?.get(1)
+        if (storeVal == null) violations += "DataStorePositionStore( を初期化子に持つ val が無い"
+        if (commandsStore == null) violations += "PositionCommands(x, store, …) の構築が無い"
+        if (queriesStore == null) violations += "PositionQueries(store) の構築が無い"
+        if (storeVal != null && commandsStore != null && commandsStore != storeVal) violations += "PositionCommands の store（$commandsStore）が $storeVal でない"
+        if (storeVal != null && queriesStore != null && queriesStore != storeVal) violations += "PositionQueries の store（$queriesStore）が $storeVal でない"
+        return violations
+    }
+
+    @Test
+    fun `android-possync-37 AppContainerは位置のstoreを1つ作り両方に渡す`() {
+        val root = resolveMainSourceRoot()
+        val file = root.walkTopDown().firstOrNull { it.name == "AppContainer.kt" }
+            ?: error("走査ルート $root に AppContainer.kt が見つからない")
+        val code = file.readText().withoutCommentLines()
+
+        assertTrue("AppContainer の位置の store の結線が違う: ${positionStoreWiringViolations(code)}", positionStoreWiringViolations(code).isEmpty())
+    }
+
+    @Test
+    fun `android-possync-37 位置のstoreの結線の検査は正しい形を通し0回と2回と別の値を落とす（vacuous passガード）`() {
+        val correct = """
+            private val playbackPositionStore: PositionStore by lazy { DataStorePositionStore(dataStore) }
+            private val positionCommands by lazy { PositionCommands(PodcastApiAdapter(apiClient), playbackPositionStore, Clock.systemUTC(), authSession::currentSubjectId, dispatcher) }
+            private val positionQueries by lazy { PositionQueries(playbackPositionStore) }
+        """.trimIndent()
+        assertTrue(positionStoreWiringViolations(correct).isEmpty())
+
+        assertFalse(positionStoreWiringViolations(correct.replace("DataStorePositionStore(", "Other(")).isEmpty())
+        assertFalse(
+            positionStoreWiringViolations(correct + "\nprivate val second by lazy { DataStorePositionStore(dataStore) }").isEmpty(),
+        )
+        assertFalse(positionStoreWiringViolations(correct.replace("PositionQueries(playbackPositionStore)", "PositionQueries(other)")).isEmpty())
+        assertFalse(positionStoreWiringViolations(correct.replace("PodcastApiAdapter(apiClient), playbackPositionStore", "PodcastApiAdapter(apiClient), other")).isEmpty())
     }
 }
