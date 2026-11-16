@@ -67,6 +67,8 @@ class QueueViewTest {
         )
         val lookup = FakeEpisodeLookup().also { it.register(*episodes) }
         val player = FakePlayerController()
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val position = newPositionWiring(apiClient, { "u1" }, dispatcher)
         val coordinator = PlaybackCoordinator(
             podcastApi = apiClient,
             playerController = player,
@@ -80,9 +82,11 @@ class QueueViewTest {
             networkMonitor = StubNetworkMonitor(initialIsOnline = true),
             preferencesStore = InMemoryPreferencesStore(),
             streakQuery = null,
-            dispatcher = StandardTestDispatcher(testScheduler),
+            dispatcher = dispatcher,
             currentSubject = { "u1" },
             episodeLookup = lookup,
+            positionCommands = position.commands,
+            positionQueries = position.queries,
         )
         return Fixture(coordinator, player)
     }

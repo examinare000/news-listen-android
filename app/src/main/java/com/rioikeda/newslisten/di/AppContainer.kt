@@ -56,6 +56,10 @@ import com.rioikeda.newslisten.podcast.ExoPlayerController
 import com.rioikeda.newslisten.podcast.OfflineLibrary
 import com.rioikeda.newslisten.podcast.PodcastViewModel
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
+import com.rioikeda.newslisten.podcast.app.PositionCommands
+import com.rioikeda.newslisten.podcast.app.PositionQueries
+import com.rioikeda.newslisten.podcast.app.PositionStore
+import com.rioikeda.newslisten.podcast.infra.DataStorePositionStore
 import com.rioikeda.newslisten.preferences.DataStorePreferencesStore
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import com.rioikeda.newslisten.preferences.app.PreferencesSync
@@ -74,6 +78,7 @@ import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import java.io.File
+import java.time.Clock
 import java.util.concurrent.TimeUnit
 
 /**
@@ -159,6 +164,32 @@ class AppContainer(context: Context) {
             dispatcher = Dispatchers.Default.limitedParallelism(1),
         )
     }
+
+    /**
+     * 位置の記録の端末保存。[positionCommands]（書く）と [positionQueries]（読む）が同じ instance を共有する
+     * （別々に作ると、記録が書く先と再開位置が読む先が別になる）。
+     */
+    private val playbackPositionStore: PositionStore by lazy {
+        DataStorePositionStore(
+            PreferenceDataStoreFactory.create(
+                scope = preferencesScope,
+                produceFile = { File(appContext.filesDir, "playback_positions.preferences_pb") },
+            ),
+        )
+    }
+
+    /** 位置の記録・保存・送信・再送・離脱での削除。`authSession` を読むので `by lazy`。 */
+    private val positionCommands: PositionCommands by lazy {
+        PositionCommands(
+            PodcastApiAdapter(apiClient),
+            playbackPositionStore,
+            Clock.systemUTC(),
+            authSession::currentSubjectId,
+            Dispatchers.Default.limitedParallelism(1),
+        )
+    }
+
+    private val positionQueries: PositionQueries by lazy { PositionQueries(playbackPositionStore) }
 
     /**
      * FCM デバイストークンの登録ロジック（フェーズ9）。port の実体（Firebase・通知権限・登録 API）は
@@ -266,6 +297,7 @@ class AppContainer(context: Context) {
                 CleanupStep("playback_stop") { _podcastViewModel.stopForSubjectLeave() },
                 CleanupStep("download_cancel") { s -> s.userId?.let { offlineLibrary.cancelDownloads(it) } },
                 CleanupStep("audio_cache") { s -> s.userId?.let { offlineLibrary.removeSubject(it) } },
+                CleanupStep("position_records") { s -> s.userId?.let { positionCommands.discardSubject(it) } },
                 CleanupStep("preferences") { preferencesSync.clearSubjectScoped() },
                 CleanupStep("fcm_local_reset") { fcmTokenRegistrar.onLogout() },
             ),
@@ -297,7 +329,7 @@ class AppContainer(context: Context) {
             onSessionRestored = { preferencesSync.syncFromServer() },
             onAuthenticated = { fcmTokenRegistrar.onAuthenticated() },
             // Unknown からの確定（shared-dec-05）と遷移 ④ の B の確立（android-dec-48）の直後に回収する。形式の判断は Subject の生成に任せる。
-            onSubjectResolved = { s -> offlineLibrary.reclaim(s?.userId) },
+            onSubjectResolved = { s -> offlineLibrary.reclaim(s?.userId); positionCommands.onSubjectResolved(s?.userId) },
         )
     }
 
@@ -381,7 +413,7 @@ class AppContainer(context: Context) {
         EpisodeCatalog(
             podcastApi = PodcastApiAdapter(apiClient),
             dispatcher = podcastDispatcher,
-            afterRefresh = { offlineLibrary.syncDownloadedState(it) },
+            afterRefresh = { offlineLibrary.syncDownloadedState(it); positionCommands.adoptEpisodes(authSession.currentSubjectId(), it) },
         )
     }
 
@@ -400,6 +432,8 @@ class AppContainer(context: Context) {
             dispatcher = podcastDispatcher,
             currentSubject = authSession::currentSubjectId,
             episodeLookup = _episodeCatalog,
+            positionCommands = positionCommands,
+            positionQueries = positionQueries,
         )
     }
 

@@ -74,12 +74,16 @@ import com.rioikeda.newslisten.podcast.PlaybackMetadata
 import com.rioikeda.newslisten.podcast.PlaybackState
 import com.rioikeda.newslisten.podcast.PlayerController
 import com.rioikeda.newslisten.podcast.app.AudioStore
+import com.rioikeda.newslisten.podcast.app.PositionStore
+import com.rioikeda.newslisten.podcast.domain.PositionRecord
+import com.rioikeda.newslisten.podcast.domain.ServerPosition
 import com.rioikeda.newslisten.preferences.ArticleOpenMode
 import com.rioikeda.newslisten.preferences.PreferencesStore
 import com.rioikeda.newslisten.preferences.app.PreferencesApi
 import com.rioikeda.newslisten.preferences.app.ServerPreferences
 import com.rioikeda.newslisten.preferences.domain.WeeklyGoal
 import com.rioikeda.newslisten.preferences.TimeFormat
+import java.time.Instant
 import java.util.IdentityHashMap
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineDispatcher
@@ -320,6 +324,7 @@ object RecordingDefaults {
         createdAt = "2026-01-01T00:00:00Z",
     )
     val episode: Episode = EpisodeDecoder.decode(podcastResponse)
+    val serverPosition: ServerPosition = ServerPosition(seconds = 0.0, recordedAt = null)
     val actionResponse: ActionResponse = ActionResponse(status = "ok", articleId = "default-article")
     val quizAnswerResponse: QuizAnswerResponse =
         QuizAnswerResponse(correctCount = 0, total = 0, correctRate = 0.0, results = emptyList())
@@ -589,9 +594,9 @@ class RecordingPodcastApi(
 ) : PodcastApi {
     private val core = ApiFake(recorder, scenario, port = "PodcastApi")
 
-    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): Episode {
+    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double, recordedAt: Instant): ServerPosition {
         core.write("updatePlaybackPosition")
-        return RecordingDefaults.episode
+        return RecordingDefaults.serverPosition
     }
 
     override suspend fun markCompleted(id: String) = core.write("markCompleted")
@@ -628,7 +633,7 @@ class RecordingApiClient(
         return RecordingDefaults.actionResponse
     }
 
-    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse {
+    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double, recordedAt: Instant): PodcastResponse {
         core.write("updatePlaybackPosition")
         return RecordingDefaults.podcastResponse
     }
@@ -901,6 +906,34 @@ internal class AudioStoreFake(recorder: EffectRecorder, scenario: ProbeScenario)
     fun <T> read(op: String): T = sequenced(op)
 }
 
+/** 位置の端末保存の port の記録 fake。書込 5（write・markSent・adoptIfNewer・removeSubject・reclaim）と列の読み 2（read・unsent）を持つ。 */
+class RecordingPositionStore(
+    val recorder: EffectRecorder,
+    val scenario: ProbeScenario,
+) : PositionStore {
+    private val core = ApiFake(recorder, scenario, port = "PositionStore")
+
+    override suspend fun read(subjectId: String, episodeId: String): PositionRecord? = core.read("read")
+
+    override suspend fun unsent(subjectId: String): List<PositionRecord> = core.read("unsent")
+
+    override suspend fun write(record: PositionRecord) = core.write("write")
+
+    override suspend fun markSent(subjectId: String, episodeId: String, recordedAt: Instant): Boolean {
+        core.write("markSent")
+        return true
+    }
+
+    override suspend fun adoptIfNewer(subjectId: String, episodeId: String, server: ServerPosition): Boolean {
+        core.write("adoptIfNewer")
+        return true
+    }
+
+    override suspend fun removeSubject(subjectId: String) = core.write("removeSubject")
+
+    override suspend fun reclaim(currentSubjectId: String?) = core.write("reclaim")
+}
+
 /** 保存庫の port の記録 fake。書込 5（save・remove・invalidate・removeSubject・reclaim）と列の読み 3 を持つ。 */
 class RecordingAudioStore(
     val recorder: EffectRecorder,
@@ -1014,6 +1047,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
     val playerController: RecordingPlayerController = RecordingPlayerController(recorder, scenario)
     val fileSystem: RecordingFileSystem = RecordingFileSystem(recorder, scenario)
     val audioStore: RecordingAudioStore = RecordingAudioStore(recorder, scenario)
+    val positionStore: RecordingPositionStore = RecordingPositionStore(recorder, scenario)
     val networkMonitor: RecordingNetworkMonitor = RecordingNetworkMonitor(recorder, scenario)
     val passkeyProvider: RecordingPasskeyProvider = RecordingPasskeyProvider(recorder, scenario)
     val feedbackPlayer: RecordingFeedbackPlayer = RecordingFeedbackPlayer(recorder, scenario)
@@ -1021,7 +1055,7 @@ class ProbeEnvironment private constructor(val scenario: ProbeScenario) {
     /** この実行単位の記録 fake の全部。配線の検査が「記録 fake であること」を照合する。 */
     val fakes: List<Any> = listOf(
         apiClient, podcastApi, authApi, accountApi, learningApi, vocabularyTestApi, feedApi, sourcesApi, deviceTokenApi, pushTokenSource, notificationPermission, preferencesApi, preferencesStore, sessionStore, playerController,
-        fileSystem, audioStore, networkMonitor, passkeyProvider, feedbackPlayer,
+        fileSystem, audioStore, positionStore, networkMonitor, passkeyProvider, feedbackPlayer,
     )
 
     /** この実行単位の scheduler に載る dispatcher。所有者の dispatcher は必ずこれで作る。 */

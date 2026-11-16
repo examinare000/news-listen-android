@@ -29,6 +29,7 @@ import com.rioikeda.newslisten.model.VocabularyTestResultItemRequest
 import com.rioikeda.newslisten.model.VocabularyTestResultResponse
 import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
 import kotlinx.serialization.json.JsonObject
+import java.time.Instant
 
 /**
  * バックエンド API への通信を担うクライアント（フェーズ2 スコープ）。
@@ -64,7 +65,7 @@ interface ApiClient {
     suspend fun fetchPodcast(id: String): PodcastResponse
 
     /** 指定 Podcast の再生位置を更新する。レスポンスは更新後の Podcast 全体。 */
-    suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse
+    suspend fun updatePlaybackPosition(id: String, positionSeconds: Double, recordedAt: Instant): PodcastResponse
 
     /** 完聴を best-effort で記録する呼び出し元のための API。 */
     suspend fun markCompleted(id: String)

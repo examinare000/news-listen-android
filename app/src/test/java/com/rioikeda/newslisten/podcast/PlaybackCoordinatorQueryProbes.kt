@@ -8,6 +8,11 @@ import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.catalog.probeEpisodeCatalog
 import com.rioikeda.newslisten.learning.probeStreakQuery
 import com.rioikeda.newslisten.podcast.app.PlaybackCoordinator
+import com.rioikeda.newslisten.podcast.app.PositionCommands
+import com.rioikeda.newslisten.podcast.app.PositionQueries
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import java.util.Collections
 import java.util.WeakHashMap
 
@@ -21,18 +26,28 @@ internal fun probePlaybackCoordinator(
     env: ProbeEnvironment,
     offlineLibrary: OfflineLibrary,
     catalog: EpisodeCatalog,
-): PlaybackCoordinator =
-    PlaybackCoordinator(
+): PlaybackCoordinator {
+    val dispatcher = env.newDispatcher()
+    return PlaybackCoordinator(
         podcastApi = env.podcastApi,
         playerController = env.playerController,
         offlineLibrary = offlineLibrary,
         networkMonitor = env.networkMonitor,
         preferencesStore = env.preferencesStore,
         streakQuery = probeStreakQuery(env),
-        dispatcher = env.newDispatcher(),
+        dispatcher = dispatcher,
         currentSubject = env.hooks.read("PlaybackCoordinator#currentSubject") { null },
         episodeLookup = catalog,
+        positionCommands = PositionCommands(
+            env.podcastApi,
+            env.positionStore,
+            Clock.fixed(Instant.parse("2026-11-16T00:00:00Z"), ZoneOffset.UTC),
+            env.hooks.read("PositionCommands#currentSubject") { null },
+            env.newDispatcher(),
+        ),
+        positionQueries = PositionQueries(env.positionStore),
     )
+}
 
 /** warm-up が一覧を読み込むために、実行単位（環境）ごとの `EpisodeCatalog` を引く。環境が消えれば一緒に消える。 */
 private val catalogsByEnvironment: MutableMap<ProbeEnvironment, EpisodeCatalog> =

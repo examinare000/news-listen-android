@@ -206,25 +206,41 @@ class OkHttpApiClientTest {
     // --- updatePlaybackPosition ---
 
     @Test
-    fun updatePlaybackPositionはPATCHでposition_secondsボディを送りPodcastResponseを受ける() = runTest {
+    fun `android-possync-62 shared-sync-09 updatePlaybackPositionはPATCHでposition_secondsとrecorded_atを小数3桁Zで送りPodcastResponseを受ける`() = runTest {
         server.enqueue(
             MockResponse().setResponseCode(200).setBody(
                 """
                 {
                   "id":"p1","type":"single","article_ids":["a1"],"difficulty":"toeic_600",
                   "audio_url":"https://example.com/p1.mp3","japanese_intro_text":"intro",
-                  "duration_seconds":120,"status":"completed","created_at":"2026-07-01T09:00:00+00:00"
+                  "duration_seconds":120,"status":"completed","created_at":"2026-07-01T09:00:00+00:00",
+                  "playback_position_seconds":42.5,"playback_position_recorded_at":"2026-11-16T01:02:03.456000Z"
                 }
                 """.trimIndent()
             )
         )
 
-        val response = client.updatePlaybackPosition("p1", 42.5)
+        val response = client.updatePlaybackPosition("p1", 12.5, java.time.Instant.parse("2026-11-16T01:02:03.456Z"))
 
         val recorded = server.takeRequest()
         assertEquals("PATCH", recorded.method)
-        assertTrue(recorded.body.readUtf8().contains("\"position_seconds\":42.5"))
+        assertEquals("/podcasts/p1/position", recorded.path)
+        assertEquals("""{"position_seconds":12.5,"recorded_at":"2026-11-16T01:02:03.456Z"}""", recorded.body.readUtf8())
         assertEquals("p1", response.id)
+        assertEquals("2026-11-16T01:02:03.456000Z", response.playbackPositionRecordedAt)
+    }
+
+    @Test
+    fun `android-possync-62 shared-sync-09 recorded_atは秒未満が0でも小数3桁を残す`() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """{"id":"p1","type":"single","article_ids":["a1"],"difficulty":"toeic_600","audio_url":"https://example.com/p1.mp3","japanese_intro_text":"intro","duration_seconds":120,"status":"completed","created_at":"2026-07-01T09:00:00+00:00"}"""
+            )
+        )
+
+        client.updatePlaybackPosition("p1", 1.0, java.time.Instant.parse("2026-11-16T01:02:03Z"))
+
+        assertTrue(server.takeRequest().body.readUtf8().contains(""""recorded_at":"2026-11-16T01:02:03.000Z""""))
     }
 
     // --- エラー系 ---

@@ -19,12 +19,12 @@ class EffectTypeCatalogTest {
     // ---- 本番 ----
 
     @Test
-    fun 本番の分類表は20のportと17のhookを持つ() {
+    fun 本番の分類表は21のportと18のhookを持つ() {
         assertEquals(
             setOf(
                 "ApiClient", "PodcastApi", "PreferencesStore", "SessionStore", "PlayerController",
                 "FileSystem", "NetworkMonitoring", "PasskeyProvider", "FeedbackPlayer", "AudioStore", "PreferencesApi", "AuthApi", "AccountApi", "LearningApi", "VocabularyTestApi", "FeedApi",
-                "SourcesApi", "DeviceTokenApi", "PushTokenSource", "NotificationPermission",
+                "SourcesApi", "DeviceTokenApi", "PushTokenSource", "NotificationPermission", "PositionStore",
             ),
             production.ports.map { it.port }.toSet(),
         )
@@ -102,6 +102,9 @@ class EffectTypeCatalogTest {
 
         assertEquals(setOf("save", "clear"), portRow(production, "SessionStore").writes)
         assertEquals(setOf("load"), portRow(production, "SessionStore").sequenceReads)
+        val positionStore = portRow(production, "PositionStore")
+        assertEquals(setOf("write", "markSent", "adoptIfNewer", "removeSubject", "reclaim"), positionStore.writes)
+        assertEquals(setOf("read", "unsent"), positionStore.sequenceReads)
         assertEquals(setOf("write", "delete", "deleteRecursively", "ensureDirectory"), portRow(production, "FileSystem").writes)
         assertEquals(setOf("exists", "listFiles", "listDirectories", "fileSize"), portRow(production, "FileSystem").sequenceReads)
         assertEquals(setOf("start", "stop"), portRow(production, "NetworkMonitoring").writes)
@@ -109,7 +112,7 @@ class EffectTypeCatalogTest {
         assertEquals(setOf("createCredential", "getCredential"), portRow(production, "PasskeyProvider").writes)
         assertEquals(setOf("playSound", "performHaptic"), portRow(production, "FeedbackPlayer").writes)
 
-        assertEquals("hook は 17 個", 17, production.hooks.size)
+        assertEquals("hook は 18 個", 18, production.hooks.size)
         assertEquals("公開 callback（SETTER）は 0 個", 0, production.hooks.count { it.wiring == HookWiring.SETTER })
         assertTrue(production.hooks.filter { it.wiring == HookWiring.SETTER }.all { it.kind == HookKind.WRITE })
     }

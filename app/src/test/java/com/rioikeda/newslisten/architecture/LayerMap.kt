@@ -68,6 +68,9 @@ object LayerMap {
         "settings/domain/FeaturedSiteEntry.kt",
         "settings/domain/FeaturedCategory.kt",
         "settings/domain/GenerationQuota.kt",
+        "podcast/domain/PositionRecord.kt",
+        "podcast/domain/ServerPosition.kt",
+        "podcast/domain/PositionRules.kt",
     )
 
     private val application = listOf(
@@ -95,11 +98,14 @@ object LayerMap {
         "settings/app/SourcesQueries.kt",
         "settings/app/SourcesState.kt",
         "onboarding/app/OnboardingCommands.kt",
+        "podcast/app/PositionCommands.kt",
+        "podcast/app/PositionQueries.kt",
     )
 
     private val port = listOf(
         "podcast/PlayerController.kt",
         "podcast/app/AudioStore.kt",
+        "podcast/app/PositionStore.kt",
         "passkey/PasskeyProvider.kt",
         "preferences/PreferencesStore.kt",
         "preferences/app/PreferencesApi.kt",
@@ -137,6 +143,7 @@ object LayerMap {
         "podcast/ExoPlayerController.kt",
         "passkey/CredentialManagerPasskeyProvider.kt",
         "preferences/DataStorePreferencesStore.kt",
+        "podcast/infra/DataStorePositionStore.kt",
         "network/ApiClient.kt",
         "network/ApiEndpoint.kt",
         "network/AudioCacheManager.kt",

@@ -27,6 +27,7 @@ import com.rioikeda.newslisten.model.VocabularyListResponse
 import com.rioikeda.newslisten.model.VocabularyTestResultItemRequest
 import com.rioikeda.newslisten.model.VocabularyTestResultResponse
 import com.rioikeda.newslisten.model.VocabularyTestSessionResponse
+import java.time.Instant
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -48,7 +49,7 @@ abstract class BaseFakeApiClient : ApiClient {
     override suspend fun dismissArticle(id: String): ActionResponse = error("dismissArticle is not stubbed in $fakeName")
     override suspend fun fetchPodcasts(): PodcastListResponse = error("fetchPodcasts is not stubbed in $fakeName")
     override suspend fun fetchPodcast(id: String): PodcastResponse = error("fetchPodcast is not stubbed in $fakeName")
-    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double): PodcastResponse = error("updatePlaybackPosition is not stubbed in $fakeName")
+    override suspend fun updatePlaybackPosition(id: String, positionSeconds: Double, recordedAt: Instant): PodcastResponse = error("updatePlaybackPosition is not stubbed in $fakeName")
     override suspend fun markCompleted(id: String): Unit = error("markCompleted is not stubbed in $fakeName")
     override suspend fun submitQuizAnswers(id: String, request: QuizAnswerRequest): QuizAnswerResponse = error("submitQuizAnswers is not stubbed in $fakeName")
     override suspend fun fetchPreferences(): PreferencesResponse = error("fetchPreferences is not stubbed in $fakeName")
