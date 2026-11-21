@@ -574,9 +574,7 @@ class PlaybackCoordinator(
         }
         if (_session.value is PlaybackSession.Starting) applySession(_session.value.playerStarted())
         applySession(_session.value.playerEnded())
-        val totalSeconds = endedDuration?.takeIf { it > 0 }
-            ?: episode.durationSeconds.toDouble().takeIf { it > 0 }
-            ?: position.takeIf { it > 0 }
+        val totalSeconds = PositionRules.completionTotalSeconds(endedDuration, episode.durationSeconds, position)
         scope.launch { sendCompletion(subject, episode.id, record, totalSeconds) }
         scope.launch { advanceAfterCompletion(generation, userGeneration) }
     }

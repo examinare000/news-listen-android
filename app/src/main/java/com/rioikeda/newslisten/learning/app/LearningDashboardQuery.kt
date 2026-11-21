@@ -56,6 +56,7 @@ class LearningDashboardQuery(
                 WeeklyGoalProgress(
                     goalEpisodes = goal.goalEpisodes,
                     completedThisWeek = goal.completedThisWeek,
+                    fraction = weeklyGoalFraction(goal.goalEpisodes, goal.completedThisWeek),
                     history = goal.history.map {
                         WeeklyRecordRow(
                             week = it.week,
@@ -84,6 +85,9 @@ class LearningDashboardQuery(
         _view.value = view
         view
     }
+
+    private fun weeklyGoalFraction(goalEpisodes: Int, completedThisWeek: Int): Float =
+        if (goalEpisodes <= 0) 0f else (completedThisWeek.toFloat() / goalEpisodes).coerceIn(0f, 1f)
 
     private companion object {
         const val RECENT_VOCABULARY_LIMIT = 5

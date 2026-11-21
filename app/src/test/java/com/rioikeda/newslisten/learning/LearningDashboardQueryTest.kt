@@ -87,6 +87,22 @@ class LearningDashboardQueryTest {
     }
 
     @Test
+    fun `android-rule-learning-05 週の目標の進みは目標0で0fそれ以外は0から1に収める`() = runTest {
+        val rig = rig()
+        suspend fun fraction(goal: Int, completed: Int): Float {
+            rig.api.onFetchDashboard = {
+                dashboardRecord(weeklyGoal = WeeklyGoalRecord(goal, completed, emptyList()))
+            }
+            return checkNotNull(checkNotNull(rig.query.load()).weeklyGoal).fraction
+        }
+
+        assertEquals(0f, fraction(0, 3), 0f)
+        assertEquals(1f, fraction(5, 7), 0f)
+        assertEquals(0.6f, fraction(5, 3), 1e-6f)
+        assertEquals(0f, fraction(5, 0), 0f)
+    }
+
+    @Test
     fun `android-rule-learning-06 新しく解錠された実績は解錠済みから既読を除いた順で解錠済みは応答の順のまま`() = runTest {
         val rig = rig(seen = setOf("streak_7"))
         rig.api.onFetchDashboard = {
