@@ -5,6 +5,12 @@ import kotlin.math.abs
 
 /** 位置を時刻で決める規則（last write wins。android-rule-playback-12〜14 の正本）。 */
 object PositionRules {
+    /** 完聴で記録する総時間。0 以下の値を飛ばし、player・episode・位置の順で採る（android-rule-playback-06）。 */
+    fun completionTotalSeconds(endedDuration: Double?, episodeDurationSeconds: Int, position: Double): Double? =
+        endedDuration?.takeIf { it > 0 }
+            ?: episodeDurationSeconds.toDouble().takeIf { it > 0 }
+            ?: position.takeIf { it > 0 }
+
     /** null は最古。同じ時刻は新しくない。 */
     fun isNewer(candidate: Instant?, than: Instant?): Boolean = when {
         candidate == null -> false

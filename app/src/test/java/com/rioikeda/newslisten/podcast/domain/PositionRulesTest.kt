@@ -20,6 +20,16 @@ class PositionRulesTest {
         PositionRecord("u1", "p1", seconds, at, unsent)
 
     @Test
+    fun `android-rule-playback-06 完聴の総時間の優先順はEndedの長さ次にepisodeの長さ次に位置で0以下は飛ばす`() {
+        assertEquals(30.0, PositionRules.completionTotalSeconds(30.0, 99, 10.0))
+        assertEquals(99.0, PositionRules.completionTotalSeconds(null, 99, 10.0))
+        assertEquals(99.0, PositionRules.completionTotalSeconds(0.0, 99, 10.0))
+        assertEquals(10.0, PositionRules.completionTotalSeconds(null, 0, 10.0))
+        assertEquals(10.0, PositionRules.completionTotalSeconds(-1.0, -1, 10.0))
+        assertEquals(null, PositionRules.completionTotalSeconds(null, 0, 0.0))
+    }
+
+    @Test
     fun `android-possync-22 shared-resume-08 時刻の比較の表（新旧・時刻なし・同時刻）`() {
         // 端末の記録が新しい / サーバーが新しい / サーバーの時刻なし / 同時刻 / 端末なしで時刻なし / 端末なしで 0 秒
         assertEquals(40.0, PositionRules.resumeSeconds(device(40.0, t2), ServerPosition(10.0, t1)), 0.0)
