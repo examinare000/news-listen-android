@@ -24,7 +24,7 @@ class LearningDashboardViewEncapsulationTest {
         quizzedEpisodes = 2,
         averageCorrectRate = 0.75,
         currentDifficulty = "toeic_900",
-        weeklyGoal = WeeklyGoalProgress(goalEpisodes = 5, completedThisWeek = 3, history = history),
+        weeklyGoal = WeeklyGoalProgress(goalEpisodes = 5, completedThisWeek = 3, fraction = 0.6f, history = history),
         monthlyActivity = monthly,
         recentQuizTrend = trend,
         unlockedAchievements = unlocked,
