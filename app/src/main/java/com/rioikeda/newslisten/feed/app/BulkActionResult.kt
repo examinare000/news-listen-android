@@ -13,12 +13,4 @@ data class BulkActionResult(
     val failureCount: Int,
     /** 生成上限（429）に当たったときの次回可能時刻の知らせ。当たらなければ `null`。 */
     val limit: FeedNotice.GenerationLimit? = null,
-) {
-    /** 操作結果の日本語説明。 */
-    val message: String
-        get() = if (failureCount == 0) {
-            "${successCount}件を一括スターしました"
-        } else {
-            "${successCount}件をスターしました（失敗: ${failureCount}件）"
-        }
-}
+)
