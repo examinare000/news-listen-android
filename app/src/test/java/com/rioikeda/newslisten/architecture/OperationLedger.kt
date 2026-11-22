@@ -96,7 +96,6 @@ object OperationLedger {
         command("AuthViewModel#retryRefreshAuth", "認証の状態を変える command", specId = "android-cmd-account-01", facade = "android-slice-account-01"),
         structural("BulkActionResult#getFailureCount", "一括操作の結果（値）"),
         structural("BulkActionResult#getLimit", "一括操作の結果（値）"),
-        structural("BulkActionResult#getMessage", "一括操作の結果（値）"),
         structural("BulkActionResult#getSuccessCount", "一括操作の結果（値）"),
         structural("ColorKt#getDarkColorScheme", "配色（値）"),
         structural("ColorKt#getLightColorScheme", "配色（値）"),

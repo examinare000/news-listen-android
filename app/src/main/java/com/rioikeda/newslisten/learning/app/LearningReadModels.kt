@@ -29,12 +29,10 @@ data class WeeklyRecordRow(val week: String, val goal: Int, val completed: Int, 
 class WeeklyGoalProgress(
     val goalEpisodes: Int,
     val completedThisWeek: Int,
+    val fraction: Float,
     history: List<WeeklyRecordRow>,
 ) {
     val history: List<WeeklyRecordRow> = Collections.unmodifiableList(ArrayList(history))
-
-    val fraction: Float =
-        if (goalEpisodes <= 0) 0f else (completedThisWeek.toFloat() / goalEpisodes).coerceIn(0f, 1f)
 }
 
 /** ストリークの表示用の値。`visible` の規則の正本は [StreakQuery]（android-rule-learning-04）。 */
