@@ -4,58 +4,32 @@ import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.learning.app.LearningNotice
 
 /**
- * 画面に出す再生の知らせの種類（android-dec-69）。文言は種類が固定で持ち、画面は [message] だけを読む（android-dec-70）。
+ * 画面に出す再生の知らせの種類（android-dec-69）。種類だけを持ち、文言は presentation の `playbackNoticeMessage` が選ぶ（android-dec-144）。
  * 例外の message や生成の失敗の識別子の生の値は持たない。application は種類を選ぶだけで、文言を書かない。
  */
 sealed interface PlaybackNotice {
-    val message: String
+    data object Offline : PlaybackNotice
 
-    data object Offline : PlaybackNotice {
-        override val message = "オフラインのため再生できません"
-    }
+    data object CacheRemoved : PlaybackNotice
 
-    data object CacheRemoved : PlaybackNotice {
-        override val message = "ダウンロード済みの音声が削除されたため再生できません"
-    }
+    data object StillGenerating : PlaybackNotice
 
-    data object StillGenerating : PlaybackNotice {
-        override val message = "生成中のため再生できません"
-    }
-
-    data class GenerationFailed(val reason: GenerationFailureReason) : PlaybackNotice {
-        override val message: String
-            get() = when (reason) {
-                GenerationFailureReason.GENERATION_FAILED -> "生成に失敗しました"
-                GenerationFailureReason.QUOTA_EXHAUSTED -> "生成の上限に達したため、生成できませんでした"
-            }
-    }
+    data class GenerationFailed(val reason: GenerationFailureReason) : PlaybackNotice
 
     /** 取得の失敗のうち通信の失敗（android-dec-08）。 */
-    data object FetchOffline : PlaybackNotice {
-        override val message = "オフラインです。接続を確認してから、もう一度お試しください"
-    }
+    data object FetchOffline : PlaybackNotice
 
     /** 取得の失敗のうち通信の失敗以外（android-dec-06）。 */
-    data object FetchFailed : PlaybackNotice {
-        override val message = "エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください"
-    }
+    data object FetchFailed : PlaybackNotice
 
-    data object PlayerFailed : PlaybackNotice {
-        override val message = "再生できませんでした。もう一度お試しください"
-    }
+    data object PlayerFailed : PlaybackNotice
 
-    data object SaveFailed : PlaybackNotice {
-        override val message = "音声を保存できませんでした"
-    }
+    data object SaveFailed : PlaybackNotice
 
-    data object RemoveFailed : PlaybackNotice {
-        override val message = "音声を削除できませんでした"
-    }
+    data object RemoveFailed : PlaybackNotice
 
-    /** 学習の操作の知らせ（android-dec-100）。文言は [LearningNotice] が持つ。 */
-    data class Learning(val notice: LearningNotice) : PlaybackNotice {
-        override val message: String get() = notice.message
-    }
+    /** 学習の操作の知らせ（android-dec-100）。文言は presentation の `learningNoticeMessage` が選ぶ。 */
+    data class Learning(val notice: LearningNotice) : PlaybackNotice
 
     companion object {
         /**

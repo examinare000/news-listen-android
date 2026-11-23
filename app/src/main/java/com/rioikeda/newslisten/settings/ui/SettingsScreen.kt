@@ -51,9 +51,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.account.ui.AccountViewModel
+import com.rioikeda.newslisten.account.ui.PasswordGuidance
 import com.rioikeda.newslisten.account.ui.SessionsViewModel
 import com.rioikeda.newslisten.auth.ui.AuthViewModel
-import com.rioikeda.newslisten.auth.domain.PasswordRule
 import com.rioikeda.newslisten.core.Difficulty
 import com.rioikeda.newslisten.core.PlaybackSpeed
 import com.rioikeda.newslisten.designsystem.DSSpacing
@@ -1283,7 +1283,7 @@ private fun PasswordChangeSection(
             enabled = !isLoading
         )
         Text(
-            text = PasswordRule.GUIDANCE,
+            text = PasswordGuidance.TEXT,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
