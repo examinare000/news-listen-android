@@ -26,6 +26,26 @@ class SubjectCleanup(
     private val steps: List<CleanupStep>,
     private val scope: CoroutineScope,
 ) {
+    internal constructor(
+        stopPlayback: suspend () -> Unit,
+        cancelDownloads: suspend (String) -> Unit,
+        removeAudio: (String) -> Unit,
+        discardPositions: suspend (String) -> Unit,
+        clearPreferences: suspend () -> Unit,
+        resetFcm: suspend () -> Unit,
+        scope: CoroutineScope,
+    ) : this(
+        steps = listOf(
+            CleanupStep("playback_stop") { stopPlayback() },
+            CleanupStep("download_cancel") { subject -> subject.userId?.let { cancelDownloads(it) } },
+            CleanupStep("audio_cache") { subject -> subject.userId?.let(removeAudio) },
+            CleanupStep("position_records") { subject -> subject.userId?.let { discardPositions(it) } },
+            CleanupStep("preferences") { clearPreferences() },
+            CleanupStep("fcm_local_reset") { resetFcm() },
+        ),
+        scope = scope,
+    )
+
     private val mutex = Mutex()
     private val _cleanupIncomplete = MutableStateFlow<CleanupIncomplete?>(null)
     val cleanupIncomplete: StateFlow<CleanupIncomplete?> = _cleanupIncomplete.asStateFlow()
@@ -53,4 +73,14 @@ class SubjectCleanup(
             }
         }
     }
+}
+
+/** 主体確定時の音声回収を終えてから、その主体の位置の回収・再送を起動する（android-dec-122）。 */
+internal fun reclaimForResolvedSubject(
+    subject: Subject?,
+    reclaimAudio: (String?) -> Unit,
+    resolvePositions: (String?) -> Unit,
+) {
+    reclaimAudio(subject?.userId)
+    resolvePositions(subject?.userId)
 }

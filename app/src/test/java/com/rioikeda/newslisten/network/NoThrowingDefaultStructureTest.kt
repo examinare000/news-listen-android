@@ -332,13 +332,12 @@ class NoThrowingDefaultStructureTest {
     private fun positionWiringViolations(code: String): List<String> {
         val violations = mutableListOf<String>()
         if (lambdaBodyOf(code, "afterRefresh")?.contains("adoptEpisodes(") != true) violations += "afterRefresh の lambda が adoptEpisodes( を呼ばない"
-        if (lambdaBodyOf(code, "onSubjectResolved")?.contains("positionCommands.onSubjectResolved(") != true) {
-            violations += "onSubjectResolved の lambda が positionCommands.onSubjectResolved( を呼ばない"
+        if (lambdaBodyOf(code, "onSubjectResolved")?.contains("reclaimForResolvedSubject(") != true ||
+            lambdaBodyOf(code, "resolvePositions")?.contains("positionCommands.onSubjectResolved(") != true
+        ) violations += "主体確定の回収に PositionCommands が結線されていない"
+        if (lambdaBodyOf(code, "discardPositions")?.contains("positionCommands.discardSubject(") != true) {
+            violations += "主体離脱の位置削除に PositionCommands が結線されていない"
         }
-        val step = code.indexOf("CleanupStep(\"position_records\")")
-        val audio = code.indexOf("CleanupStep(\"audio_cache\")")
-        if (step < 0) violations += "subjectCleanup に CleanupStep(\"position_records\") が無い"
-        if (step >= 0 && audio >= 0 && step < audio) violations += "position_records が audio_cache の前にある"
         return violations
     }
 
@@ -356,15 +355,16 @@ class NoThrowingDefaultStructureTest {
     fun `android-possync-20 shared-sync-07 位置の結線の検査は正しい形を通しどれか1つを外した文字列を落とす`() {
         val correct = """
             afterRefresh = { offlineLibrary.syncDownloadedState(it); positionCommands.adoptEpisodes(authSession.currentSubjectId(), it) },
-            onSubjectResolved = { s -> offlineLibrary.reclaim(s?.userId); positionCommands.onSubjectResolved(s?.userId) },
-            CleanupStep("audio_cache") { s -> s.userId?.let { offlineLibrary.removeSubject(it) } },
-            CleanupStep("position_records") { s -> s.userId?.let { positionCommands.discardSubject(it) } },
+            onSubjectResolved = { subject ->
+                reclaimForResolvedSubject(subject, resolvePositions = { positionCommands.onSubjectResolved(it) })
+            },
+            discardPositions = { positionCommands.discardSubject(it) },
         """.trimIndent()
         assertTrue(positionWiringViolations(correct).isEmpty())
 
         assertFalse(positionWiringViolations(correct.replace("positionCommands.adoptEpisodes", "other.run")).isEmpty())
-        assertFalse(positionWiringViolations(correct.replace("positionCommands.onSubjectResolved(s?.userId)", "Unit")).isEmpty())
-        assertFalse(positionWiringViolations(correct.replace("CleanupStep(\"position_records\")", "CleanupStep(\"other\")")).isEmpty())
+        assertFalse(positionWiringViolations(correct.replace("positionCommands.onSubjectResolved(it)", "Unit")).isEmpty())
+        assertFalse(positionWiringViolations(correct.replace("positionCommands.discardSubject(it)", "Unit")).isEmpty())
     }
 
     /** `DataStorePositionStore(`・`PositionCommands(`・`PositionQueries(` の構築が 1 回ずつで、同じ store の値を両方へ渡しているかの違反を返す。 */

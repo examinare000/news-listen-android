@@ -12,7 +12,7 @@ import com.rioikeda.newslisten.account.app.SessionQueries
 import com.rioikeda.newslisten.auth.domain.AuthState
 import com.rioikeda.newslisten.auth.ui.AuthViewModel
 import com.rioikeda.newslisten.auth.app.AuthSession
-import com.rioikeda.newslisten.auth.domain.CleanupStep
+import com.rioikeda.newslisten.auth.app.reclaimForResolvedSubject
 import com.rioikeda.newslisten.auth.app.SubjectCleanup
 import com.rioikeda.newslisten.catalog.app.EpisodeCatalog
 import com.rioikeda.newslisten.feed.ui.FeedViewModel
@@ -289,18 +289,17 @@ class AppContainer(context: Context) {
 
     /**
      * 主体離脱の後始末の手順列（ADR-104）。呼出元の cancel で止まらないよう、`SupervisorJob` の長寿命 scope で動かす。
-     * 手順は実行時にラムダの中で各資産を読むので、構築時に `_podcastViewModel` などを評価しない。
+     * 各資産は手順の実行時に解決し、authSession の構築中に再生や設定の依存を初期化しない。
      */
     private val subjectCleanup: SubjectCleanup by lazy {
         SubjectCleanup(
-            steps = listOf(
-                CleanupStep("playback_stop") { _podcastViewModel.stopForSubjectLeave() },
-                CleanupStep("download_cancel") { s -> s.userId?.let { offlineLibrary.cancelDownloads(it) } },
-                CleanupStep("audio_cache") { s -> s.userId?.let { offlineLibrary.removeSubject(it) } },
-                CleanupStep("position_records") { s -> s.userId?.let { positionCommands.discardSubject(it) } },
-                CleanupStep("preferences") { preferencesSync.clearSubjectScoped() },
-                CleanupStep("fcm_local_reset") { fcmTokenRegistrar.onLogout() },
-            ),
+            // ViewModel の初回取得で設定の購読も始まるため、従来の遅延初期化の時点を保つ。
+            stopPlayback = { _podcastViewModel.stopForSubjectLeave() },
+            cancelDownloads = { offlineLibrary.cancelDownloads(it) },
+            removeAudio = { offlineLibrary.removeSubject(it) },
+            discardPositions = { positionCommands.discardSubject(it) },
+            clearPreferences = { preferencesSync.clearSubjectScoped() },
+            resetFcm = { fcmTokenRegistrar.onLogout() },
             scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         )
     }
@@ -329,7 +328,13 @@ class AppContainer(context: Context) {
             onSessionRestored = { preferencesSync.syncFromServer() },
             onAuthenticated = { fcmTokenRegistrar.onAuthenticated() },
             // Unknown からの確定（shared-dec-05）と遷移 ④ の B の確立（android-dec-48）の直後に回収する。形式の判断は Subject の生成に任せる。
-            onSubjectResolved = { s -> offlineLibrary.reclaim(s?.userId); positionCommands.onSubjectResolved(s?.userId) },
+            onSubjectResolved = { subject ->
+                reclaimForResolvedSubject(
+                    subject,
+                    reclaimAudio = { offlineLibrary.reclaim(it) },
+                    resolvePositions = { positionCommands.onSubjectResolved(it) },
+                )
+            },
         )
     }
 

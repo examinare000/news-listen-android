@@ -41,7 +41,7 @@ data class Subject(val userId: String?, val username: String) {
 
 /**
  * 主体離脱の後始末の 1 手順。[name] は失敗の観測（[CleanupIncomplete.parts]）に使う識別子。
- * 手順列の組み立ては構成側（AppContainer）が持ち、実行は [SubjectCleanup] が担う。
+ * 手順の名前・順序と失敗時の継続は application の SubjectCleanup が持つ。
  */
 data class CleanupStep(val name: String, val run: suspend (Subject) -> Unit)
 

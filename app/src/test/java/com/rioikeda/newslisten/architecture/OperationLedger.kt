@@ -346,6 +346,7 @@ object OperationLedger {
         command("SettingsViewModel#syncWeeklyGoalEpisodes", "PreferencesSync への中継 command", specId = "android-cmd-prefs-01", facade = "android-slice-prefs-01"),
         command("SettingsViewModel#updateSource", "RSS ソースを変更する command", specId = "android-cmd-sources-01", facade = "android-slice-periphery-02"),
         query("SubjectCleanup#getCleanupIncomplete", "StateFlow を公開する getter（投影を読むだけ）", specId = "android-query-account-01"),
+        command("SubjectCleanupKt#reclaimForResolvedSubject", "主体の確定で音声を回収し、位置の回収と再送を起動する command"),
         command("SubjectCleanup#start", "主体離脱の後始末の手順列を起動する command（完了を待たない）"),
         structural("TypeKt#getDSTypography", "書体の定義（値）"),
         command("VocabularyTestViewModel#answerRetest", "VocabularyTestCommands への中継 command（android-dec-107）", specId = "android-cmd-learning-03", facade = "android-slice-learning-03"),
