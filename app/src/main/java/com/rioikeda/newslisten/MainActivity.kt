@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
         val feedViewModel = appContainer.getFeedViewModel()
         val podcastViewModel = appContainer.getPodcastViewModel()
         val learningViewModel = appContainer.getLearningViewModel()
+        val createVocabularyTestViewModel = appContainer::createVocabularyTestViewModel
         val settingsViewModel = appContainer.getSettingsViewModel()
         val streakQuery = appContainer.getStreakQuery()
         val learningCommands = appContainer.getLearningCommands()
@@ -188,7 +189,7 @@ class MainActivity : ComponentActivity() {
                                 passkeyCredentialsViewModel,
                                 streakQuery,
                                 learningCommands,
-                                appContainer,
+                                createVocabularyTestViewModel = createVocabularyTestViewModel,
                             )
                         }
                     }
