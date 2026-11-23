@@ -83,7 +83,7 @@ class OperationLedgerTest {
         val findings = LedgerChecks.classification(ProductionWorld.population, rows, EffectTypeCatalog.production)
 
         val structural = rows.filter { it.evidence == QueryEvidence.STRUCTURAL }.map { it.id }.toSet()
-        listOf("ArticleOpener#resolveOpenAction", "LearningNotice#getMessage").forEach {
+        listOf("ArticleOpener#resolveOpenAction", "PodcastScreenKt#playbackNoticeMessage").forEach {
             assertTrue("$it が STRUCTURAL で台帳に無い（効果を持たない型の操作）", it in structural)
         }
         assertTrue(

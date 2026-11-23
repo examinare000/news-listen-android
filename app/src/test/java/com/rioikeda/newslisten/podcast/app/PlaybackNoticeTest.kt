@@ -3,6 +3,8 @@ package com.rioikeda.newslisten.podcast.app
 import com.rioikeda.newslisten.catalog.domain.Episode
 import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.network.EpisodeDecoder
+import com.rioikeda.newslisten.podcast.text
+import com.rioikeda.newslisten.podcast.ui.playbackNoticeMessage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -10,9 +12,9 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * [PlaybackNotice]（再生の知らせの種類と固定の文言）の検証。
+ * [PlaybackNotice]（再生の知らせの種類）と、presentation が種類から選ぶ文言 [playbackNoticeMessage] の検証。
  *
- * 文言の期待値は型の側とは独立にリテラルで持つ（android-dec-70）。基点で文言が変わる 4 種
+ * 文言の期待値は文言を選ぶ関数とは独立にリテラルで持つ（android-dec-70）。基点で文言が変わる 4 種
  * （FetchOffline・FetchFailed・PlayerFailed・QUOTA_EXHAUSTED）は、このテストだけが固定する。
  */
 class PlaybackNoticeTest {
@@ -38,52 +40,52 @@ class PlaybackNoticeTest {
 
     @Test
     fun `android-dec-70 Offlineの文言は基点と同じ`() {
-        assertEquals("オフラインのため再生できません", PlaybackNotice.Offline.message)
+        assertEquals("オフラインのため再生できません", playbackNoticeMessage(PlaybackNotice.Offline))
     }
 
     @Test
     fun `android-dec-70 CacheRemovedの文言は基点と同じ`() {
-        assertEquals("ダウンロード済みの音声が削除されたため再生できません", PlaybackNotice.CacheRemoved.message)
+        assertEquals("ダウンロード済みの音声が削除されたため再生できません", playbackNoticeMessage(PlaybackNotice.CacheRemoved))
     }
 
     @Test
     fun `android-dec-70 StillGeneratingの文言は基点と同じ`() {
-        assertEquals("生成中のため再生できません", PlaybackNotice.StillGenerating.message)
+        assertEquals("生成中のため再生できません", playbackNoticeMessage(PlaybackNotice.StillGenerating))
     }
 
     @Test
     fun `android-dec-70 android-dec-06 GenerationFailedのGENERATION_FAILEDは生成に失敗しましたを持つ`() {
-        assertEquals("生成に失敗しました", PlaybackNotice.GenerationFailed(GenerationFailureReason.GENERATION_FAILED).message)
+        assertEquals("生成に失敗しました", playbackNoticeMessage(PlaybackNotice.GenerationFailed(GenerationFailureReason.GENERATION_FAILED)))
     }
 
     @Test
     fun `android-dec-70 android-dec-06 GenerationFailedのQUOTA_EXHAUSTEDは上限に達した旨の文言を持つ`() {
-        assertEquals("生成の上限に達したため、生成できませんでした", PlaybackNotice.GenerationFailed(GenerationFailureReason.QUOTA_EXHAUSTED).message)
+        assertEquals("生成の上限に達したため、生成できませんでした", playbackNoticeMessage(PlaybackNotice.GenerationFailed(GenerationFailureReason.QUOTA_EXHAUSTED)))
     }
 
     @Test
     fun `android-dec-70 android-dec-08 FetchOfflineの文言は接続の確認を促す`() {
-        assertEquals("オフラインです。接続を確認してから、もう一度お試しください", PlaybackNotice.FetchOffline.message)
+        assertEquals("オフラインです。接続を確認してから、もう一度お試しください", playbackNoticeMessage(PlaybackNotice.FetchOffline))
     }
 
     @Test
     fun `android-dec-70 android-dec-06 FetchFailedの文言は取得の失敗を伝える`() {
-        assertEquals("エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください", PlaybackNotice.FetchFailed.message)
+        assertEquals("エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください", playbackNoticeMessage(PlaybackNotice.FetchFailed))
     }
 
     @Test
     fun `android-dec-70 android-dec-69 PlayerFailedの文言は再生エンジンの失敗を伝える`() {
-        assertEquals("再生できませんでした。もう一度お試しください", PlaybackNotice.PlayerFailed.message)
+        assertEquals("再生できませんでした。もう一度お試しください", playbackNoticeMessage(PlaybackNotice.PlayerFailed))
     }
 
     @Test
     fun `android-dec-70 SaveFailedの文言は基点と同じ`() {
-        assertEquals("音声を保存できませんでした", PlaybackNotice.SaveFailed.message)
+        assertEquals("音声を保存できませんでした", playbackNoticeMessage(PlaybackNotice.SaveFailed))
     }
 
     @Test
     fun `android-dec-70 RemoveFailedの文言は基点と同じ`() {
-        assertEquals("音声を削除できませんでした", PlaybackNotice.RemoveFailed.message)
+        assertEquals("音声を削除できませんでした", playbackNoticeMessage(PlaybackNotice.RemoveFailed))
     }
 
     @Test
@@ -110,7 +112,7 @@ class PlaybackNoticeTest {
         val generic = PlaybackNotice.unplayable(failed("generation_failed"))
 
         assertEquals(PlaybackNotice.GenerationFailed(GenerationFailureReason.QUOTA_EXHAUSTED), quota)
-        assertEquals("生成の上限に達したため、生成できませんでした", quota?.message)
+        assertEquals("生成の上限に達したため、生成できませんでした", quota.text())
         assertNotEquals(generic, quota)
     }
 
@@ -128,7 +130,7 @@ class PlaybackNoticeTest {
             val notice = PlaybackNotice.unplayable(failed(raw))
 
             assertEquals(PlaybackNotice.GenerationFailed(GenerationFailureReason.GENERATION_FAILED), notice)
-            assertEquals("生成に失敗しました", notice?.message)
+            assertEquals("生成に失敗しました", notice.text())
             assertFalse("入力の識別子 $raw が知らせに残っている", notice.toString().contains(raw))
         }
     }

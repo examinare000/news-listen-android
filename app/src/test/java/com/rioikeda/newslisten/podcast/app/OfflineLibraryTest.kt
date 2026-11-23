@@ -8,6 +8,7 @@ import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.network.FakeFileSystem
 import com.rioikeda.newslisten.podcast.FakeEpisodeLookup
 import com.rioikeda.newslisten.podcast.FakePodcastApiClient
+import com.rioikeda.newslisten.podcast.text
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -188,9 +189,9 @@ class OfflineLibraryTest {
 
         library.download(podcast(id = "p1"))
 
-        assertEquals("オフラインです。接続を確認してから、もう一度お試しください", library.notice.value?.message)
+        assertEquals("オフラインです。接続を確認してから、もう一度お試しください", library.notice.value.text())
         assertEquals(PlaybackNotice.FetchOffline, library.notice.value)
-        assertFalse("例外の message が画面に出る", library.notice.value?.message.orEmpty().contains(exception.message.orEmpty()))
+        assertFalse("例外の message が画面に出る", library.notice.value.text().orEmpty().contains(exception.message.orEmpty()))
         assertFalse(cacheManager.isCached("u1", "p1"))
         assertEquals(emptySet<String>(), library.downloadingIds.value)
         assertEquals(emptySet<String>(), library.downloadedIds.value)
@@ -275,7 +276,7 @@ class OfflineLibraryTest {
         library.download(p1)
 
         // 旧は保存庫の英語の技術文言（"Failed to write cache for id=…"）がそのまま出ていた。
-        assertEquals("音声を保存できませんでした", library.notice.value?.message)
+        assertEquals("音声を保存できませんでした", library.notice.value.text())
         assertEquals(emptySet<String>(), library.downloadedIds.value)
         assertEquals(emptySet<String>(), library.downloadingIds.value)
         assertFalse(cacheManager.isCached("u1", "p1"))
@@ -309,7 +310,7 @@ class OfflineLibraryTest {
 
         library.removeDownload("../evil")
 
-        assertEquals("音声を削除できませんでした", library.notice.value?.message)
+        assertEquals("音声を削除できませんでした", library.notice.value.text())
         assertEquals(setOf("p1"), library.downloadedIds.value)
         assertTrue(cacheManager.isCached("u1", "p1"))
     }
@@ -320,7 +321,7 @@ class OfflineLibraryTest {
 
         library.removeDownload("p1")
 
-        assertEquals("音声を削除できませんでした", library.notice.value?.message)
+        assertEquals("音声を削除できませんでした", library.notice.value.text())
     }
 
     @Test
@@ -339,7 +340,7 @@ class OfflineLibraryTest {
         assertFalse(cacheManager.isCached("u1", "p1"))
         assertEquals(emptySet<String>(), library.downloadedIds.value)
         assertEquals(emptySet<String>(), library.downloadingIds.value)
-        assertEquals("生成に失敗しました", library.notice.value?.message)
+        assertEquals("生成に失敗しました", library.notice.value.text())
     }
 
     @Test
@@ -351,8 +352,8 @@ class OfflineLibraryTest {
         library.download(podcast(id = "p1"))
 
         assertEquals(PlaybackNotice.FetchFailed, library.notice.value)
-        assertEquals("エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください", library.notice.value?.message)
-        assertFalse("HTTP Error 500 が画面に出る", library.notice.value?.message.orEmpty().contains("HTTP Error 500"))
+        assertEquals("エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください", library.notice.value.text())
+        assertFalse("HTTP Error 500 が画面に出る", library.notice.value.text().orEmpty().contains("HTTP Error 500"))
         assertFalse(cacheManager.isCached("u1", "p1"))
         assertEquals(emptySet<String>(), library.downloadingIds.value)
     }
@@ -370,8 +371,8 @@ class OfflineLibraryTest {
 
         assertTrue(apiClient.downloadAudioCalls.isEmpty())
         assertFalse(cacheManager.isCached("u1", "p1"))
-        assertEquals("生成の上限に達したため、生成できませんでした", library.notice.value?.message)
-        assertFalse("識別子の生の値が画面に出る", library.notice.value?.message.orEmpty().contains("quota_exhausted"))
+        assertEquals("生成の上限に達したため、生成できませんでした", library.notice.value.text())
+        assertFalse("識別子の生の値が画面に出る", library.notice.value.text().orEmpty().contains("quota_exhausted"))
     }
 
     @Test

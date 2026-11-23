@@ -7,6 +7,7 @@ import com.rioikeda.newslisten.model.PodcastResponse
 import com.rioikeda.newslisten.network.EpisodeDecoder
 import com.rioikeda.newslisten.podcast.FakePodcastApi
 import com.rioikeda.newslisten.podcast.app.PlaybackNotice
+import com.rioikeda.newslisten.podcast.text
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
@@ -87,9 +88,9 @@ class EpisodeCatalogTest {
 
         f.catalog.refresh()
 
-        assertEquals("オフラインです。接続を確認してから、もう一度お試しください", f.catalog.notice.value?.message)
+        assertEquals("オフラインです。接続を確認してから、もう一度お試しください", f.catalog.notice.value.text())
         assertEquals(PlaybackNotice.FetchOffline, f.catalog.notice.value)
-        assertFalse("例外の message が画面に出る", f.catalog.notice.value?.message.orEmpty().contains(exception.message.orEmpty()))
+        assertFalse("例外の message が画面に出る", f.catalog.notice.value.text().orEmpty().contains(exception.message.orEmpty()))
         assertEquals(listOf("1"), f.catalog.episodes.value.map { it.episodeId })
         assertSame(first.single(), f.catalog.find("1"))
         assertEquals(1, f.synced.size) // 失敗では呼ばれない（最初の成功の 1 回のまま）
@@ -196,8 +197,8 @@ class EpisodeCatalogTest {
         f.catalog.refresh()
 
         assertEquals(PlaybackNotice.FetchFailed, f.catalog.notice.value)
-        assertEquals("エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください", f.catalog.notice.value?.message)
-        assertFalse("HTTP Error 500 が画面に出る", f.catalog.notice.value?.message.orEmpty().contains("HTTP Error 500"))
+        assertEquals("エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください", f.catalog.notice.value.text())
+        assertFalse("HTTP Error 500 が画面に出る", f.catalog.notice.value.text().orEmpty().contains("HTTP Error 500"))
         assertEquals(0, f.synced.size)
     }
 
@@ -217,7 +218,7 @@ class EpisodeCatalogTest {
             val label = failure::class.simpleName
             assertEquals(label, PlaybackNotice.FetchFailed, f.catalog.notice.value)
             assertFalse(label, f.catalog.notice.value == PlaybackNotice.FetchOffline)
-            assertFalse(label, f.catalog.notice.value?.message.orEmpty().contains("HTTP Error"))
+            assertFalse(label, f.catalog.notice.value.text().orEmpty().contains("HTTP Error"))
         }
     }
 
@@ -229,6 +230,6 @@ class EpisodeCatalogTest {
 
         assertNotNull(f.catalog.notice.value)
         assertEquals(PlaybackNotice.FetchOffline, f.catalog.notice.value)
-        assertFalse("例外の message が画面に出る", f.catalog.notice.value?.message.orEmpty().contains("boom"))
+        assertFalse("例外の message が画面に出る", f.catalog.notice.value.text().orEmpty().contains("boom"))
     }
 }

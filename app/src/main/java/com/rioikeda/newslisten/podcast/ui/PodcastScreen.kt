@@ -42,6 +42,9 @@ import com.rioikeda.newslisten.R
 import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.DSFeedback
 import com.rioikeda.newslisten.learning.app.LearningCommands
+import com.rioikeda.newslisten.learning.app.LearningNotice
+import com.rioikeda.newslisten.podcast.app.GenerationFailureReason
+import com.rioikeda.newslisten.podcast.app.PlaybackNotice
 
 /**
  * Podcast タブのルートスクリーン。一覧表示と再生中のプレイヤーを担う。
@@ -212,7 +215,7 @@ fun PodcastScreen(viewModel: PodcastViewModel, learningCommands: LearningCommand
         AlertDialog(
             onDismissRequest = { viewModel.dismissNotice() },
             title = { Text(stringResource(R.string.error_dialog_title)) },
-            text = { Text(notice?.message ?: "") },
+            text = { Text(notice?.let(::playbackNoticeMessage) ?: "") },
             confirmButton = {
                 Button(onClick = { viewModel.dismissNotice() }) {
                     Text("OK")
@@ -239,3 +242,27 @@ fun PodcastScreen(viewModel: PodcastViewModel, learningCommands: LearningCommand
         learningCommands.loadVocabularyRegistrations()
     }
 }
+
+/** 再生の知らせの種類から、画面に出す文言を選ぶ（android-dec-144）。 */
+internal fun playbackNoticeMessage(notice: PlaybackNotice): String =
+    when (notice) {
+        PlaybackNotice.Offline -> "オフラインのため再生できません"
+        PlaybackNotice.CacheRemoved -> "ダウンロード済みの音声が削除されたため再生できません"
+        PlaybackNotice.StillGenerating -> "生成中のため再生できません"
+        is PlaybackNotice.GenerationFailed -> when (notice.reason) {
+            GenerationFailureReason.GENERATION_FAILED -> "生成に失敗しました"
+            GenerationFailureReason.QUOTA_EXHAUSTED -> "生成の上限に達したため、生成できませんでした"
+        }
+        PlaybackNotice.FetchOffline -> "オフラインです。接続を確認してから、もう一度お試しください"
+        PlaybackNotice.FetchFailed -> "エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください"
+        PlaybackNotice.PlayerFailed -> "再生できませんでした。もう一度お試しください"
+        PlaybackNotice.SaveFailed -> "音声を保存できませんでした"
+        PlaybackNotice.RemoveFailed -> "音声を削除できませんでした"
+        is PlaybackNotice.Learning -> learningNoticeMessage(notice.notice)
+    }
+
+/** 学習の知らせの種類から、画面に出す文言を選ぶ（android-dec-144）。 */
+internal fun learningNoticeMessage(notice: LearningNotice): String =
+    when (notice) {
+        LearningNotice.VocabularyFailed -> "語彙の登録に失敗しました"
+    }

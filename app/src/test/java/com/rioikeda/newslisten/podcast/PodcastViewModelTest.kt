@@ -166,8 +166,8 @@ class PodcastViewModelTest {
 
         viewModel.fetchPodcasts()
 
-        assertEquals(fetchOfflineMessage, viewModel.notice.value?.message)
-        assertFalse("例外の message が画面に出る", viewModel.notice.value?.message.orEmpty().contains(exception.message.orEmpty()))
+        assertEquals(fetchOfflineMessage, viewModel.notice.value.text())
+        assertFalse("例外の message が画面に出る", viewModel.notice.value.text().orEmpty().contains(exception.message.orEmpty()))
         assertTrue(viewModel.episodes.value.isEmpty())
     }
 
@@ -180,9 +180,9 @@ class PodcastViewModelTest {
 
         assertEquals(
             "エピソードを取得できませんでした。通信状況を確かめて、もう一度お試しください",
-            viewModel.notice.value?.message,
+            viewModel.notice.value.text(),
         )
-        assertFalse("HTTP Error 500 が画面に出る", viewModel.notice.value?.message.orEmpty().contains("HTTP Error 500"))
+        assertFalse("HTTP Error 500 が画面に出る", viewModel.notice.value.text().orEmpty().contains("HTTP Error 500"))
     }
 
     @Test
@@ -267,7 +267,7 @@ class PodcastViewModelTest {
         viewModel.download(podcast(id = "p1"))
 
         assertEquals(listOf("p1"), apiClient.fetchPodcastCalls)
-        assertEquals(fetchOfflineMessage, viewModel.notice.value?.message)
+        assertEquals(fetchOfflineMessage, viewModel.notice.value.text())
         assertEquals(emptySet<String>(), viewModel.downloadingIds.value)
     }
 
@@ -324,7 +324,7 @@ class PodcastViewModelTest {
         gate.completeExceptionally(exception)
         runCurrent()
 
-        assertEquals(fetchOfflineMessage, viewModel.notice.value?.message)
+        assertEquals(fetchOfflineMessage, viewModel.notice.value.text())
         assertEquals(emptySet<String>(), viewModel.downloadingIds.value)
     }
 
@@ -347,7 +347,7 @@ class PodcastViewModelTest {
 
         gateY.completeExceptionally(exception)
         runCurrent()
-        assertEquals(fetchOfflineMessage, viewModel.notice.value?.message)
+        assertEquals(fetchOfflineMessage, viewModel.notice.value.text())
         viewModel.dismissNotice()
         assertNull(viewModel.notice.value)
 
@@ -399,7 +399,7 @@ class PodcastViewModelTest {
 
         gateY.completeExceptionally(exception)
         runCurrent()
-        assertEquals(fetchOfflineMessage, viewModel.notice.value?.message)
+        assertEquals(fetchOfflineMessage, viewModel.notice.value.text())
         viewModel.dismissNotice()
 
         offlineLibrary.cancelDownloads("u1")
@@ -446,10 +446,10 @@ class PodcastViewModelTest {
         val viewModel = newViewModel(apiClient, FakePlayerController())
 
         viewModel.playNow(podcast(status = "processing")) // 再生の失敗だけがある
-        assertEquals("生成中のため再生できません", viewModel.notice.value?.message)
+        assertEquals("生成中のため再生できません", viewModel.notice.value.text())
 
         viewModel.fetchPodcasts() // 自前の失敗が重なると、自前の値が見える
-        assertEquals(fetchOfflineMessage, viewModel.notice.value?.message)
+        assertEquals(fetchOfflineMessage, viewModel.notice.value.text())
 
         viewModel.dismissNotice() // 自前を消した後に再生の失敗が見えるなら、片方しか消えていない
         assertNull(viewModel.notice.value)
@@ -464,7 +464,7 @@ class PodcastViewModelTest {
         viewModel.fetchPodcasts()
 
         assertEquals(1, viewModel.episodes.value.size)
-        assertEquals("生成中のため再生できません", viewModel.notice.value?.message)
+        assertEquals("生成中のため再生できません", viewModel.notice.value.text())
     }
 
     @Test
@@ -478,11 +478,11 @@ class PodcastViewModelTest {
         )
         val viewModel = newViewModel(apiClient, FakePlayerController())
         viewModel.fetchPodcasts()
-        assertEquals(fetchOfflineMessage, viewModel.notice.value?.message)
+        assertEquals(fetchOfflineMessage, viewModel.notice.value.text())
 
         viewModel.playNow(p1)
 
-        assertEquals(fetchOfflineMessage, viewModel.notice.value?.message)
+        assertEquals(fetchOfflineMessage, viewModel.notice.value.text())
         viewModel.stopForSubjectLeave()
     }
 
@@ -492,7 +492,7 @@ class PodcastViewModelTest {
         val apiClient = FakePodcastApiClient(onFetchPodcasts = { throw exception })
         val viewModel = newViewModel(apiClient, FakePlayerController())
         val recorded = mutableListOf<String?>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.notice.collect { recorded += it?.message } }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.notice.collect { recorded += it.text() } }
         runCurrent()
 
         viewModel.playNow(podcast(status = "processing"))
@@ -516,15 +516,15 @@ class PodcastViewModelTest {
         val viewModel = newViewModel(apiClient, FakePlayerController(), learningCommands = learning)
 
         viewModel.playNow(podcast(status = "processing")) // 再生の失敗だけがある
-        assertEquals("生成中のため再生できません", viewModel.notice.value?.message)
+        assertEquals("生成中のため再生できません", viewModel.notice.value.text())
 
         viewModel.fetchPodcasts() // Catalog の失敗が重なると、再生の失敗より優先される
-        assertEquals(fetchOfflineMessage, viewModel.notice.value?.message)
+        assertEquals(fetchOfflineMessage, viewModel.notice.value.text())
 
         learning.registerVocabulary("p1", "term") // 自前の失敗が重なると、自前の値が見える
         val own = viewModel.notice.value
         assertNotNull(own)
-        assertTrue(own?.message != fetchOfflineMessage && own?.message != "生成中のため再生できません")
+        assertTrue(own.text() != fetchOfflineMessage && own.text() != "生成中のため再生できません")
 
         viewModel.dismissNotice() // 3 つの持ち主のどれか 1 つでも残れば、次の assert で見える
         assertNull(viewModel.notice.value)
@@ -581,7 +581,7 @@ class PodcastViewModelTest {
         learning.registerVocabulary("p1", "term") // VM 自身（Learning）
         assertNotNull(coordinator.notice.value)
         assertNotNull(catalog.notice.value)
-        assertEquals(vocabularyFailedMessage, viewModel.notice.value?.message)
+        assertEquals(vocabularyFailedMessage, viewModel.notice.value.text())
 
         viewModel.dismissNotice()
 
@@ -600,7 +600,7 @@ class PodcastViewModelTest {
         learning.registerVocabulary("p1", "term")
 
         assertEquals(PlaybackNotice.Learning(LearningNotice.VocabularyFailed), viewModel.notice.value)
-        assertEquals(vocabularyFailedMessage, viewModel.notice.value?.message)
+        assertEquals(vocabularyFailedMessage, viewModel.notice.value.text())
     }
 
     // 保存の失敗（ダウンロード）を起こす。取得と音声は成功し、ディスクの書込だけが失敗する。
@@ -621,7 +621,7 @@ class PodcastViewModelTest {
         val learning = learningCommands(failingSave())
         val viewModel = saveFailingViewModel(learning)
         learning.registerVocabulary("p1", "term")
-        assertEquals(vocabularyFailedMessage, viewModel.notice.value?.message)
+        assertEquals(vocabularyFailedMessage, viewModel.notice.value.text())
 
         viewModel.download(podcast(id = "p1"))
 
@@ -648,7 +648,7 @@ class PodcastViewModelTest {
         viewModel.download(podcast(id = "p1")) // 自前の `_notice` = SaveFailed
         learning.registerVocabulary("p1", "term") // Learning が優先して見える
         val recorded = mutableListOf<String?>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.notice.collect { recorded += it?.message } }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.notice.collect { recorded += it.text() } }
         runCurrent()
         recorded.clear()
 
