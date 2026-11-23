@@ -49,6 +49,7 @@ import com.rioikeda.newslisten.designsystem.DSSpacing
 import com.rioikeda.newslisten.designsystem.rememberDSFeedback
 import com.rioikeda.newslisten.learning.ui.LearningScreen
 import com.rioikeda.newslisten.learning.ui.LearningViewModel
+import com.rioikeda.newslisten.learning.ui.VocabularyTestViewModel
 import com.rioikeda.newslisten.passkey.ui.PasskeyCredentialsViewModel
 import com.rioikeda.newslisten.passkey.ui.PasskeyRegistrationViewModel
 import com.rioikeda.newslisten.podcast.ui.PodcastScreen
@@ -86,7 +87,7 @@ fun AppScaffold(
     passkeyCredentialsViewModel: PasskeyCredentialsViewModel,
     streakQuery: StreakQuery,
     learningCommands: LearningCommands,
-    appContainer: com.rioikeda.newslisten.di.AppContainer? = null,
+    createVocabularyTestViewModel: (() -> VocabularyTestViewModel)? = null,
 ) {
     var selectedTab by remember { mutableStateOf(0) }
     val feedback = rememberDSFeedback(settingsViewModel.preferences)
@@ -126,7 +127,9 @@ fun AppScaffold(
         TabItem(
             label = stringResource(R.string.tab_learning),
             icon = Icons.Filled.Create,
-            screen = { LearningScreen(learningViewModel, feedback, appContainer = appContainer) }
+            screen = {
+                LearningScreen(learningViewModel, feedback, createVocabularyTestViewModel = createVocabularyTestViewModel)
+            }
         ),
         TabItem(
             label = stringResource(R.string.tab_settings),

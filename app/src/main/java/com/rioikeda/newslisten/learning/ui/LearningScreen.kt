@@ -45,7 +45,7 @@ fun LearningScreen(
     viewModel: LearningViewModel,
     feedback: DSFeedback,
     onNavigateToVocabularyTest: (VocabularyTestViewModel) -> Unit = {},
-    appContainer: com.rioikeda.newslisten.di.AppContainer? = null
+    createVocabularyTestViewModel: (() -> VocabularyTestViewModel)? = null,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
@@ -56,7 +56,7 @@ fun LearningScreen(
     }
 
     if (showVocabularyTest) {
-        val vocabularyTestViewModel = appContainer?.createVocabularyTestViewModel()
+        val vocabularyTestViewModel = createVocabularyTestViewModel?.invoke()
         if (vocabularyTestViewModel != null) {
             VocabularyTestScreen(
                 viewModel = vocabularyTestViewModel,

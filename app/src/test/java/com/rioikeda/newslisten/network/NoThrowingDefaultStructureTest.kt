@@ -172,6 +172,23 @@ class NoThrowingDefaultStructureTest {
     }
 
     @Test
+    fun 単語テスト画面の呼び手はAppContainer全体を受け取らない() {
+        val screens = listOf(
+            "com.rioikeda.newslisten.AppScaffoldKt" to "AppScaffold",
+            "com.rioikeda.newslisten.learning.ui.LearningScreenKt" to "LearningScreen",
+        )
+        for ((owner, name) in screens) {
+            val screen = Class.forName(owner).declaredMethods.single { it.name == name }
+            assertFalse("$name が composition root に依存している", screen.parameterTypes.any {
+                it.name == "com.rioikeda.newslisten.di.AppContainer"
+            })
+            assertTrue("$name が語彙テストの生成関数を受け取っていない", screen.genericParameterTypes.any {
+                it.typeName == "kotlin.jvm.functions.Function0<com.rioikeda.newslisten.learning.ui.VocabularyTestViewModel>"
+            })
+        }
+    }
+
+    @Test
     fun AppContainerは単語テストの入口を呼ぶたびに新しく作りbylazyで持たない() {
         // verifies: android-dec-106。単語テストは開くたびに新しい VocabularyTestCommands を持つ
         val root = resolveMainSourceRoot()
