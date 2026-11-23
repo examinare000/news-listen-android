@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import kotlin.coroutines.CoroutineContext
 
@@ -29,6 +30,69 @@ class SubjectCleanupTest {
 
     private fun TestScope.newCleanup(steps: List<CleanupStep>): SubjectCleanup =
         SubjectCleanup(steps, CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler)))
+
+    @Test
+    fun `主体を持つ手順だけにuserIdを渡し6手順の失敗を名前と順序で記録する`() = runTest {
+        val calls = mutableListOf<String>()
+        var failingCall: String? = null
+        fun record(call: String) {
+            calls += call
+            if (call == failingCall) throw IllegalStateException(call)
+        }
+        val cleanup = SubjectCleanup(
+            stopPlayback = { record("stop") },
+            cancelDownloads = { record("cancel:$it") },
+            removeAudio = { record("audio:$it") },
+            discardPositions = { record("records:$it") },
+            clearPreferences = { record("preferences") },
+            resetFcm = { record("fcm") },
+            scope = this,
+        )
+        val expected = listOf(
+            "stop" to "playback_stop",
+            "cancel:u-1" to "download_cancel",
+            "audio:u-1" to "audio_cache",
+            "records:u-1" to "position_records",
+            "preferences" to "preferences",
+            "fcm" to "fcm_local_reset",
+        )
+        for ((call, part) in expected) {
+            calls.clear()
+            failingCall = call
+            cleanup.start(subjectA)
+            assertEquals(emptyList<String>(), calls)
+            advanceUntilIdle()
+            assertEquals(expected.map { it.first }, calls)
+            assertEquals(setOf(part), cleanup.cleanupIncomplete.value?.parts)
+        }
+
+        calls.clear()
+        failingCall = null
+        cleanup.start(Subject(null, "legacy"))
+        advanceUntilIdle()
+        assertEquals(listOf("stop", "preferences", "fcm"), calls)
+        assertNull(cleanup.cleanupIncomplete.value)
+    }
+
+    @Test
+    fun `主体確定は音声を先に回収し位置の回収へ同じ主体を渡す`() {
+        val calls = mutableListOf<String>()
+        fun resolved(subject: Subject?) = reclaimForResolvedSubject(
+            subject,
+            reclaimAudio = { calls += "audio:$it" },
+            resolvePositions = { calls += "positions:$it" },
+        )
+        resolved(subjectB)
+        resolved(null)
+        assertEquals(listOf("audio:u-2", "positions:u-2", "audio:null", "positions:null"), calls)
+
+        val failure = IllegalStateException("reclaimAudio")
+        val thrown = assertThrows(IllegalStateException::class.java) {
+            reclaimForResolvedSubject(subjectA, reclaimAudio = { throw failure }, resolvePositions = { calls += "unexpected" })
+        }
+        assertEquals(failure, thrown)
+        assertEquals(4, calls.size)
+    }
 
     private fun recordingStep(name: String, log: MutableList<String>, body: suspend () -> Unit = {}) =
         CleanupStep(name) { subject ->
