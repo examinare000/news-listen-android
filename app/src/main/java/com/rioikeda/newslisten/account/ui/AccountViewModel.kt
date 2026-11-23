@@ -3,7 +3,6 @@ package com.rioikeda.newslisten.account.ui
 import com.rioikeda.newslisten.account.app.AccountCommands
 import com.rioikeda.newslisten.auth.domain.AuthState
 import com.rioikeda.newslisten.auth.ui.AuthViewModel
-import com.rioikeda.newslisten.auth.domain.PasswordRule
 import com.rioikeda.newslisten.core.ApiException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -137,7 +136,7 @@ class AccountViewModel(
         (authViewModel.authState.value as? AuthState.Authenticated)?.user?.displayName ?: ""
 
     private companion object {
-        const val PASSWORD_STRENGTH_ERROR_MESSAGE = PasswordRule.GUIDANCE
+        const val PASSWORD_STRENGTH_ERROR_MESSAGE = PasswordGuidance.TEXT
         const val GENERIC_PASSWORD_ERROR_MESSAGE = "パスワードの変更に失敗しました"
     }
 }
